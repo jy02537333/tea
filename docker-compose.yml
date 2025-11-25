@@ -1,0 +1,64 @@
+version: "3.9"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: tea-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: tea
+      MYSQL_USER: teauser
+      MYSQL_PASSWORD: teapass
+      TZ: Asia/Shanghai
+    command:
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_general_ci"
+      - "--default-authentication-plugin=mysql_native_password"
+    ports:
+      - "3306:3306"
+    volumes:
+      - tea-mysql-data:/var/lib/mysql
+
+  redis:
+    image: redis:7.0
+    container_name: tea-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - tea-redis-data:/data
+
+  tea-api:
+    build:
+      context: ./tea-api
+      dockerfile: Dockerfile
+    container_name: tea-api
+    restart: unless-stopped
+    depends_on:
+      - mysql
+      - redis
+    environment:
+      TZ: Asia/Shanghai
+      DB_DSN: "teauser:teapass@tcp(mysql:3306)/tea?charset=utf8mb4&parseTime=True&loc=Local"
+      REDIS_ADDR: "redis:6379"
+    ports:
+      - "8080:8080"
+
+  admin-fe:
+    image: nginx:1.27-alpine
+    container_name: tea-admin-fe
+    restart: unless-stopped
+    depends_on:
+      - tea-api
+    volumes:
+      - ./Admin-FE:/usr/share/nginx/html:ro
+    ports:
+      - "8081:80"
+    environment:
+      TZ: Asia/Shanghai
+
+volumes:
+  tea-mysql-data:
+  tea-redis-data:

@@ -1,0 +1,11 @@
+{
+  "name": "tea-screenshots",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "playwright": "^1.40.0"
+  },
+  "scripts": {
+    "capture": "node index.js"
+  }
+}

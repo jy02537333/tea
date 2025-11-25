@@ -1,0 +1,5 @@
+page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:8082/api/v1/admin/menus
+Call log:
+[2m  - navigating to "http://localhost:8082/api/v1/admin/menus", waiting until "networkidle"[22m
+
+    at E:\project\tea\tools\capture-screenshots\index.js:24:35

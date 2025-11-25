@@ -1,0 +1,204 @@
+Authenticated API test results - 2025-11-23T22:06:51+08:00
+
+Dev-login raw response: E:\project\tea\scripts\devlogin_resp.json
+
+Token length: 243
+
+URL: http://localhost:8080/api/v1/health
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/health": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/auth/captcha
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/auth/captcha": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/auth/login
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/auth/login": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/auth/me
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/auth/me": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/admin/menus
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/admin/menus": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/admin/users
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/admin/users": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/products
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/products": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/products/1
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/products/1": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/categories
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/categories": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/categories/1
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/categories/1": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/stores
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/stores": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/admin/stores/1/orders
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/admin/stores/1/orders": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/admin/stores/1/orders/stats
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/admin/stores/1/orders/stats": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/admin/stores/1/products
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/admin/stores/1/products": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/admin/stores/1/products/1
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/admin/stores/1/products/1": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/admin/products
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/admin/products": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/admin/orders
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/admin/orders": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/admin/orders/export
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/admin/orders/export": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/admin/orders/1
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/admin/orders/1": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/orders/1/deliver
+METHOD: POST
+STATUS: ERROR
+BODY_PREVIEW:
+Post "http://localhost:8080/api/v1/orders/1/deliver": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/orders/1/complete
+METHOD: POST
+STATUS: ERROR
+BODY_PREVIEW:
+Post "http://localhost:8080/api/v1/orders/1/complete": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/orders/1/cancel
+METHOD: POST
+STATUS: ERROR
+BODY_PREVIEW:
+Post "http://localhost:8080/api/v1/orders/1/cancel": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/orders/1/admin-cancel
+METHOD: POST
+STATUS: ERROR
+BODY_PREVIEW:
+Post "http://localhost:8080/api/v1/orders/1/admin-cancel": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/orders/1/refund
+METHOD: POST
+STATUS: ERROR
+BODY_PREVIEW:
+Post "http://localhost:8080/api/v1/orders/1/refund": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/orders/1/refund/start
+METHOD: POST
+STATUS: ERROR
+BODY_PREVIEW:
+Post "http://localhost:8080/api/v1/orders/1/refund/start": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/orders/1/refund/confirm
+METHOD: POST
+STATUS: ERROR
+BODY_PREVIEW:
+Post "http://localhost:8080/api/v1/orders/1/refund/confirm": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/admin/logs/operations?module=finance&order_id=1&limit=5
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/admin/logs/operations?module=finance&order_id=1&limit=5": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/admin/logs/operations
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/admin/logs/operations": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/admin/logs/operations/export
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/admin/logs/operations/export": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/admin/logs/access
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/admin/logs/access": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/admin/logs/access/export
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/admin/logs/access/export": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/admin/refunds
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/admin/refunds": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----
+URL: http://localhost:8080/api/v1/admin/refunds/export
+METHOD: GET
+STATUS: ERROR
+BODY_PREVIEW:
+Get "http://localhost:8080/api/v1/admin/refunds/export": dial tcp [::1]:8080: connectex: No connection could be made because the target machine actively refused it.
+----

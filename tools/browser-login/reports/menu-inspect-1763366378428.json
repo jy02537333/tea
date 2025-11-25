@@ -1,0 +1,51 @@
+{
+  "timestamp": "2025-11-17T07:59:38.427Z",
+  "url": "http://localhost:8000/index.html",
+  "diag": {
+    "hasRoot": true,
+    "items": [
+      {
+        "tab": "testing",
+        "text": "API 测试管理"
+      },
+      {
+        "tab": "products",
+        "text": "商品管理"
+      },
+      {
+        "tab": "categories",
+        "text": "分类管理"
+      },
+      {
+        "tab": "stores",
+        "text": "门店管理"
+      },
+      {
+        "tab": "finance",
+        "text": "财务/退款"
+      },
+      {
+        "tab": "users",
+        "text": "用户管理"
+      },
+      {
+        "tab": "system",
+        "text": "系统设置"
+      }
+    ],
+    "firstRect": {
+      "x": 64,
+      "y": 278,
+      "width": 236,
+      "height": 37
+    },
+    "firstStyle": {
+      "color": "rgb(0, 0, 0)",
+      "background": "rgba(0, 0, 0, 0)",
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1"
+    }
+  },
+  "screenshot": "menu-inspect-1763366378318.png"
+}

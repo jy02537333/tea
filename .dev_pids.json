@@ -1,0 +1,15 @@
+﻿[
+    {
+        "out":  "D:\\developTool\\work\\go\\tea\\.dev_logs\\admin-fe-out.log",
+        "pid":  13832,
+        "name":  "admin-fe",
+        "err":  "D:\\developTool\\work\\go\\tea\\.dev_logs\\admin-fe-err.log"
+    },
+    {
+        "port":  8082,
+        "out":  "D:\\developTool\\work\\go\\tea\\.dev_logs\\api-server-8082-out.log",
+        "pid":  16252,
+        "name":  "api-server",
+        "err":  "D:\\developTool\\work\\go\\tea\\.dev_logs\\api-server-8082-err.log"
+    }
+]

@@ -1,0 +1,463 @@
+{
+  "timestamp": "2025-11-17T04:44:45.351Z",
+  "adminUrl": "http://localhost:8000",
+  "username": "admin",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjo1LCJuYW1lIjoi6LaF57qn566h55CG5ZGYIiwiZXhwIjoxNzYzMzU4Mjg0LCJpYXQiOjE3NjMzNTQ2ODR9.y5nfhP7bOzcByQJPN9wnI0v3x8F5DKLsmnFYU3ep1vs",
+  "sidebarText": "首页\n商品管理\n分类管理\n门店管理\n财务/退款\n用户管理\n系统设置",
+  "success": true,
+  "networkLogs": [
+    {
+      "type": "request",
+      "data": {
+        "id": "request@fa102abf36e1300cc5d8d55542cad390",
+        "url": "http://localhost:8000/index.html",
+        "method": "GET",
+        "headers": {
+          "referer": "http://localhost:8000/login.html?next=index.html",
+          "upgrade-insecure-requests": "1",
+          "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.7390.37 Safari/537.36",
+          "sec-ch-ua": "\"HeadlessChrome\";v=\"141\", \"Not?A_Brand\";v=\"8\", \"Chromium\";v=\"141\"",
+          "sec-ch-ua-mobile": "?0",
+          "sec-ch-ua-platform": "\"Windows\""
+        },
+        "ts": 1763354684960
+      }
+    },
+    {
+      "type": "response",
+      "data": {
+        "url": "http://localhost:8082/api/v1/auth/login",
+        "status": 200,
+        "headers": {
+          "access-control-allow-headers": "Content-Type, Authorization",
+          "access-control-allow-origin": "*",
+          "content-length": "263",
+          "date": "Mon, 17 Nov 2025 04:44:44 GMT",
+          "content-type": "application/json; charset=utf-8",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        "body": "{\"data\":{\"token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjo1LCJuYW1lIjoi6LaF57qn566h55CG5ZGYIiwiZXhwIjoxNzYzMzU4Mjg0LCJpYXQiOjE3NjMzNTQ2ODR9.y5nfhP7bOzcByQJPN9wnI0v3x8F5DKLsmnFYU3ep1vs\",\"role\":5,\"name\":\"超级管理员\",\"iat\":1763354684,\"exp\":1763358284}}\n",
+        "ts": 1763354684961
+      }
+    },
+    {
+      "type": "response",
+      "data": {
+        "url": "http://localhost:8000/index.html",
+        "status": 200,
+        "headers": {
+          "content-length": "302153",
+          "content-type": "text/html",
+          "date": "Mon, 17 Nov 2025 04:44:44 GMT",
+          "last-modified": "Mon, 17 Nov 2025 04:18:17 GMT",
+          "server": "SimpleHTTP/0.6 Python/3.13.2"
+        },
+        "body": null,
+        "ts": 1763354684965
+      }
+    },
+    {
+      "type": "request",
+      "data": {
+        "id": "request@a8f2b0b56f7da21ac5266f83d58fbd73",
+        "url": "http://localhost:8082/api/v1/auth/me",
+        "method": "GET",
+        "headers": {
+          "sec-ch-ua-platform": "\"Windows\"",
+          "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjo1LCJuYW1lIjoi6LaF57qn566h55CG5ZGYIiwiZXhwIjoxNzYzMzU4Mjg0LCJpYXQiOjE3NjMzNTQ2ODR9.y5nfhP7bOzcByQJPN9wnI0v3x8F5DKLsmnFYU3ep1vs",
+          "referer": "http://localhost:8000/",
+          "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.7390.37 Safari/537.36",
+          "sec-ch-ua": "\"HeadlessChrome\";v=\"141\", \"Not?A_Brand\";v=\"8\", \"Chromium\";v=\"141\"",
+          "sec-ch-ua-mobile": "?0"
+        },
+        "ts": 1763354685019
+      }
+    },
+    {
+      "type": "request",
+      "data": {
+        "id": "request@fb73c119579bd9915753f1e750b9fc7c",
+        "url": "http://localhost:8082/api/v1/admin/menus",
+        "method": "GET",
+        "headers": {
+          "sec-ch-ua-platform": "\"Windows\"",
+          "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjo1LCJuYW1lIjoi6LaF57qn566h55CG5ZGYIiwiZXhwIjoxNzYzMzU4Mjg0LCJpYXQiOjE3NjMzNTQ2ODR9.y5nfhP7bOzcByQJPN9wnI0v3x8F5DKLsmnFYU3ep1vs",
+          "referer": "http://localhost:8000/",
+          "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.7390.37 Safari/537.36",
+          "sec-ch-ua": "\"HeadlessChrome\";v=\"141\", \"Not?A_Brand\";v=\"8\", \"Chromium\";v=\"141\"",
+          "sec-ch-ua-mobile": "?0"
+        },
+        "ts": 1763354685019
+      }
+    },
+    {
+      "type": "request",
+      "data": {
+        "id": "request@0d217e2121cefd1c61ed8678886f116c",
+        "url": "http://localhost:8082/api/v1/categories",
+        "method": "GET",
+        "headers": {
+          "sec-ch-ua-platform": "\"Windows\"",
+          "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjo1LCJuYW1lIjoi6LaF57qn566h55CG5ZGYIiwiZXhwIjoxNzYzMzU4Mjg0LCJpYXQiOjE3NjMzNTQ2ODR9.y5nfhP7bOzcByQJPN9wnI0v3x8F5DKLsmnFYU3ep1vs",
+          "referer": "http://localhost:8000/",
+          "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.7390.37 Safari/537.36",
+          "sec-ch-ua": "\"HeadlessChrome\";v=\"141\", \"Not?A_Brand\";v=\"8\", \"Chromium\";v=\"141\"",
+          "sec-ch-ua-mobile": "?0"
+        },
+        "ts": 1763354685019
+      }
+    },
+    {
+      "type": "request",
+      "data": {
+        "id": "request@8e4eb567904fe126a05acddf706e8f4e",
+        "url": "http://localhost:8082/api/v1/products",
+        "method": "GET",
+        "headers": {
+          "sec-ch-ua-platform": "\"Windows\"",
+          "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjo1LCJuYW1lIjoi6LaF57qn566h55CG5ZGYIiwiZXhwIjoxNzYzMzU4Mjg0LCJpYXQiOjE3NjMzNTQ2ODR9.y5nfhP7bOzcByQJPN9wnI0v3x8F5DKLsmnFYU3ep1vs",
+          "referer": "http://localhost:8000/",
+          "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.7390.37 Safari/537.36",
+          "sec-ch-ua": "\"HeadlessChrome\";v=\"141\", \"Not?A_Brand\";v=\"8\", \"Chromium\";v=\"141\"",
+          "sec-ch-ua-mobile": "?0"
+        },
+        "ts": 1763354685019
+      }
+    },
+    {
+      "type": "request",
+      "data": {
+        "id": "request@981cc18faa55e82f83a4e4c22b0255af",
+        "url": "http://localhost:8082/api/v1/health",
+        "method": "GET",
+        "headers": {
+          "sec-ch-ua-platform": "\"Windows\"",
+          "referer": "http://localhost:8000/",
+          "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.7390.37 Safari/537.36",
+          "sec-ch-ua": "\"HeadlessChrome\";v=\"141\", \"Not?A_Brand\";v=\"8\", \"Chromium\";v=\"141\"",
+          "sec-ch-ua-mobile": "?0"
+        },
+        "ts": 1763354685020
+      }
+    },
+    {
+      "type": "response",
+      "data": {
+        "url": "http://localhost:8082/api/v1/health",
+        "status": 200,
+        "headers": {
+          "access-control-allow-headers": "Content-Type, Authorization",
+          "access-control-allow-origin": "*",
+          "content-length": "16",
+          "date": "Mon, 17 Nov 2025 04:44:45 GMT",
+          "content-type": "application/json; charset=utf-8",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        "body": null,
+        "ts": 1763354685029
+      }
+    },
+    {
+      "type": "response",
+      "data": {
+        "url": "http://localhost:8082/api/v1/auth/me",
+        "status": 200,
+        "headers": {
+          "access-control-allow-headers": "Content-Type, Authorization",
+          "access-control-allow-origin": "*",
+          "content-length": "79",
+          "date": "Mon, 17 Nov 2025 04:44:45 GMT",
+          "content-type": "application/json; charset=utf-8",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        "body": null,
+        "ts": 1763354685029
+      }
+    },
+    {
+      "type": "response",
+      "data": {
+        "url": "http://localhost:8082/api/v1/products",
+        "status": 200,
+        "headers": {
+          "access-control-allow-headers": "Content-Type, Authorization",
+          "access-control-allow-origin": "*",
+          "content-length": "314",
+          "date": "Mon, 17 Nov 2025 04:44:45 GMT",
+          "content-type": "application/json; charset=utf-8",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        "body": null,
+        "ts": 1763354685030
+      }
+    },
+    {
+      "type": "response",
+      "data": {
+        "url": "http://localhost:8082/api/v1/categories",
+        "status": 200,
+        "headers": {
+          "access-control-allow-headers": "Content-Type, Authorization",
+          "access-control-allow-origin": "*",
+          "content-length": "70",
+          "date": "Mon, 17 Nov 2025 04:44:45 GMT",
+          "content-type": "application/json; charset=utf-8",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        "body": null,
+        "ts": 1763354685031
+      }
+    },
+    {
+      "type": "response",
+      "data": {
+        "url": "http://localhost:8082/api/v1/admin/menus",
+        "status": 200,
+        "headers": {
+          "access-control-allow-headers": "Content-Type, Authorization",
+          "access-control-allow-origin": "*",
+          "content-length": "498",
+          "date": "Mon, 17 Nov 2025 04:44:45 GMT",
+          "content-type": "application/json; charset=utf-8",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        "body": "{\"data\":[{\"key\":\"dashboard\",\"min_role\":0,\"tab\":\"testing\",\"title\":\"首页\"},{\"key\":\"products\",\"min_role\":3,\"tab\":\"products\",\"title\":\"商品管理\"},{\"key\":\"categories\",\"min_role\":3,\"tab\":\"categories\",\"title\":\"分类管理\"},{\"key\":\"stores\",\"min_role\":4,\"tab\":\"stores\",\"title\":\"门店管理\"},{\"key\":\"finance\",\"min_role\":4,\"tab\":\"finance\",\"title\":\"财务/退款\"},{\"key\":\"users\",\"min_role\":3,\"tab\":\"users\",\"title\":\"用户管理\"},{\"key\":\"system\",\"min_role\":5,\"tab\":\"system\",\"title\":\"系统设置\"}]}\n",
+        "ts": 1763354685038
+      }
+    },
+    {
+      "type": "request",
+      "data": {
+        "id": "request@7c4219fc53175bc7044530b2fbb23f17",
+        "url": "http://localhost:8082/api/v1/stores",
+        "method": "GET",
+        "headers": {
+          "sec-ch-ua-platform": "\"Windows\"",
+          "referer": "http://localhost:8000/",
+          "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.7390.37 Safari/537.36",
+          "sec-ch-ua": "\"HeadlessChrome\";v=\"141\", \"Not?A_Brand\";v=\"8\", \"Chromium\";v=\"141\"",
+          "sec-ch-ua-mobile": "?0"
+        },
+        "ts": 1763354685135
+      }
+    },
+    {
+      "type": "response",
+      "data": {
+        "url": "http://localhost:8082/api/v1/stores",
+        "status": 200,
+        "headers": {
+          "access-control-allow-headers": "Content-Type, Authorization",
+          "access-control-allow-origin": "*",
+          "content-length": "101",
+          "date": "Mon, 17 Nov 2025 04:44:45 GMT",
+          "content-type": "application/json; charset=utf-8",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        "body": null,
+        "ts": 1763354685142
+      }
+    },
+    {
+      "type": "request",
+      "data": {
+        "id": "request@cd188086483b42d3cdaeb35f62759bef",
+        "url": "http://localhost:8082/api/v1/admin/stores/1/orders/stats",
+        "method": "GET",
+        "headers": {
+          "sec-ch-ua-platform": "\"Windows\"",
+          "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjo1LCJuYW1lIjoi6LaF57qn566h55CG5ZGYIiwiZXhwIjoxNzYzMzU4Mjg0LCJpYXQiOjE3NjMzNTQ2ODR9.y5nfhP7bOzcByQJPN9wnI0v3x8F5DKLsmnFYU3ep1vs",
+          "referer": "http://localhost:8000/",
+          "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.7390.37 Safari/537.36",
+          "sec-ch-ua": "\"HeadlessChrome\";v=\"141\", \"Not?A_Brand\";v=\"8\", \"Chromium\";v=\"141\"",
+          "sec-ch-ua-mobile": "?0"
+        },
+        "ts": 1763354685234
+      }
+    },
+    {
+      "type": "request",
+      "data": {
+        "id": "request@03d042a1aa7f0cfc34e6e652db5bdee2",
+        "url": "http://localhost:8082/api/v1/admin/stores/1/products",
+        "method": "GET",
+        "headers": {
+          "sec-ch-ua-platform": "\"Windows\"",
+          "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjo1LCJuYW1lIjoi6LaF57qn566h55CG5ZGYIiwiZXhwIjoxNzYzMzU4Mjg0LCJpYXQiOjE3NjMzNTQ2ODR9.y5nfhP7bOzcByQJPN9wnI0v3x8F5DKLsmnFYU3ep1vs",
+          "referer": "http://localhost:8000/",
+          "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.7390.37 Safari/537.36",
+          "sec-ch-ua": "\"HeadlessChrome\";v=\"141\", \"Not?A_Brand\";v=\"8\", \"Chromium\";v=\"141\"",
+          "sec-ch-ua-mobile": "?0"
+        },
+        "ts": 1763354685234
+      }
+    },
+    {
+      "type": "request",
+      "data": {
+        "id": "request@717a1d7b2fd83bfa385470268b2a119e",
+        "url": "http://localhost:8082/api/v1/admin/orders?store_id=1&limit=20&page=1",
+        "method": "GET",
+        "headers": {
+          "sec-ch-ua-platform": "\"Windows\"",
+          "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjo1LCJuYW1lIjoi6LaF57qn566h55CG5ZGYIiwiZXhwIjoxNzYzMzU4Mjg0LCJpYXQiOjE3NjMzNTQ2ODR9.y5nfhP7bOzcByQJPN9wnI0v3x8F5DKLsmnFYU3ep1vs",
+          "referer": "http://localhost:8000/",
+          "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.7390.37 Safari/537.36",
+          "sec-ch-ua": "\"HeadlessChrome\";v=\"141\", \"Not?A_Brand\";v=\"8\", \"Chromium\";v=\"141\"",
+          "sec-ch-ua-mobile": "?0"
+        },
+        "ts": 1763354685234
+      }
+    },
+    {
+      "type": "request",
+      "data": {
+        "id": "request@6b0760d102cafa2325c8aeb23217a88a",
+        "url": "http://localhost:8082/api/v1/admin/products?store_id=1&page=1&limit=20",
+        "method": "GET",
+        "headers": {
+          "sec-ch-ua-platform": "\"Windows\"",
+          "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjo1LCJuYW1lIjoi6LaF57qn566h55CG5ZGYIiwiZXhwIjoxNzYzMzU4Mjg0LCJpYXQiOjE3NjMzNTQ2ODR9.y5nfhP7bOzcByQJPN9wnI0v3x8F5DKLsmnFYU3ep1vs",
+          "referer": "http://localhost:8000/",
+          "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.7390.37 Safari/537.36",
+          "sec-ch-ua": "\"HeadlessChrome\";v=\"141\", \"Not?A_Brand\";v=\"8\", \"Chromium\";v=\"141\"",
+          "sec-ch-ua-mobile": "?0"
+        },
+        "ts": 1763354685235
+      }
+    },
+    {
+      "type": "response",
+      "data": {
+        "url": "http://localhost:8082/api/v1/admin/orders?store_id=1&limit=20&page=1",
+        "status": 301,
+        "headers": {
+          "access-control-allow-headers": "Content-Type, Authorization",
+          "access-control-allow-origin": "*",
+          "location": "/api/v1/admin/orders/?store_id=1&limit=20&page=1",
+          "content-length": "91",
+          "date": "Mon, 17 Nov 2025 04:44:45 GMT",
+          "content-type": "text/html; charset=utf-8",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        "body": null,
+        "ts": 1763354685239
+      }
+    },
+    {
+      "type": "request",
+      "data": {
+        "id": "request@aa4541be6e30eb72cc6b7adf772be493",
+        "url": "http://localhost:8082/api/v1/admin/orders/?store_id=1&limit=20&page=1",
+        "method": "GET",
+        "headers": {
+          "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.7390.37 Safari/537.36",
+          "referer": "http://localhost:8000/"
+        },
+        "ts": 1763354685239
+      }
+    },
+    {
+      "type": "response",
+      "data": {
+        "url": "http://localhost:8082/api/v1/admin/stores/1/products",
+        "status": 200,
+        "headers": {
+          "access-control-allow-headers": "Content-Type, Authorization",
+          "access-control-allow-origin": "*",
+          "content-length": "173",
+          "date": "Mon, 17 Nov 2025 04:44:45 GMT",
+          "content-type": "application/json; charset=utf-8",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        "body": null,
+        "ts": 1763354685240
+      }
+    },
+    {
+      "type": "response",
+      "data": {
+        "url": "http://localhost:8082/api/v1/admin/stores/1/orders/stats",
+        "status": 200,
+        "headers": {
+          "access-control-allow-headers": "Content-Type, Authorization",
+          "access-control-allow-origin": "*",
+          "content-length": "53",
+          "date": "Mon, 17 Nov 2025 04:44:45 GMT",
+          "content-type": "application/json; charset=utf-8",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        "body": null,
+        "ts": 1763354685240
+      }
+    },
+    {
+      "type": "response",
+      "data": {
+        "url": "http://localhost:8082/api/v1/admin/products?store_id=1&page=1&limit=20",
+        "status": 200,
+        "headers": {
+          "access-control-allow-headers": "Content-Type, Authorization",
+          "access-control-allow-origin": "*",
+          "content-length": "314",
+          "date": "Mon, 17 Nov 2025 04:44:45 GMT",
+          "content-type": "application/json; charset=utf-8",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        "body": null,
+        "ts": 1763354685240
+      }
+    },
+    {
+      "type": "response",
+      "data": {
+        "url": "http://localhost:8082/api/v1/admin/orders/?store_id=1&limit=20&page=1",
+        "status": 200,
+        "headers": {
+          "access-control-allow-headers": "Content-Type, Authorization",
+          "access-control-allow-origin": "*",
+          "content-length": "412",
+          "date": "Mon, 17 Nov 2025 04:44:45 GMT",
+          "content-type": "application/json; charset=utf-8",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        "body": null,
+        "ts": 1763354685241
+      }
+    },
+    {
+      "type": "request",
+      "data": {
+        "id": "request@e2d48b8937eacec40f50b48980a810cd",
+        "url": "http://localhost:8082/api/v1/admin/orders/1001",
+        "method": "GET",
+        "headers": {
+          "sec-ch-ua-platform": "\"Windows\"",
+          "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjo1LCJuYW1lIjoi6LaF57qn566h55CG5ZGYIiwiZXhwIjoxNzYzMzU4Mjg0LCJpYXQiOjE3NjMzNTQ2ODR9.y5nfhP7bOzcByQJPN9wnI0v3x8F5DKLsmnFYU3ep1vs",
+          "referer": "http://localhost:8000/",
+          "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.7390.37 Safari/537.36",
+          "sec-ch-ua": "\"HeadlessChrome\";v=\"141\", \"Not?A_Brand\";v=\"8\", \"Chromium\";v=\"141\"",
+          "sec-ch-ua-mobile": "?0"
+        },
+        "ts": 1763354685317
+      }
+    },
+    {
+      "type": "response",
+      "data": {
+        "url": "http://localhost:8082/api/v1/admin/orders/1001",
+        "status": 200,
+        "headers": {
+          "access-control-allow-headers": "Content-Type, Authorization",
+          "access-control-allow-origin": "*",
+          "content-length": "196",
+          "date": "Mon, 17 Nov 2025 04:44:45 GMT",
+          "content-type": "application/json; charset=utf-8",
+          "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        "body": null,
+        "ts": 1763354685327
+      }
+    }
+  ]
+}

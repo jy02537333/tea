@@ -1,0 +1,8 @@
+{
+  "timestamp": "2025-11-17T04:57:55.573Z",
+  "adminUrl": "http://localhost:8000",
+  "apiBase": "http://localhost:8082/api/v1",
+  "tokenPresent": true,
+  "sidebar": "首页\n商品管理\n分类管理\n门店管理\n财务/退款\n用户管理\n系统设置",
+  "storeOrderFlow": true
+}
