@@ -1,0 +1,15 @@
+{
+  "timestamp": "2025-11-17T06:20:15.333Z",
+  "url": "http://localhost:8000/index.html",
+  "diag": {
+    "hasMenuRoot": false,
+    "menuRootHTML": null,
+    "sidebarMenuType": "undefined",
+    "sidebarMenuLen": null,
+    "hasRenderSidebarMenu": false,
+    "hasFetchAndRenderMenus": false,
+    "containerDisplay": ""
+  },
+  "items": [],
+  "found": false
+}
