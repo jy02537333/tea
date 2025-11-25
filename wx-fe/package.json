@@ -3,13 +3,18 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dev:weapp": "taro dev:weapp",
+    "build:weapp": "taro build:weapp",
+    "dev:h5": "taro dev:h5",
+    "build:h5": "taro build:h5"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
     "@types/react": "^18.3.27",
     "@types/react-dom": "^18.3.7",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "@tarojs/cli": "^4.1.8"
   },
   "dependencies": {
     "@tarojs/components": "^4.1.8",
