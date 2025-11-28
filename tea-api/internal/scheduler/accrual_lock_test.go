@@ -6,13 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shopspring/decimal"
-
 	"tea-api/internal/config"
 	"tea-api/internal/model"
 	"tea-api/internal/service"
 	"tea-api/pkg/database"
 	"tea-api/pkg/utils"
+	"tea-api/testutil"
 )
 
 // 验证 runOnce 的 Redis 分布式锁（若 Redis 不可用则跳过）
@@ -32,13 +31,9 @@ func Test_Accrual_RedisLock_Skips_Duplicate(t *testing.T) {
 	// 初始化 DB
 	database.InitDatabase()
 	db := database.GetDB()
-	// Ensure phone length matches DB schema (varchar(20)) to avoid insert error
-	phoneVal := "p_" + utils.GenerateUID()
-	if len(phoneVal) > 20 {
-		phoneVal = phoneVal[:20]
-	}
-	usernameVal := "user_" + utils.GenerateUID()
-	u := model.User{BaseModel: model.BaseModel{UID: utils.GenerateUID()}, Username: usernameVal, OpenID: "u_" + utils.GenerateUID(), Phone: phoneVal, Nickname: "rl", Status: 1, Balance: decimal.NewFromFloat(1000)}
+	// Create a test user via helper to ensure consistent, schema-safe values
+	uPtr := testutil.CreateTestUser(t)
+	u := *uPtr
 	if err := db.Create(&u).Error; err != nil {
 		t.Fatalf("create user: %v", err)
 	}
