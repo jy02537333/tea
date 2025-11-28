@@ -33,11 +33,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
-      - name: Run go test with race detector (only tea-api)
+      - name: Run go test with race detector (only tea-api, list pkgs)
         env:
           CGO_ENABLED: 1
         run: |
+          set -euo pipefail
+          echo "Switching to tea-api directory and listing packages"
+          cd tea-api
           go version
           go env
-          # Limit test scope to the tea-api module to avoid cross-module/internal import issues.
-          go test -race ./tea-api/... -v
+          pkgs=$(go list ./...)
+          echo "Packages to test: $pkgs"
+          # Run race detector for the listed packages
+          CGO_ENABLED=1 go test -race $pkgs -v
