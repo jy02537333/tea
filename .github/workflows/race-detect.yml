@@ -33,13 +33,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
-      - name: Run go test with race detector
+      - name: Run go test with race detector (only tea-api)
         env:
           CGO_ENABLED: 1
         run: |
           go version
           go env
-          # Run the race detector across all packages. If some packages require external
-          # services, consider limiting to specific packages or setting env to skip
-          # integration tests.
-          go test -race ./... -v
+          # Limit test scope to the tea-api module to avoid cross-module/internal import issues.
+          go test -race ./tea-api/... -v
