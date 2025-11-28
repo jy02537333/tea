@@ -26,12 +26,30 @@ export default function ProductList() {
     }
   }
 
+  // 兼容 images 为 string[] 或 string
+  function normalizeImages(images: any): string[] {
+    if (!images) return [];
+    if (Array.isArray(images)) return images;
+    try {
+      const arr = JSON.parse(images);
+      if (Array.isArray(arr)) return arr;
+    } catch {}
+    if (typeof images === 'string') return [images];
+    return [];
+  }
+
   return (
     <View style={{ padding: 12 }}>
       {products.map((p) => (
         <View key={p.id} style={{ marginBottom: 12, borderBottomWidth: 1, borderColor: '#eee', paddingBottom: 8 }}>
           <Text style={{ fontSize: 16, fontWeight: 'bold' }}>{p.name}</Text>
           <Text>价格: {p.price}</Text>
+          {/* 多图渲染 */}
+          <View style={{ flexDirection: 'row', marginTop: 4 }}>
+            {normalizeImages(p.images).map((url, i) => (
+              <Image key={i} src={url} style={{ width: 60, height: 60, marginRight: 6, borderRadius: 4 }} mode="aspectFill" />
+            ))}
+          </View>
           <Button onClick={() => console.log('add', p.id)}>加入购物车</Button>
         </View>
       ))}

@@ -174,6 +174,13 @@ func SetupRouter() *gin.Engine {
 		productGroup.PUT("/:id", middleware.AuthMiddleware(), productHandler.UpdateProduct)
 		productGroup.DELETE("/:id", middleware.AuthMiddleware(), productHandler.DeleteProduct)
 		productGroup.PUT("/:id/stock", middleware.AuthMiddleware(), productHandler.UpdateProductStock)
+
+		// 商品图片管理（图片列表公开，修改需管理员）
+		productGroup.GET(":id/images", productHandler.GetProductImages)
+		productGroup.POST(":id/images", middleware.AuthMiddleware(), middleware.RequireRoles("admin"), productHandler.AddProductImage)
+		productGroup.POST(":id/images/batch-delete", middleware.AuthMiddleware(), middleware.RequireRoles("admin"), productHandler.BatchDeleteProductImages)
+		productGroup.PUT(":id/images/:image_id", middleware.AuthMiddleware(), middleware.RequireRoles("admin"), productHandler.UpdateProductImage)
+		productGroup.DELETE(":id/images/:image_id", middleware.AuthMiddleware(), middleware.RequireRoles("admin"), productHandler.DeleteProductImage)
 	}
 
 	// 购物车相关路由（需要登录）
@@ -270,5 +277,9 @@ func SetupRouter() *gin.Engine {
 	// 模拟回调（仅开发环境）
 	api.POST("/payment/mock-callback", paymentHandler.MockCallback)
 
+	// OSS 相关路由（仅管理员可操作）
+	ossHandler := handler.NewOssHandler(service.NewOssService())
+	api.POST("/oss/delete", middleware.AuthMiddleware(), middleware.RequireRoles("admin"), ossHandler.DeleteOssFile)
+	api.GET("/oss/list", middleware.AuthMiddleware(), middleware.RequireRoles("admin"), ossHandler.ListOssFiles)
 	return r
 }

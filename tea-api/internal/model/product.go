@@ -32,7 +32,9 @@ type Product struct {
 	IsNew         bool            `gorm:"default:false" json:"is_new"`
 	IsRecommend   bool            `gorm:"default:false" json:"is_recommend"`
 
-	Category Category `gorm:"foreignKey:CategoryID"`
+	Category   Category       `gorm:"foreignKey:CategoryID"`
+	Skus       []ProductSku   `gorm:"foreignKey:ProductID" json:"skus"`
+	ImagesList []ProductImage `gorm:"foreignKey:ProductID" json:"images_list"`
 }
 
 // ProductSku 商品SKU模型

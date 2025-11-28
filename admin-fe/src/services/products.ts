@@ -34,3 +34,29 @@ export async function updateProductStock(id: number, stock: number, action: 'add
 
 // backward-compatible alias used by example pages
 export const listProducts = getProducts;
+
+// Product images APIs
+export async function getProductImages(productId: number) {
+  const res = await api.get(`/api/v1/products/${productId}/images`);
+  return unwrapResponse<any[]>(res);
+}
+
+export async function addProductImage(productId: number, payload: { image_url: string; sort?: number; is_main?: boolean }) {
+  const res = await api.post(`/api/v1/products/${productId}/images`, payload);
+  return unwrapResponse(res);
+}
+
+export async function updateProductImage(productId: number, imageId: number, payload: { sort?: number; is_main?: boolean }) {
+  const res = await api.put(`/api/v1/products/${productId}/images/${imageId}`, payload);
+  return unwrapResponse(res);
+}
+
+export async function deleteProductImage(productId: number, imageId: number) {
+  const res = await api.delete(`/api/v1/products/${productId}/images/${imageId}`);
+  return unwrapResponse(res);
+}
+
+export async function batchDeleteProductImages(productId: number, ids: number[]) {
+  const res = await api.post(`/api/v1/products/${productId}/images/batch-delete`, { ids });
+  return unwrapResponse(res);
+}

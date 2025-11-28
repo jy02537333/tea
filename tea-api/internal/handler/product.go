@@ -426,3 +426,120 @@ func (h *ProductHandler) UpdateProductStock(c *gin.Context) {
 
 	response.Success(c, nil)
 }
+
+// GetProductImages 获取商品图片列表
+func (h *ProductHandler) GetProductImages(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "无效的商品ID", err.Error())
+		return
+	}
+	imgs, err := h.productService.GetProductImages(uint(id))
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "获取商品图片失败", err.Error())
+		return
+	}
+	response.Success(c, imgs)
+}
+
+// AddProductImage 添加商品图片（管理员）
+func (h *ProductHandler) AddProductImage(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "无效的商品ID", err.Error())
+		return
+	}
+	var req struct {
+		ImageURL string `json:"image_url" binding:"required"`
+		Sort     int    `json:"sort"`
+		IsMain   bool   `json:"is_main"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "参数错误", err.Error())
+		return
+	}
+	img, err := h.productService.AddProductImage(uint(id), req.ImageURL, req.Sort, req.IsMain)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "添加商品图片失败", err.Error())
+		return
+	}
+	response.Success(c, img)
+}
+
+// UpdateProductImage 更新图片（排序/主图）
+func (h *ProductHandler) UpdateProductImage(c *gin.Context) {
+	_, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "无效的商品ID", err.Error())
+		return
+	}
+	imgID64, err := strconv.ParseUint(c.Param("image_id"), 10, 32)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "无效的图片ID", err.Error())
+		return
+	}
+	var req struct {
+		Sort   *int  `json:"sort"`
+		IsMain *bool `json:"is_main"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "参数错误", err.Error())
+		return
+	}
+	if req.Sort == nil && req.IsMain == nil {
+		response.Error(c, http.StatusBadRequest, "至少提供一个要更新的字段 (sort 或 is_main)")
+		return
+	}
+	if err := h.productService.UpdateProductImage(uint(imgID64), req.Sort, req.IsMain); err != nil {
+		response.Error(c, http.StatusInternalServerError, "更新图片失败", err.Error())
+		return
+	}
+	response.Success(c, nil)
+}
+
+// DeleteProductImage 删除商品图片
+func (h *ProductHandler) DeleteProductImage(c *gin.Context) {
+	_, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "无效的商品ID", err.Error())
+		return
+	}
+	imgID64, err := strconv.ParseUint(c.Param("image_id"), 10, 32)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "无效的图片ID", err.Error())
+		return
+	}
+	if err := h.productService.DeleteProductImage(uint(imgID64)); err != nil {
+		response.Error(c, http.StatusInternalServerError, "删除图片失败", err.Error())
+		return
+	}
+	response.Success(c, nil)
+}
+
+// BatchDeleteProductImages 批量删除商品图片（管理员）
+func (h *ProductHandler) BatchDeleteProductImages(c *gin.Context) {
+	_, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "无效的商品ID", err.Error())
+		return
+	}
+
+	var req struct {
+		IDs []uint `json:"ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "参数错误", err.Error())
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		response.Success(c, nil)
+		return
+	}
+
+	if err := h.productService.DeleteProductImages(req.IDs); err != nil {
+		response.Error(c, http.StatusInternalServerError, "批量删除图片失败", err.Error())
+		return
+	}
+	response.Success(c, nil)
+}

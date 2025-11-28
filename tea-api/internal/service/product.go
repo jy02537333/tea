@@ -9,7 +9,10 @@ import (
 
 	"tea-api/internal/model"
 	"tea-api/pkg/database"
+	"tea-api/pkg/logx"
 	"tea-api/pkg/rabbitmq"
+
+	"go.uber.org/zap"
 )
 
 type ProductService struct {
@@ -103,7 +106,7 @@ func (s *ProductService) CreateProduct(product *model.Product) error {
 		}
 
 		if err := rabbitmq.PublishOrderMessage(msg); err != nil {
-			fmt.Printf("发布商品创建消息失败: %v\n", err)
+			logx.Get().Error("发布商品创建消息失败", zap.Error(err))
 		}
 	}()
 
@@ -262,6 +265,30 @@ func (s *ProductService) DeleteProduct(id uint) error {
 		return errors.New("该商品有未完成的订单，无法删除")
 	}
 
+	// 在删除商品前，先查出其图片并尝试删除 OSS 上的文件（best-effort）
+	var imgs []model.ProductImage
+	if err := s.db.Where("product_id = ?", id).Find(&imgs).Error; err == nil && len(imgs) > 0 {
+		urls := make([]string, 0, len(imgs))
+		for _, im := range imgs {
+			urls = append(urls, im.ImageURL)
+		}
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					logx.Get().Warn("oss delete panic", zap.Any("panic", r))
+				}
+			}()
+			if err := DeleteFilesFunc(urls); err != nil {
+				logx.Get().Warn("OSS 批量删除失败", zap.Error(err))
+			}
+		}()
+	}
+
+	// 删除数据库中的商品图片记录
+	if err := s.db.Where("product_id = ?", id).Delete(&model.ProductImage{}).Error; err != nil {
+		return fmt.Errorf("删除商品图片记录失败: %w", err)
+	}
+
 	if err := s.db.Delete(&model.Product{}, id).Error; err != nil {
 		return fmt.Errorf("删除商品失败: %w", err)
 	}
@@ -298,5 +325,141 @@ func (s *ProductService) UpdateProductStock(id uint, stock int, action string) e
 		return fmt.Errorf("更新库存失败: %w", err)
 	}
 
+	return nil
+}
+
+// GetProductImages 获取商品图片列表
+func (s *ProductService) GetProductImages(productID uint) ([]*model.ProductImage, error) {
+	var list []*model.ProductImage
+	if err := s.db.Where("product_id = ?", productID).Order("sort ASC, id ASC").Find(&list).Error; err != nil {
+		return nil, fmt.Errorf("获取商品图片失败: %w", err)
+	}
+	return list, nil
+}
+
+// AddProductImage 添加商品图片（支持设置为主图）
+func (s *ProductService) AddProductImage(productID uint, imageURL string, sort int, isMain bool) (*model.ProductImage, error) {
+	// 若设置为主图，先将其他图片的 IsMain 设为 false
+	tx := s.db.Begin()
+	if isMain {
+		if err := tx.Model(&model.ProductImage{}).Where("product_id = ?", productID).Update("is_main", false).Error; err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("设置主图失败: %w", err)
+		}
+	}
+	img := &model.ProductImage{
+		ProductID: productID,
+		ImageURL:  imageURL,
+		Sort:      sort,
+		IsMain:    isMain,
+	}
+	if err := tx.Create(img).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("添加商品图片失败: %w", err)
+	}
+	if err := tx.Commit().Error; err != nil {
+		return nil, fmt.Errorf("数据库提交失败: %w", err)
+	}
+	return img, nil
+}
+
+// UpdateProductImage 更新图片排序或主图标记
+func (s *ProductService) UpdateProductImage(imageID uint, sort *int, isMain *bool) error {
+	var img model.ProductImage
+	if err := s.db.First(&img, imageID).Error; err != nil {
+		return fmt.Errorf("图片不存在: %w", err)
+	}
+	tx := s.db.Begin()
+	if isMain != nil && *isMain {
+		// 取消该商品下其他图片的主图标记
+		if err := tx.Model(&model.ProductImage{}).Where("product_id = ?", img.ProductID).Update("is_main", false).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("设置主图失败: %w", err)
+		}
+		if err := tx.Model(&model.ProductImage{}).Where("id = ?", imageID).Update("is_main", true).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("设置主图失败: %w", err)
+		}
+	}
+	if sort != nil {
+		if err := tx.Model(&model.ProductImage{}).Where("id = ?", imageID).Update("sort", *sort).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("更新排序失败: %w", err)
+		}
+	}
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("数据库提交失败: %w", err)
+	}
+	return nil
+}
+
+// DeleteProductImage 删除图片
+func (s *ProductService) DeleteProductImage(imageID uint) error {
+	var img model.ProductImage
+	if err := s.db.First(&img, imageID).Error; err != nil {
+		return fmt.Errorf("图片不存在: %w", err)
+	}
+
+	// 尝试先删除 OSS 上的文件（若配置正确且可访问）
+	defer func() {
+		// 不影响主流程的错误处理：如果 OSS 删除失败，仍继续删除数据库记录，但记录错误到日志
+		// 这里简单打印错误，项目可替换为更完善的日志/告警
+		// 注意：NewOssService 可能 panic 或错误，包内已有实现会 panic 于初始化失败；捕获以防止影响主流程
+	}()
+
+	// collect URL
+	urls := []string{img.ImageURL}
+	// 调用 OSS 服务删除（忽略返回错误，但记录）
+	func() {
+		// 防止 NewOssService panic 影响逻辑
+		defer func() {
+			if r := recover(); r != nil {
+				logx.Get().Warn("oss delete panic", zap.Any("panic", r))
+			}
+		}()
+		if err := DeleteFilesFunc(urls); err != nil {
+			logx.Get().Warn("OSS 删除文件失败", zap.Error(err))
+		}
+	}()
+
+	if err := s.db.Delete(&model.ProductImage{}, imageID).Error; err != nil {
+		return fmt.Errorf("删除图片失败: %w", err)
+	}
+	return nil
+}
+
+// DeleteProductImages 批量删除图片（接受图片ID列表）
+func (s *ProductService) DeleteProductImages(ids []uint) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	var imgs []model.ProductImage
+	if err := s.db.Where("id IN ?", ids).Find(&imgs).Error; err != nil {
+		return fmt.Errorf("查询图片失败: %w", err)
+	}
+
+	// collect URLs for OSS deletion
+	urls := make([]string, 0, len(imgs))
+	for _, im := range imgs {
+		urls = append(urls, im.ImageURL)
+	}
+
+	// best-effort delete from OSS
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logx.Get().Warn("oss delete panic", zap.Any("panic", r))
+			}
+		}()
+		if err := DeleteFilesFunc(urls); err != nil {
+			logx.Get().Warn("OSS 批量删除失败", zap.Error(err))
+		}
+	}()
+
+	// delete DB records
+	if err := s.db.Where("id IN ?", ids).Delete(&model.ProductImage{}).Error; err != nil {
+		return fmt.Errorf("删除图片记录失败: %w", err)
+	}
 	return nil
 }

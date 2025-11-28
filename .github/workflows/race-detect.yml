@@ -1,0 +1,45 @@
+name: Go Race Detector
+
+on:
+  push:
+    branches: [ feat/frontend-scaffold ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  race:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+
+      - name: Install build dependencies (gcc for race detector)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Run go test with race detector
+        env:
+          CGO_ENABLED: 1
+        run: |
+          go version
+          go env
+          # Run the race detector across all packages. If some packages require external
+          # services, consider limiting to specific packages or setting env to skip
+          # integration tests.
+          go test -race ./... -v

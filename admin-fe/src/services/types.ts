@@ -40,7 +40,7 @@ export interface Product {
   category_id: number;
   price: string | number;
   original_price?: string | number;
-  images?: string;
+  images?: string[];
   stock?: number;
   status?: number;
 }

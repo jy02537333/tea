@@ -27,6 +27,18 @@ export default function ProductList() {
     }
   }
 
+  // 兼容 images 为 string[] 或 string
+  function normalizeImages(images: any): string[] {
+    if (!images) return [];
+    if (Array.isArray(images)) return images;
+    try {
+      const arr = JSON.parse(images);
+      if (Array.isArray(arr)) return arr;
+    } catch {}
+    if (typeof images === 'string') return [images];
+    return [];
+  }
+
   return (
     <div style={{ padding: 16 }}>
       <Space style={{ marginBottom: 12 }}>
@@ -41,6 +53,10 @@ export default function ProductList() {
           { title: '名称', dataIndex: 'name' },
           { title: '价格', dataIndex: 'price' },
           { title: '库存', dataIndex: 'stock' },
+          { title: '图片', dataIndex: 'images', render: (imgs) => {
+            const arr = normalizeImages(imgs);
+            return arr.length > 0 ? arr.map((url, i) => <img key={i} src={url} alt="" style={{ width: 40, height: 40, objectFit: 'cover', marginRight: 4 }} />) : '-';
+          } },
         ]}
       />
     </div>
