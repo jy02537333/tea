@@ -9,6 +9,30 @@ on:
 jobs:
   race:
     runs-on: ubuntu-latest
+    env:
+      MYSQL_ROOT_PASSWORD: gs963852
+      # Redis uses default no-password
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: gs963852
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=5s
+          --health-timeout=2s
+          --health-retries=20
+      redis:
+        image: redis:6.2
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=2s
+          --health-retries=20
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -21,7 +45,33 @@ jobs:
       - name: Install build dependencies (gcc for race detector)
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential
+          sudo apt-get install -y build-essential default-mysql-client redis-tools
+
+      - name: Prepare DB and wait for services
+        run: |
+          set -euo pipefail
+          echo "Waiting for MySQL to be healthy..."
+          for i in {1..40}; do
+            if mysqladmin ping -h 127.0.0.1 -P 3306 -uroot -p"$MYSQL_ROOT_PASSWORD" --silent; then
+              echo "MySQL is up"; break
+            fi
+            echo "Waiting for MySQL... ($i)"; sleep 2
+          done
+          echo "Creating database 'tea_shop' if not exists"
+          mysql -h127.0.0.1 -P3306 -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS tea_shop CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;" || true
+          if [ -f "tea-api/scripts/init.sql" ]; then
+            echo "Importing schema from tea-api/scripts/init.sql"
+            mysql -h127.0.0.1 -P3306 -uroot -p"$MYSQL_ROOT_PASSWORD" tea_shop < tea-api/scripts/init.sql || true
+          else
+            echo "No init.sql found; skipping schema import"
+          fi
+          echo "Waiting for Redis to be reachable..."
+          for i in {1..30}; do
+            if redis-cli -h 127.0.0.1 -p 6379 ping | grep -q PONG; then
+              echo "Redis is up"; break
+            fi
+            echo "Waiting for Redis... ($i)"; sleep 1
+          done
 
       - name: Cache Go modules
         uses: actions/cache@v4
