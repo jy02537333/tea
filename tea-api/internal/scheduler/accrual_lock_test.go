@@ -34,9 +34,6 @@ func Test_Accrual_RedisLock_Skips_Duplicate(t *testing.T) {
 	// Create a test user via helper to ensure consistent, schema-safe values
 	uPtr := testutil.CreateTestUser(t)
 	u := *uPtr
-	if err := db.Create(&u).Error; err != nil {
-		t.Fatalf("create user: %v", err)
-	}
 
 	cfg := config.Accrual{UseRedisLock: true, LockTTLSecond: 60}
 	// 使用次日日期，避免与潜在线上/其他测试留下的同日锁冲突
