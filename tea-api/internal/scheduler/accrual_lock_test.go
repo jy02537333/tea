@@ -37,7 +37,8 @@ func Test_Accrual_RedisLock_Skips_Duplicate(t *testing.T) {
 	if len(phoneVal) > 20 {
 		phoneVal = phoneVal[:20]
 	}
-	u := model.User{BaseModel: model.BaseModel{UID: utils.GenerateUID()}, OpenID: "u_" + utils.GenerateUID(), Phone: phoneVal, Nickname: "rl", Status: 1, Balance: decimal.NewFromFloat(1000)}
+	usernameVal := "user_" + utils.GenerateUID()
+	u := model.User{BaseModel: model.BaseModel{UID: utils.GenerateUID()}, Username: usernameVal, OpenID: "u_" + utils.GenerateUID(), Phone: phoneVal, Nickname: "rl", Status: 1, Balance: decimal.NewFromFloat(1000)}
 	if err := db.Create(&u).Error; err != nil {
 		t.Fatalf("create user: %v", err)
 	}
