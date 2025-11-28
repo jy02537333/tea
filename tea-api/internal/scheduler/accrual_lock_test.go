@@ -32,7 +32,12 @@ func Test_Accrual_RedisLock_Skips_Duplicate(t *testing.T) {
 	// 初始化 DB
 	database.InitDatabase()
 	db := database.GetDB()
-	u := model.User{BaseModel: model.BaseModel{UID: utils.GenerateUID()}, OpenID: "u_" + utils.GenerateUID(), Phone: "p_" + utils.GenerateUID(), Nickname: "rl", Status: 1, Balance: decimal.NewFromFloat(1000)}
+	// Ensure phone length matches DB schema (varchar(20)) to avoid insert error
+	phoneVal := "p_" + utils.GenerateUID()
+	if len(phoneVal) > 20 {
+		phoneVal = phoneVal[:20]
+	}
+	u := model.User{BaseModel: model.BaseModel{UID: utils.GenerateUID()}, OpenID: "u_" + utils.GenerateUID(), Phone: phoneVal, Nickname: "rl", Status: 1, Balance: decimal.NewFromFloat(1000)}
 	if err := db.Create(&u).Error; err != nil {
 		t.Fatalf("create user: %v", err)
 	}
