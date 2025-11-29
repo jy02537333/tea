@@ -56,6 +56,7 @@ export default function ProductDetail() {
             ))}
           </View>
           <Button onClick={addToCart} disabled={loading}>加入购物车</Button>
+          <Button onClick={() => Taro.navigateTo({ url: '/src/pages/cart/index' })}>去购物车</Button>
         </View>
       )}
     </View>
