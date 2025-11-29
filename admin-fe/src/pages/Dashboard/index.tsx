@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Row, Col, Statistic, message, Space, Button, DatePicker } from 'antd';
+import { Card, Row, Col, Statistic, message, Space, Button, DatePicker, Input, Select } from 'antd';
 import { accrualSummary, runAccrual, accrualExport } from '../../services/accrual';
 
 export default function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<any>({ record_count: 0, user_count: 0, total_interest: '0' });
+  const [exportName, setExportName] = useState<string>('accrual_report');
+  const [exportFields, setExportFields] = useState<string[]>(['id','user_id','amount','date']);
 
   useEffect(() => { fetchSummary(); }, []);
 
@@ -50,7 +52,7 @@ export default function Dashboard() {
             const blob = await accrualExport({ format: 'xlsx' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = `accrual_${Date.now()}.xlsx`; a.click();
+            a.href = url; a.download = `${exportName}_${Date.now()}.xlsx`; a.click();
             URL.revokeObjectURL(url);
           } catch (e: any) {
             message.error(e?.message || '导出失败');
@@ -58,6 +60,21 @@ export default function Dashboard() {
         }}>
           导出报表
         </Button>
+        <Input style={{ width: 200 }} placeholder="文件名" value={exportName} onChange={(e) => setExportName(e.target.value)} />
+        <Select
+          mode="multiple"
+          style={{ width: 260 }}
+          value={exportFields}
+          onChange={setExportFields}
+          options={[
+            { label: 'id', value: 'id' },
+            { label: 'user_id', value: 'user_id' },
+            { label: 'amount', value: 'amount' },
+            { label: 'date', value: 'date' },
+            { label: 'remark', value: 'remark' },
+          ]}
+          placeholder="选择导出字段"
+        />
       </Space>
       <Row gutter={16}>
         <Col span={8}><Card loading={loading}><Statistic title="记录数" value={summary.record_count || 0} /></Card></Col>
