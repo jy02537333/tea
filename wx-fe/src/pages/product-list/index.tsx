@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Button } from '@tarojs/components';
+import { View, Text, Button, Image } from '@tarojs/components';
 import { listProducts } from '../../services/products';
 import { Product } from '../../services/types';
 

@@ -10,11 +10,12 @@
     "build:h5": "taro build:h5"
   },
   "devDependencies": {
+    "@tarojs/cli": "^4.1.8",
     "@types/node": "^24.10.1",
     "@types/react": "^18.3.27",
     "@types/react-dom": "^18.3.7",
-    "typescript": "^5.0.0",
-    "@tarojs/cli": "^4.1.8"
+    "msw": "^2.12.3",
+    "typescript": "^5.0.0"
   },
   "dependencies": {
     "@tarojs/components": "^4.1.8",

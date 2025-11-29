@@ -3,7 +3,8 @@ import { Table, Button, Space, Modal, message, Form, Input, InputNumber, Select,
 import { UploadOutlined } from '@ant-design/icons';
 import { getOssSignature } from '../../services/oss';
 import { deleteOssFiles } from '../../services/oss-delete';
-import { getProducts, createProduct, updateProduct, deleteProduct, updateProduct as updateProductStatus, Product } from '../../services/products';
+import { getProducts, createProduct, updateProduct, deleteProduct, updateProduct as updateProductStatus } from '../../services/products';
+import type { Product } from '../../services/types';
 import type { UploadFile } from 'antd/es/upload/interface';
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [filter, setFilter] = useState<{ category_id?: number; status?: number; keyword?: string }>({});
@@ -65,7 +66,8 @@ const Products: React.FC = () => {
     return fileList.map(f => f.url || f.thumbUrl || (f.response && f.response.url)).filter(Boolean);
   }
 
-  async function customOssUpload({ file, onSuccess, onError, onProgress }) {
+  async function customOssUpload(options: any) {
+    const { file, onSuccess, onError, onProgress } = options || {};
     try {
       // 获取 OSS 签名
       const sign = await getOssSignature({ dir: 'products/' });
@@ -181,7 +183,7 @@ const Products: React.FC = () => {
         message.success('保存成功');
       }
       closeModal();
-      fetch(page);
+      fetch(page, filter);
     } catch (e: any) {
       message.error(e?.message || '保存失败');
     }
@@ -194,7 +196,7 @@ const Products: React.FC = () => {
         try {
           await deleteProduct(record.id);
           message.success('已删除');
-          fetch(page);
+          fetch(page, filter);
         } catch (e: any) {
           message.error(e?.message || '删除失败');
         }

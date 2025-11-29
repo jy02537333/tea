@@ -57,7 +57,7 @@ export default function OssManager() {
         dataSource={data}
         rowSelection={{
           selectedRowKeys: selected,
-          onChange: setSelected,
+          onChange: (keys) => setSelected((keys as React.Key[]).map(String)),
         }}
         columns={[{
           title: '图片',
