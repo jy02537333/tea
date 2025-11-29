@@ -49,7 +49,7 @@ export default function Dashboard() {
         </Button>
         <Button onClick={async () => {
           try {
-            const blob = await accrualExport({ format: 'xlsx' });
+            const blob = await accrualExport({ format: 'xlsx', fields: exportFields.join(',') });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url; a.download = `${exportName}_${Date.now()}.xlsx`; a.click();
