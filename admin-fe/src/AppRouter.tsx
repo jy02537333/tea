@@ -1,10 +1,11 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, Navigate } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import ProductList from './pages/ProductList';
 import Products from './pages/Products';
 import OrderDetail from './pages/OrderDetail';
 import Users from './pages/Users';
+import Login from './pages/Login';
 
 export default function AppRouter() {
   return (
@@ -17,11 +18,13 @@ export default function AppRouter() {
         <Link to="/orders/1">订单详情(id=1)</Link>
       </nav>
       <Routes>
+        <Route path="/login" element={<Login />} />
         <Route path="/" element={<Dashboard />} />
         <Route path="/products" element={<ProductList />} />
         <Route path="/products-new" element={<Products />} />
         <Route path="/users" element={<Users />} />
         <Route path="/orders/:id" element={<OrderDetail id={1} />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );

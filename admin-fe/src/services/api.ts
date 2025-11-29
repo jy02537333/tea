@@ -31,6 +31,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Auth interceptor: attach Bearer token when available
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('auth_token');
+  if (token) {
+    config.headers = config.headers || {};
+    config.headers['Authorization'] = `Bearer ${token}`;
+  }
+  return config;
+});
+
 // Response interceptor: simple 401 handling
 api.interceptors.response.use(
   (res) => res,
@@ -40,6 +50,21 @@ api.interceptors.response.use(
       setToken(null);
       // optionally dispatch an event
       window.dispatchEvent(new Event('unauthorized'));
+    }
+    return Promise.reject(err);
+  }
+);
+
+// Response interceptor: redirect to login on 401
+api.interceptors.response.use(
+  (resp) => resp,
+  (err) => {
+    if (err?.response?.status === 401) {
+      // preserve current path
+      const from = encodeURIComponent(window.location.pathname + window.location.search);
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = `/login?from=${from}`;
+      }
     }
     return Promise.reject(err);
   }
