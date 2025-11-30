@@ -71,6 +71,8 @@ export default function OrderDetailPage() {
                   <Text>#{idx + 1} 商品ID: {it.product_id}</Text>
                   <Text> 数量: {it.quantity}</Text>
                   {typeof (it as any).price !== 'undefined' && <Text> 价格: {(it as any).price}</Text>}
+                  {typeof (it as any).sku_name !== 'undefined' && <Text> SKU: {(it as any).sku_name}</Text>}
+                  {typeof (it as any).image_url !== 'undefined' && <Text> 图片: {(it as any).image_url}</Text>}
                 </View>
               ))
             ) : (

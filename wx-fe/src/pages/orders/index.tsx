@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, Button } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import { listOrders } from '../../services/orders';
+import { listStores } from '../../services/stores';
 import { cacheOrders, getCachedOrders } from '../../store/orders';
 import type { Order } from '../../services/types';
 
@@ -12,6 +13,7 @@ export default function OrdersPage() {
   const [hasMore, setHasMore] = useState(true);
   const [statusFilter, setStatusFilter] = useState<number | null>(null);
   const [storeFilter, setStoreFilter] = useState<number | null>(null);
+  const [stores, setStores] = useState<{ label: string; value: number }[]>([]);
 
   const STATUS_OPTIONS: { label: string; value: number | null }[] = [
     { label: '全部', value: null },
@@ -23,6 +25,15 @@ export default function OrdersPage() {
   ];
 
   useEffect(() => { resetAndFetch(); }, [statusFilter, storeFilter]);
+  useEffect(() => { fetchStores(); }, []);
+    async function fetchStores() {
+      try {
+        const res = await listStores({ page: 1, limit: 100 });
+        const maybe: any = res;
+        const list = maybe?.data || maybe?.items || [];
+        setStores(list.map((s: any) => ({ label: s.name, value: s.id })));
+      } catch {}
+    }
   useEffect(() => {
     // 优先显示缓存的列表以减少闪烁
     const cached = getCachedOrders();
@@ -67,7 +78,20 @@ export default function OrdersPage() {
             style={{ marginRight: 4, backgroundColor: statusFilter === opt.value ? '#1677ff' : '#ddd', color: statusFilter === opt.value ? '#fff' : '#000' }}
           >{opt.label}</Button>
         ))}
-        <Button size="mini" onClick={() => setStoreFilter(null)} style={{ marginLeft: 4 }}>清除门店</Button>
+        <View style={{ marginLeft: 8 }}>
+          <Text>门店：</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            {stores.map(s => (
+              <Button
+                key={s.value}
+                size="mini"
+                onClick={() => setStoreFilter(s.value)}
+                style={{ marginRight: 4, backgroundColor: storeFilter === s.value ? '#52c41a' : '#ddd', color: storeFilter === s.value ? '#fff' : '#000' }}
+              >{s.label}</Button>
+            ))}
+            <Button size="mini" onClick={() => setStoreFilter(null)} style={{ marginLeft: 4 }}>清除门店</Button>
+          </View>
+        </View>
       </View>
       {loading && <Text>加载中...</Text>}
       {!loading && orders.length === 0 && <Text>暂无订单</Text>}
