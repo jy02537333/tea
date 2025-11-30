@@ -5,9 +5,12 @@ body {
 
 /* 骨架 shimmer 动画 */
 .thumbnail-skeleton {
-  background: linear-gradient(90deg, #eaeaea 0%, #f5f5f5 50%, #eaeaea 100%);
+  --shimmer-bg: #eaeaea;
+  --shimmer-highlight: #f5f5f5;
+  --shimmer-duration: 1.2s;
+  background: linear-gradient(90deg, var(--shimmer-bg) 0%, var(--shimmer-highlight) 50%, var(--shimmer-bg) 100%);
   background-size: 200% 100%;
-  animation: shimmer 1.2s infinite linear;
+  animation: shimmer var(--shimmer-duration) infinite linear;
 }
 
 @keyframes shimmer {
