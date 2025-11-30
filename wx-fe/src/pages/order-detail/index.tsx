@@ -90,7 +90,11 @@ export default function OrderDetailPage() {
                 return (
                   <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 4, paddingBottom: 4 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      {img ? <Image src={img} style={{ width: 40, height: 40, marginRight: 6, borderRadius: 4 }} mode="aspectFill" /> : null}
+                      {img ? (
+                        <Image src={img} style={{ width: 40, height: 40, marginRight: 6, borderRadius: 4, backgroundColor: '#f0f0f0' }} mode="aspectFill" lazyLoad />
+                      ) : (
+                        <View style={{ width: 40, height: 40, marginRight: 6, borderRadius: 4, backgroundColor: '#e5e5e5' }} />
+                      )}
                       <Text>{name}</Text>
                     </View>
                     <View>
