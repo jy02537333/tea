@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Button } from '@tarojs/components';
+import { View, Text, Button, Image } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import { getOrder, cancelOrder, payOrder, receiveOrder } from '../../services/orders';
+import { getProduct } from '../../services/products';
 import { cacheOrder, getCachedOrder } from '../../store/orders';
+import { getCachedProduct, cacheProduct } from '../../store/products';
 import type { Order } from '../../services/types';
 
 export default function OrderDetailPage() {
@@ -25,6 +27,21 @@ export default function OrderDetailPage() {
       const o = await getOrder(id);
       setOrder(o);
       cacheOrder(o);
+      // 补充订单项的产品名称与图片（按需请求）
+      if (o?.items && o.items.length > 0) {
+        const tasks = o.items.map(async (it: any) => {
+          const pid = it.product_id;
+          if (!pid) return;
+          const cached = getCachedProduct(pid);
+          if (cached) return cached;
+          try {
+            const p = await getProduct(pid);
+            cacheProduct(p as any);
+            return p as any;
+          } catch { return null; }
+        });
+        await Promise.all(tasks);
+      }
     } finally {
       setLoading(false);
     }
@@ -66,15 +83,24 @@ export default function OrderDetailPage() {
           <View style={{ marginTop: 8 }}>
             <Text> 商品项：</Text>
             {(order.items && order.items.length > 0) ? (
-              order.items.map((it, idx) => (
-                <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 4, paddingBottom: 4 }}>
-                  <Text>#{idx + 1} 商品ID: {it.product_id}</Text>
-                  <Text> 数量: {it.quantity}</Text>
-                  {typeof (it as any).price !== 'undefined' && <Text> 价格: {(it as any).price}</Text>}
-                  {typeof (it as any).sku_name !== 'undefined' && <Text> SKU: {(it as any).sku_name}</Text>}
-                  {typeof (it as any).image_url !== 'undefined' && <Text> 图片: {(it as any).image_url}</Text>}
-                </View>
-              ))
+              order.items.map((it, idx) => {
+                const prod = getCachedProduct(it.product_id || 0);
+                const name = (prod as any)?.name || (it as any)?.product_name || `#${it.product_id}`;
+                const img = ((prod as any)?.images && (prod as any).images[0]) || (it as any)?.image_url;
+                return (
+                  <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 4, paddingBottom: 4 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      {img ? <Image src={img} style={{ width: 40, height: 40, marginRight: 6, borderRadius: 4 }} mode="aspectFill" /> : null}
+                      <Text>{name}</Text>
+                    </View>
+                    <View>
+                      <Text> 数量: {it.quantity}</Text>
+                      {typeof (it as any).price !== 'undefined' && <Text>  价格: {(it as any).price}</Text>}
+                      {typeof (it as any).sku_name !== 'undefined' && <Text>  SKU: {(it as any).sku_name}</Text>}
+                    </View>
+                  </View>
+                );
+              })
             ) : (
               <Text>无订单项或未返回</Text>
             )}

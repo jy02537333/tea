@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Button } from '@tarojs/components';
+import { View, Text, Button, Picker } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import { listOrders } from '../../services/orders';
 import { listStores } from '../../services/stores';
@@ -14,6 +14,7 @@ export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState<number | null>(null);
   const [storeFilter, setStoreFilter] = useState<number | null>(null);
   const [stores, setStores] = useState<{ label: string; value: number }[]>([]);
+  const [storePickerIndex, setStorePickerIndex] = useState<number>(-1);
 
   const STATUS_OPTIONS: { label: string; value: number | null }[] = [
     { label: '全部', value: null },
@@ -80,17 +81,22 @@ export default function OrdersPage() {
         ))}
         <View style={{ marginLeft: 8 }}>
           <Text>门店：</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {stores.map(s => (
-              <Button
-                key={s.value}
-                size="mini"
-                onClick={() => setStoreFilter(s.value)}
-                style={{ marginRight: 4, backgroundColor: storeFilter === s.value ? '#52c41a' : '#ddd', color: storeFilter === s.value ? '#fff' : '#000' }}
-              >{s.label}</Button>
-            ))}
-            <Button size="mini" onClick={() => setStoreFilter(null)} style={{ marginLeft: 4 }}>清除门店</Button>
-          </View>
+          <Picker
+            mode="selector"
+            range={stores.map(s => s.label)}
+            onChange={(e) => {
+              const idx = Number((e as any).detail?.value ?? -1);
+              setStorePickerIndex(idx);
+              if (idx >= 0) {
+                setStoreFilter(stores[idx].value);
+              }
+            }}
+          >
+            <View style={{ padding: 6, backgroundColor: '#f5f5f5', borderRadius: 4, display: 'inline-block' }}>
+              <Text>{storePickerIndex >= 0 ? stores[storePickerIndex]?.label : '选择门店'}</Text>
+            </View>
+          </Picker>
+          <Button size="mini" onClick={() => { setStoreFilter(null); setStorePickerIndex(-1); }} style={{ marginLeft: 6 }}>清除门店</Button>
         </View>
       </View>
       {loading && <Text>加载中...</Text>}
