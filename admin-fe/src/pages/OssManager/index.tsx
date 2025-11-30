@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Button, Space, message, Modal } from 'antd';
+import Thumbnail from '../../components/Thumbnail';
 import { listOssFiles, deleteOssFiles } from '../../services/oss-manager';
 
 const PAGE_SIZE = 20;
@@ -62,7 +63,7 @@ export default function OssManager() {
         columns={[{
           title: '图片',
           dataIndex: '',
-          render: (url: string) => <img src={url} alt="" style={{ width: 80, height: 80, objectFit: 'cover' }} />,
+          render: (url: string) => <Thumbnail src={url} width={80} height={80} />,
         }, {
           title: 'URL',
           dataIndex: '',

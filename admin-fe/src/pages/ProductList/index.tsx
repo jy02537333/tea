@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Button, Space } from 'antd';
+import Thumbnail from '../../components/Thumbnail';
 import { listProducts } from '../../services/products';
 import { Product } from '../../services/types';
 
@@ -53,9 +54,9 @@ export default function ProductList() {
           { title: '名称', dataIndex: 'name' },
           { title: '价格', dataIndex: 'price' },
           { title: '库存', dataIndex: 'stock' },
-          { title: '图片', dataIndex: 'images', render: (imgs) => {
+            { title: '图片', dataIndex: 'images', render: (imgs) => {
             const arr = normalizeImages(imgs);
-            return arr.length > 0 ? arr.map((url, i) => <img key={i} src={url} alt="" style={{ width: 40, height: 40, objectFit: 'cover', marginRight: 4 }} />) : '-';
+            return arr.length > 0 ? arr.map((url, i) => <Thumbnail key={i} src={url} width={40} height={40} />) : '-';
           } },
         ]}
       />

@@ -1,0 +1,23 @@
+:root {
+  --af-shimmer-bg: #eaeaea;
+  --af-shimmer-highlight: #f5f5f5;
+  --af-shimmer-duration: 1.2s;
+}
+
+.af-thumbnail-container {
+  position: relative;
+  display: inline-block;
+}
+
+.af-thumbnail-skeleton {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, var(--af-shimmer-bg) 0%, var(--af-shimmer-highlight) 50%, var(--af-shimmer-bg) 100%);
+  background-size: 200% 100%;
+  animation: af-shimmer var(--af-shimmer-duration) infinite linear;
+}
+
+@keyframes af-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

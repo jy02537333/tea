@@ -10,6 +10,7 @@ import type { UploadFile } from 'antd/es/upload/interface';
   const [filter, setFilter] = useState<{ category_id?: number; status?: number; keyword?: string }>({});
 import { getCategories } from '../../services/categories';
 import ProductImagesManager from '../../components/ProductImagesManager';
+import Thumbnail from '../../components/Thumbnail';
 
 const PAGE_SIZE = 20;
 
@@ -304,10 +305,10 @@ const Products: React.FC = () => {
           <Form.Item name="status" label="状态" initialValue={1}> <Select options={[{ label: '上架', value: 1 }, { label: '下架', value: 0 }]} /> </Form.Item>
         </Form>
         {/* 多图本地预览 */}
-        {form.getFieldValue('images') && form.getFieldValue('images').length > 0 && (
+          {form.getFieldValue('images') && form.getFieldValue('images').length > 0 && (
           <div style={{ marginTop: 8 }}>
             {form.getFieldValue('images').map((f: any, i: number) => (
-              <img key={i} src={f.url || (f.response && f.response.url)} alt="预览" style={{ width: 80, height: 80, objectFit: 'cover', marginRight: 8 }} />
+              <Thumbnail key={i} src={f.url || (f.response && f.response.url)} width={80} height={80} />
             ))}
           </div>
         )}

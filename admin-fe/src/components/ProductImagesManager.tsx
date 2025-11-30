@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import Thumbnail from './Thumbnail';
 import { Modal, List, Button, message, Upload, InputNumber, Space, Tooltip, Checkbox, Progress } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { getOssSignature } from '../services/oss';
@@ -228,7 +229,11 @@ const ProductImagesManager: React.FC<Props> = ({ productId, visible, onClose, on
             >
               <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
                 <List.Item.Meta
-                  avatar={<img src={item.image_url || undefined} alt="" style={{ width: 160, height: 100, objectFit: 'cover', background: '#f5f5f5', cursor: item.isTemp ? 'default' : 'grab', transition: 'transform .12s ease, box-shadow .12s ease', boxShadow: isDragOver ? '0 8px 20px rgba(0,0,0,0.12)' : undefined, transform: isDragOver ? 'scale(1.02)' : undefined, border: isDragOver ? '2px dashed #1890ff' : undefined }} />}
+                  avatar={
+                    <span style={{ display: 'inline-block', width: 160, height: 100, marginRight: 8, cursor: item.isTemp ? 'default' : 'grab', transition: 'transform .12s ease, box-shadow .12s ease', boxShadow: isDragOver ? '0 8px 20px rgba(0,0,0,0.12)' : undefined, transform: isDragOver ? 'scale(1.02)' : undefined, border: isDragOver ? '2px dashed #1890ff' : undefined }}>
+                      <Thumbnail src={item.image_url || undefined} width={160} height={100} />
+                    </span>
+                  }
                   title={
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <span style={{ wordBreak: 'break-all', maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.image_url}</span>
