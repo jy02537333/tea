@@ -10,4 +10,4 @@ export interface TaroThumbnailProps {
     loading?: 'lazy' | 'eager';
     animateScale?: boolean;
 }
-export default function Thumbnail({ src, width, height, radius, skeleton, shimmerHighlight, shimmerBg, shimmerSpeed, loading, animateScale, }: TaroThumbnailProps): any;
+export default function Thumbnail({ src, width, height, radius, skeleton, shimmerHighlight, shimmerBg, shimmerSpeed, loading, animateScale, }: TaroThumbnailProps): import("react/jsx-runtime").JSX.Element;

@@ -12,4 +12,4 @@ export interface ReactThumbnailProps {
     loading?: 'lazy' | 'eager';
     animateScale?: boolean;
 }
-export default function Thumbnail({ src, alt, width, height, radius, skeleton, shimmerHighlight, shimmerBg, shimmerSpeed, loading, animateScale, }: ReactThumbnailProps): any;
+export default function Thumbnail({ src, alt, width, height, radius, skeleton, shimmerHighlight, shimmerBg, shimmerSpeed, loading, animateScale, }: ReactThumbnailProps): import("react/jsx-runtime").JSX.Element;
