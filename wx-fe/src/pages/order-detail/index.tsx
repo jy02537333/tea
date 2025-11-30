@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, Button } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import { getOrder, cancelOrder, payOrder, receiveOrder } from '../../services/orders';
+import { cacheOrder, getCachedOrder } from '../../store/orders';
 import type { Order } from '../../services/types';
 
 export default function OrderDetailPage() {
@@ -11,7 +12,11 @@ export default function OrderDetailPage() {
   useEffect(() => {
     const params = Taro.getCurrentInstance().router?.params || {} as any;
     const id = Number(params.id || 0);
-    if (id) fetch(id);
+    if (id) {
+      const cached = getCachedOrder(id);
+      if (cached) setOrder(cached);
+      fetch(id);
+    }
   }, []);
 
   async function fetch(id: number) {
@@ -19,6 +24,7 @@ export default function OrderDetailPage() {
     try {
       const o = await getOrder(id);
       setOrder(o);
+      cacheOrder(o);
     } finally {
       setLoading(false);
     }
@@ -57,6 +63,20 @@ export default function OrderDetailPage() {
           <Text>订单号: {order.order_no || order.id}</Text>
           <Text> 金额: {order.pay_amount}</Text>
           <Text> 状态: {order.status}</Text>
+          <View style={{ marginTop: 8 }}>
+            <Text> 商品项：</Text>
+            {(order.items && order.items.length > 0) ? (
+              order.items.map((it, idx) => (
+                <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 4, paddingBottom: 4 }}>
+                  <Text>#{idx + 1} 商品ID: {it.product_id}</Text>
+                  <Text> 数量: {it.quantity}</Text>
+                  {typeof (it as any).price !== 'undefined' && <Text> 价格: {(it as any).price}</Text>}
+                </View>
+              ))
+            ) : (
+              <Text>无订单项或未返回</Text>
+            )}
+          </View>
           <View style={{ flexDirection: 'row', marginTop: 8 }}>
             <Button onClick={onCancel} disabled={loading}>取消订单</Button>
             <Button onClick={onPay} disabled={loading}>支付</Button>
