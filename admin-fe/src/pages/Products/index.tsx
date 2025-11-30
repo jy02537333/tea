@@ -227,7 +227,7 @@ const Products: React.FC = () => {
           { title: '库存', dataIndex: 'stock' },
           { title: '图片', dataIndex: 'images', render: (imgs) => {
             const arr = normalizeImages(imgs);
-            return arr.length > 0 ? arr.map((url, i) => <img key={i} src={url} alt="" style={{ width: 40, height: 40, objectFit: 'cover', marginRight: 4 }} />) : '-';
+            return arr.length > 0 ? arr.map((url, i) => <Thumbnail key={i} src={url} width={40} height={40} />) : '-';
           } },
           { title: '状态', dataIndex: 'status', render: (s) => s === 1 ? '上架' : '下架' },
           {

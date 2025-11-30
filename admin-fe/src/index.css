@@ -1,0 +1,7 @@
+:root {
+  --af-shimmer-bg: #eaeaea;
+  --af-shimmer-highlight: #f5f5f5;
+  --af-shimmer-duration: 1.2s;
+}
+
+/* optional global admin-fe variables for thumbnail */

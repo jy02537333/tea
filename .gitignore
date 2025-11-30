@@ -28,3 +28,7 @@ deploy/test.html
 *.pyc
 *.exe
 *.db
+
+# ignore built assets from admin-fe and wx-fe
+admin-fe/dist/
+wx-fe/dist/

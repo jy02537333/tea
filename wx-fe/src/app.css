@@ -3,6 +3,12 @@ body {
   background: #f7f7f7;
 }
 
+:root {
+  --shimmer-bg: #eaeaea;
+  --shimmer-highlight: #f5f5f5;
+  --shimmer-duration: 1.2s;
+}
+
 /* 骨架 shimmer 动画 */
 .thumbnail-skeleton {
   --shimmer-bg: #eaeaea;
