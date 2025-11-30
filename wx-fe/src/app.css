@@ -2,3 +2,15 @@
 body {
   background: #f7f7f7;
 }
+
+/* 骨架 shimmer 动画 */
+.thumbnail-skeleton {
+  background: linear-gradient(90deg, #eaeaea 0%, #f5f5f5 50%, #eaeaea 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite linear;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

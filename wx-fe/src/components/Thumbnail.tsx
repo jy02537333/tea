@@ -15,16 +15,16 @@ export default function Thumbnail({ src, width = 40, height = 40, radius = 4, la
   const [loaded, setLoaded] = useState(false);
   const containerStyle: CSSProperties = { width: `${width}px`, height: `${height}px`, borderRadius: `${radius}px`, marginRight: '6px', overflow: 'hidden' } as any;
   const imgStyle: CSSProperties = { width: '100%', height: '100%', opacity: loaded ? 1 : 0, transition: 'opacity 300ms ease-in-out', backgroundColor: '#f0f0f0' } as any;
-  const skeletonStyle: CSSProperties = { width: '100%', height: '100%', backgroundColor: '#e5e5e5' } as any;
+  const skeletonStyle: CSSProperties = { width: '100%', height: '100%' } as any;
 
   if (!src) {
     // 无图片时直接显示骨架占位
-    return <View style={{ ...containerStyle, ...(skeleton ? skeletonStyle : { backgroundColor: '#e5e5e5' }) }} />;
+    return <View className={skeleton ? 'thumbnail-skeleton' : ''} style={{ ...containerStyle, ...(skeleton ? skeletonStyle : { backgroundColor: '#e5e5e5' }) }} />;
   }
 
   return (
     <View style={containerStyle}>
-      {skeleton && !loaded ? <View style={skeletonStyle} /> : null}
+      {skeleton && !loaded ? <View className="thumbnail-skeleton" style={skeletonStyle} /> : null}
       <Image src={src} style={imgStyle} mode="aspectFill" lazyLoad={lazyLoad} onLoad={() => setLoaded(true)} />
     </View>
   );
