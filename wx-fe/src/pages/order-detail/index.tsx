@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Button, Image } from '@tarojs/components';
+import { View, Text, Button } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import { getOrder, cancelOrder, payOrder, receiveOrder } from '../../services/orders';
 import { getProduct } from '../../services/products';
 import { cacheOrder, getCachedOrder } from '../../store/orders';
 import { getCachedProduct, cacheProduct } from '../../store/products';
+import Thumbnail from '../../components/Thumbnail';
 import type { Order } from '../../services/types';
 
 export default function OrderDetailPage() {
@@ -90,11 +91,7 @@ export default function OrderDetailPage() {
                 return (
                   <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 4, paddingBottom: 4 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      {img ? (
-                        <Image src={img} style={{ width: 40, height: 40, marginRight: 6, borderRadius: 4, backgroundColor: '#f0f0f0' }} mode="aspectFill" lazyLoad />
-                      ) : (
-                        <View style={{ width: 40, height: 40, marginRight: 6, borderRadius: 4, backgroundColor: '#e5e5e5' }} />
-                      )}
+                      <Thumbnail src={img} width={40} height={40} radius={4} lazyLoad={true} />
                       <Text>{name}</Text>
                     </View>
                     <View>
