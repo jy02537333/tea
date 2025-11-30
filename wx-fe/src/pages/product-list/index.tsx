@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Button, Image } from '@tarojs/components';
+import { View, Text, Button } from '@tarojs/components';
+import Thumbnail from '../../components/Thumbnail';
 import { listProducts } from '../../services/products';
 import { Product } from '../../services/types';
 
@@ -47,7 +48,7 @@ export default function ProductList() {
           {/* 多图渲染 */}
           <View style={{ flexDirection: 'row', marginTop: 4 }}>
             {normalizeImages(p.images).map((url, i) => (
-              <Image key={i} src={url} style={{ width: 60, height: 60, marginRight: 6, borderRadius: 4 }} mode="aspectFill" />
+              <Thumbnail key={i} src={url} width={60} height={60} radius={4} lazyLoad={true} />
             ))}
           </View>
           <Button onClick={() => console.log('add', p.id)}>加入购物车</Button>

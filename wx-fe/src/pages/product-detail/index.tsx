@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Button, Image } from '@tarojs/components';
+import { View, Text, Button } from '@tarojs/components';
+import Thumbnail from '../../components/Thumbnail';
 import Taro from '@tarojs/taro';
 import { getProduct } from '../../services/products';
 import { addCartItem } from '../../services/cart';
@@ -52,7 +53,7 @@ export default function ProductDetail() {
           <Text>价格: {product.price}</Text>
           <View style={{ flexDirection: 'row', marginTop: 6 }}>
             {normalizeImages(product.images).map((url, i) => (
-              <Image key={i} src={url} style={{ width: 80, height: 80, marginRight: 8, borderRadius: 6 }} mode="aspectFill" />
+              <Thumbnail key={i} src={url} width={80} height={80} radius={6} lazyLoad={true} />
             ))}
           </View>
           <Button onClick={addToCart} disabled={loading}>加入购物车</Button>
