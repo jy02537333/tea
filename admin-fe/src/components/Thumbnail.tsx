@@ -56,8 +56,8 @@ export default function Thumbnail({
   };
 
   return (
-    <div ref={ref} style={{ ...style, ...cssVars }} className="af-thumbnail-container">
-      {skeleton && !loaded && <div className="af-thumbnail-skeleton" />}
+    <div ref={ref} style={{ ...style, ...cssVars }} className={`af-thumbnail-container ${loaded ? 'af-loaded' : ''}`}>
+      {skeleton && <div className="af-thumbnail-skeleton" />}
       {shouldLoad && src ? (
         <img
           src={src}

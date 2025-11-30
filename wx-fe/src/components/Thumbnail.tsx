@@ -17,6 +17,8 @@ interface Props {
   shimmerSpeed?: number;
   /** 在 H5 上可选传递原生 loading 属性值（'lazy'|'eager'） */
   loading?: 'lazy' | 'eager';
+  /** 是否启用加载时缩放动画（从略大或略小过渡），默认 true */
+  animateScale?: boolean;
 }
 
 export default function Thumbnail({
@@ -30,11 +32,13 @@ export default function Thumbnail({
   shimmerBg = '#eaeaea',
   shimmerSpeed = 1.2,
   loading = 'lazy',
+  /** 是否启用缩放动画（load 时从小放大），默认 true */
+  animateScale = true,
 }: Props) {
   const [loaded, setLoaded] = useState(false);
   const containerStyle: CSSProperties = { width: `${width}px`, height: `${height}px`, borderRadius: `${radius}px`, marginRight: '6px', overflow: 'hidden' } as any;
-  const imgStyle: CSSProperties = { width: '100%', height: '100%', opacity: loaded ? 1 : 0, transition: 'opacity 300ms ease-in-out', backgroundColor: '#f0f0f0' } as any;
-  const skeletonStyle: CSSProperties = { width: '100%', height: '100%' } as any;
+  const imgStyle: CSSProperties = { width: '100%', height: '100%', opacity: loaded ? 1 : 0, transform: loaded ? 'scale(1)' : (animateScale ? 'scale(1.03)' : 'scale(1)'), transition: 'opacity 320ms ease-in-out, transform 320ms ease-in-out', backgroundColor: '#f0f0f0' } as any;
+  const skeletonStyle: CSSProperties = { width: '100%', height: '100%', opacity: loaded ? 0 : 1, transition: 'opacity 320ms ease-in-out' } as any;
 
   const cssVars = {
     ['--shimmer-duration' as any]: `${shimmerSpeed}s`,
@@ -49,7 +53,7 @@ export default function Thumbnail({
 
   return (
     <View style={containerStyle}>
-      {skeleton && !loaded ? <View className="thumbnail-skeleton" style={{ ...skeletonStyle, ...cssVars }} /> : null}
+      {skeleton ? <View className="thumbnail-skeleton" style={{ ...skeletonStyle, ...cssVars }} /> : null}
       <Image src={src} style={imgStyle} mode="aspectFill" lazyLoad={lazyLoad} onLoad={() => setLoaded(true)} {...({ loading } as any)} />
     </View>
   );
