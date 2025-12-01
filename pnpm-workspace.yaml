@@ -1,0 +1,4 @@
+packages:
+  - 'admin-fe'
+  - 'wx-fe'
+  - 'packages/*'

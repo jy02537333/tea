@@ -1,0 +1,19 @@
+{
+  "name": "tea-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Monorepo for tea project",
+  "workspaces": [
+    "admin-fe",
+    "wx-fe",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "pnpm": "^8.0.0"
+  },
+  "scripts": {
+    "build:ui-thumbnail": "pnpm -w --filter @local/ui-thumbnail run build",
+    "bootstrap": "pnpm -w install",
+    "build": "pnpm -w --filter @local/ui-thumbnail run build"
+  }
+}
