@@ -1,0 +1,16 @@
+{
+  "name": "tea-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Monorepo for tea project",
+  "workspaces": [
+    "admin-fe",
+    "wx-fe",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "pnpm": "^8.0.0",
+    "@babel/core": "^7.26.0",
+    "@babel/types": "^7.26.0",
+    "@babel/helper-validator-identifier": "^7.26.0",
+    "@

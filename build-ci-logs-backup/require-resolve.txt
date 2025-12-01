@@ -1,0 +1,19 @@
+=== require.resolve checks ===
+CHECK: react/jsx-runtime
+找不到命令 “node”，但可以通过以下软件包安装它：
+sudo apt install nodejs
+CHECK: react
+找不到命令 “node”，但可以通过以下软件包安装它：
+sudo apt install nodejs
+CHECK: @babel/types
+找不到命令 “node”，但可以通过以下软件包安装它：
+sudo apt install nodejs
+CHECK: @babel/helper-validator-identifier
+找不到命令 “node”，但可以通过以下软件包安装它：
+sudo apt install nodejs
+CHECK: @babel/helper-function-name
+找不到命令 “node”，但可以通过以下软件包安装它：
+sudo apt install nodejs
+CHECK: @babel/runtime
+找不到命令 “node”，但可以通过以下软件包安装它：
+sudo apt install nodejs
