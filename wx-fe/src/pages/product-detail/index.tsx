@@ -4,14 +4,13 @@ import Thumbnail from '../../components/Thumbnail';
 import Taro from '@tarojs/taro';
 import { getProduct } from '../../services/products';
 import { addCartItem } from '../../services/cart';
-import type { Product } from '../../services/types';
 
 export default function ProductDetail() {
-  const [product, setProduct] = useState<Product | null>(null);
+  const [product, setProduct] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const params = Taro.getCurrentInstance().router?.params || {} as any;
+    const params = (Taro.getCurrentInstance().router?.params || {});
     const id = Number(params.id || 0);
     if (id) fetchDetail(id);
   }, []);
@@ -57,7 +56,7 @@ export default function ProductDetail() {
             ))}
           </View>
           <Button onClick={addToCart} disabled={loading}>加入购物车</Button>
-          <Button onClick={() => Taro.navigateTo({ url: '/src/pages/cart/index' })}>去购物车</Button>
+          <Button onClick={() => Taro.navigateTo({ url: '/pages/cart/index' })}>去购物车</Button>
         </View>
       )}
     </View>

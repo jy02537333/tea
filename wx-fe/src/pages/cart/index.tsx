@@ -3,10 +3,10 @@ import { View, Text, Button } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import { listCart, updateCartItem, removeCartItem } from '../../services/cart';
 import { createOrderFromCart } from '../../services/orders';
-import type { CartItem } from '../../services/types';
+// types removed for Babel compatibility during Taro build
 
 export default function CartPage() {
-  const [items, setItems] = useState<CartItem[]>([]);
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => { fetchCart(); }, []);
@@ -22,20 +22,20 @@ export default function CartPage() {
   }
 
   function total() {
-    return items.reduce((sum, it) => sum + (Number((it as any).price) || 0) * (it.quantity || 1), 0);
+    return items.reduce((sum, it) => sum + (Number((it && it.price) || 0) || 0) * (it && it.quantity || 1), 0);
   }
 
-  async function inc(it: CartItem) {
+  async function inc(it) {
     await updateCartItem(it.id, (it.quantity || 1) + 1);
     fetchCart();
   }
-  async function dec(it: CartItem) {
+  async function dec(it) {
     const q = (it.quantity || 1) - 1;
     if (q <= 0) return;
     await updateCartItem(it.id, q);
     fetchCart();
   }
-  async function del(it: CartItem) {
+  async function del(it) {
     await removeCartItem(it.id);
     fetchCart();
   }
@@ -54,7 +54,7 @@ export default function CartPage() {
     <View style={{ padding: 12 }}>
       {items.map((it) => (
         <View key={it.id} style={{ marginBottom: 8, borderBottomWidth: 1, borderColor: '#eee', paddingBottom: 6 }}>
-          <Text>{(it as any).name || it.product_id}</Text>
+          <Text>{(it && it.name) || it.product_id}</Text>
           <Text> 数量: {it.quantity}</Text>
           <View style={{ flexDirection: 'row', marginTop: 4 }}>
             <Button onClick={() => dec(it)}> - </Button>

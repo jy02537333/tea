@@ -11,6 +11,12 @@
   },
   "devDependencies": {
     "@tarojs/cli": "^4.1.8",
+    "@tarojs/plugin-platform-h5": "^4.1.8",
+    "@tarojs/plugin-framework-react": "^4.1.8",
+    "@tarojs/webpack5-runner": "^4.1.8",
+    "@babel/preset-react": "^7.22.5",
+    "@babel/preset-typescript": "^7.22.5",
+    "@babel/preset-env": "^7.22.5",
     "@types/node": "^24.10.1",
     "@types/react": "^18.3.27",
     "@types/react-dom": "^18.3.7",
