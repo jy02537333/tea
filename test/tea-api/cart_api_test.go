@@ -26,7 +26,9 @@ import (
 func Test_Cart_Add_List_Update_Remove(t *testing.T) {
 	_ = os.Setenv("TEA_USE_SQLITE", "0")
 	// Use 测试环境2
-	_ = os.Setenv("TEA_DSN", "root:gs963852@tcp(127.0.0.1:3306)/tea_shop?charset=utf8mb4&parseTime=True&loc=Local")
+	if os.Getenv("TEA_DSN") == "" {
+		_ = os.Setenv("TEA_DSN", "root:gs963852@tcp(127.0.0.1:3306)/tea_shop?charset=utf8mb4&parseTime=True&loc=Local")
+	}
 	_ = os.Setenv("REDIS_ADDR", "127.0.0.1:6379")
 	_ = os.Setenv("REDIS_PASS", "")
 	_ = os.Setenv("RABBITMQ_ADDR", "amqp://guest:guest@127.0.0.1:5672/")
