@@ -103,10 +103,18 @@ go run ./cmd -config=configs/config.yaml
 - RBAC 权限与缓存说明：`doc/rbac.md`
 - 计息功能说明：`doc/accrual.md`
 
+### 常用脚本
+
+- 生成加密密码：`go run ./scripts/hash_password <password>`
+- 创建管理员账号（尊重 `TEA_DSN`/`TEA_DATABASE_*` 环境变量）：`go run ./scripts/seed_admin --config=configs/config.yaml`
+- 为指定商品补充 SKU：`go run ./scripts/seed_skus --config=configs/config.mysql.local.yaml --product=1`
+
+脚本目录已拆分为独立子模块，运行时请在 `tea-api` 目录下执行 `go run ./scripts/<name>` 形式，避免旧的 `go run scripts/*.go` 调用方式。
+
 ## API 文档
 
 ### 基础信息
-- Base URL: `http://localhost:8080/api/v1`
+- Base URL: `http://localhost:9292/api/v1`
 - 认证方式: Bearer Token (JWT)
 
 ### 用户相关接口

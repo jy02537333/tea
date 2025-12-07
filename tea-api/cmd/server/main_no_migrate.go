@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"tea-api/internal/config"
 	"tea-api/internal/router"
@@ -39,10 +38,12 @@ func main() {
 	log.Println("🚀 启动茶心阁API服务器（无迁移模式）...")
 
 	// 加载配置
-	config.Init()
+	if err := config.LoadConfig("configs/config.yaml"); err != nil {
+		log.Fatalf("加载配置文件失败: %v", err)
+	}
 
 	// 初始化数据库连接（不执行迁移）
-	db, err := database.InitWithoutMigrate()
+	_, err := database.InitWithoutMigrate()
 	if err != nil {
 		log.Fatalf("数据库连接失败: %v", err)
 	}
@@ -57,17 +58,10 @@ func main() {
 	// 添加CORS中间件
 	r.Use(corsMiddleware())
 
-	// 添加健康检查端点
-	r.GET("/api/v1/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message":   "Tea API Server is running (no-migrate mode)",
-			"timestamp": time.Now().Format(time.RFC3339),
-			"database":  "connected",
-		})
-	})
+	// `router.SetupRouter()` 已包含健康检查端点 `/api/v1/health`，不重复注册以避免冲突。
 
 	// 启动服务器
-	port := ":8080"
+	port := ":9292"
 	log.Printf("🚀 服务器启动在端口 %s", port)
 	log.Printf("🔗 健康检查: http://localhost%s/api/v1/health", port)
 

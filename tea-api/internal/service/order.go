@@ -101,9 +101,9 @@ func (s *OrderService) CreateOrderFromCart(userID uint, deliveryType int, addres
 
 			// 价格基于SKU优先
 			price := prod.Price
-			if it.SkuID != 0 {
+			if it.SkuID != nil {
 				var sku model.ProductSku
-				if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&sku, it.SkuID).Error; err != nil {
+				if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&sku, *it.SkuID).Error; err != nil {
 					if errors.Is(err, gorm.ErrRecordNotFound) {
 						return errors.New("SKU不存在")
 					}
@@ -166,20 +166,19 @@ func (s *OrderService) CreateOrderFromCart(userID uint, deliveryType int, addres
 			amount := price.Mul(qty)
 			total = total.Add(amount)
 
+			var skuName string
+			if it.SkuID != nil {
+				skuName = it.Sku.SkuName
+			}
 			oi := model.OrderItem{
 				ProductID:   prod.ID,
 				SkuID:       it.SkuID,
 				ProductName: prod.Name,
-				SkuName: func() string {
-					if it.SkuID == 0 {
-						return ""
-					}
-					return it.Sku.SkuName
-				}(),
-				Price:    price,
-				Quantity: it.Quantity,
-				Amount:   amount,
-				Image:    "",
+				SkuName:     skuName,
+				Price:       price,
+				Quantity:    it.Quantity,
+				Amount:      amount,
+				Image:       "",
 			}
 			orderItems = append(orderItems, oi)
 		}
@@ -345,8 +344,8 @@ func (s *OrderService) CancelOrder(userID, orderID uint, reason string) error {
 	}
 	// 回补库存（逐条更新，避免事务在 SQLite 上长时间锁表）
 	for _, it := range items {
-		if it.SkuID != 0 {
-			if err := s.db.Model(&model.ProductSku{}).Where("id = ?", it.SkuID).
+		if it.SkuID != nil {
+			if err := s.db.Model(&model.ProductSku{}).Where("id = ?", *it.SkuID).
 				Update("stock", gorm.Expr("stock + ?", it.Quantity)).Error; err != nil {
 				return err
 			}
@@ -394,8 +393,8 @@ func (s *OrderService) AdminCancelOrder(orderID uint, reason string) error {
 	}
 	// 回补库存
 	for _, it := range items {
-		if it.SkuID != 0 {
-			if err := s.db.Model(&model.ProductSku{}).Where("id = ?", it.SkuID).
+		if it.SkuID != nil {
+			if err := s.db.Model(&model.ProductSku{}).Where("id = ?", *it.SkuID).
 				Update("stock", gorm.Expr("stock + ?", it.Quantity)).Error; err != nil {
 				return err
 			}
@@ -552,8 +551,8 @@ func (s *OrderService) AdminRefundOrder(orderID uint, reason string) error {
 			return err
 		}
 		for _, it := range items {
-			if it.SkuID != 0 {
-				if err := s.db.Model(&model.ProductSku{}).Where("id = ?", it.SkuID).
+			if it.SkuID != nil {
+				if err := s.db.Model(&model.ProductSku{}).Where("id = ?", *it.SkuID).
 					Update("stock", gorm.Expr("stock + ?", it.Quantity)).Error; err != nil {
 					return err
 				}
@@ -588,7 +587,7 @@ func (s *OrderService) AdminRefundOrder(orderID uint, reason string) error {
 	var uc model.UserCoupon
 	if err := s.db.Where("order_id = ? AND status = 2", order.ID).First(&uc).Error; err == nil {
 		if err2 := s.db.Model(&model.UserCoupon{}).Where("id = ?", uc.ID).
-			Updates(map[string]any{"status": 1, "used_at": nil, "order_id": 0}).Error; err2 != nil {
+			Updates(map[string]any{"status": 1, "used_at": nil, "order_id": nil}).Error; err2 != nil {
 			return err2
 		}
 		// 安全递减已使用计数
@@ -645,8 +644,8 @@ func (s *OrderService) AdminRefundConfirm(orderID uint, reason string) error {
 			return err
 		}
 		for _, it := range items {
-			if it.SkuID != 0 {
-				if err := s.db.Model(&model.ProductSku{}).Where("id = ?", it.SkuID).
+			if it.SkuID != nil {
+				if err := s.db.Model(&model.ProductSku{}).Where("id = ?", *it.SkuID).
 					Update("stock", gorm.Expr("stock + ?", it.Quantity)).Error; err != nil {
 					return err
 				}
@@ -680,7 +679,7 @@ func (s *OrderService) AdminRefundConfirm(orderID uint, reason string) error {
 	var uc model.UserCoupon
 	if err := s.db.Where("order_id = ? AND status = 2", order.ID).First(&uc).Error; err == nil {
 		if err2 := s.db.Model(&model.UserCoupon{}).Where("id = ?", uc.ID).
-			Updates(map[string]any{"status": 1, "used_at": nil, "order_id": 0}).Error; err2 != nil {
+			Updates(map[string]any{"status": 1, "used_at": nil, "order_id": nil}).Error; err2 != nil {
 			return err2
 		}
 		if err2 := s.db.Model(&model.Coupon{}).Where("id = ? AND used_count > 0", uc.CouponID).

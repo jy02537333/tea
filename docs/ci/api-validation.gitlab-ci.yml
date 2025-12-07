@@ -1,0 +1,47 @@
+stages:
+  - test
+
+variables:
+  MYSQL_DATABASE: "tea_shop"
+  MYSQL_ROOT_PASSWORD: "gs963852"
+  REDIS_PASSWORD: "123456"
+  RABBITMQ_DEFAULT_USER: "guest"
+  RABBITMQ_DEFAULT_PASS: "guest"
+
+api_validation:
+  image: golang:1.21
+  stage: test
+  services:
+    - name: mysql:8.0
+      alias: mysql
+    - name: redis:6
+      alias: redis
+    - name: rabbitmq:3-management
+      alias: rabbitmq
+  variables:
+    MYSQL_HOST: mysql
+    MYSQL_PORT: 3306
+    MYSQL_USER: root
+    MYSQL_PASSWORD: $MYSQL_ROOT_PASSWORD
+    MYSQL_DB: $MYSQL_DATABASE
+    REDIS_ADDR: redis:6379
+    REDIS_PASSWORD: $REDIS_PASSWORD
+    RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+  script:
+    - apt-get update && apt-get install -y netcat curl jq
+    - go version
+    - cd tea-api
+    - go build -o tea-api ./...
+    - ./tea-api &
+    - for i in `seq 1 30`; do nc -z localhost 9292 && break || sleep 2; done
+    - go run scripts/seed_skus.go -product 1 -sku_name "默认规格" -sku_code "SKU-P1-001" -price "99.00" -stock 20 || true
+    - cd ..
+    - sh scripts/run_api_validation.sh || true
+    - bash scripts/assert_api_validation.sh || { echo "API assertion failed"; exit 1; }
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - build-ci-logs/api_validation/
+      - build-ci-logs/admin_login_response.json
+      - build-ci-logs/

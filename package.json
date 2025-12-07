@@ -9,8 +9,10 @@
     "packages/*"
   ],
   "devDependencies": {
-    "pnpm": "^8.0.0",
     "@babel/core": "^7.26.0",
-    "@babel/types": "^7.26.0",
     "@babel/helper-validator-identifier": "^7.26.0",
-    "@
+    "@babel/types": "^7.26.0",
+    "pnpm": "^8.0.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -17,10 +17,10 @@ func AccessLogMiddleware() gin.HandlerFunc {
 	return gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
 		// 记录访问日志到数据库
 		go func() {
-			var userID uint
+			var userID *uint
 			if uid, exists := param.Keys["user_id"]; exists {
 				if u, ok := uid.(uint); ok {
-					userID = u
+					userID = makeUintPtr(u)
 				}
 			}
 
@@ -66,10 +66,10 @@ func DetailedAccessLogMiddleware() gin.HandlerFunc {
 
 		// 记录详细访问日志
 		go func() {
-			var userID uint
+			var userID *uint
 			if uid, exists := c.Get("user_id"); exists {
 				if u, ok := uid.(uint); ok {
-					userID = u
+					userID = makeUintPtr(u)
 				}
 			}
 			var role string
@@ -106,6 +106,10 @@ func DetailedAccessLogMiddleware() gin.HandlerFunc {
 				zap.L().Error("Failed to create detailed access log", zap.Error(err))
 			}
 			// 结构化日志输出到 Zap
+			logUserID := uint(0)
+			if userID != nil {
+				logUserID = *userID
+			}
 			logx.Get().Info("access",
 				zap.String("rid", rid),
 				zap.String("method", accessLog.Method),
@@ -115,9 +119,17 @@ func DetailedAccessLogMiddleware() gin.HandlerFunc {
 				zap.Duration("latency", duration),
 				zap.String("ip", accessLog.IP),
 				zap.String("ua", accessLog.UserAgent),
-				zap.Uint("user_id", userID),
+				zap.Uint("user_id", logUserID),
 				zap.String("role", role),
 			)
 		}()
 	}
+}
+
+func makeUintPtr(val uint) *uint {
+	if val == 0 {
+		return nil
+	}
+	copy := val
+	return &copy
 }

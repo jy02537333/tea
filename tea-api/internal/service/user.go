@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -41,17 +42,29 @@ type LoginResponse struct {
 	UserInfo interface{} `json:"user_info"`
 }
 
+// CreateAdminUserInput 管理端创建用户的入参
+type CreateAdminUserInput struct {
+	Username string
+	Password string
+	Phone    string
+	Nickname string
+	Role     string
+	Status   int
+}
+
 // UserInfo 用户信息
 type UserInfo struct {
-	ID       uint    `json:"id"`
-	UID      string  `json:"uid"`
-	OpenID   string  `json:"open_id"`
-	Nickname string  `json:"nickname"`
-	Avatar   string  `json:"avatar"`
-	Phone    string  `json:"phone"`
-	Gender   int     `json:"gender"`
-	Balance  float64 `json:"balance"`
-	Points   int     `json:"points"`
+	ID                      uint       `json:"id"`
+	UID                     string     `json:"uid"`
+	OpenID                  string     `json:"open_id"`
+	Nickname                string     `json:"nickname"`
+	Avatar                  string     `json:"avatar"`
+	Phone                   string     `json:"phone"`
+	Gender                  int        `json:"gender"`
+	Balance                 float64    `json:"balance"`
+	Points                  int        `json:"points"`
+	DefaultAddress          string     `json:"default_address"`
+	DefaultAddressUpdatedAt *time.Time `json:"default_address_updated_at"`
 }
 
 // Login 微信登录
@@ -107,15 +120,17 @@ func (s *UserService) Login(code string) (*LoginResponse, error) {
 
 	// 构造响应
 	userInfo := UserInfo{
-		ID:       user.ID,
-		UID:      user.UID,
-		OpenID:   user.OpenID,
-		Nickname: user.Nickname,
-		Avatar:   user.Avatar,
-		Phone:    user.Phone,
-		Gender:   user.Gender,
-		Balance:  toFloat(user.Balance),
-		Points:   user.Points,
+		ID:                      user.ID,
+		UID:                     user.UID,
+		OpenID:                  user.OpenID,
+		Nickname:                user.Nickname,
+		Avatar:                  user.Avatar,
+		Phone:                   user.Phone,
+		Gender:                  user.Gender,
+		Balance:                 toFloat(user.Balance),
+		Points:                  user.Points,
+		DefaultAddress:          user.DefaultAddress,
+		DefaultAddressUpdatedAt: user.DefaultAddressUpdatedAt,
 	}
 
 	return &LoginResponse{
@@ -182,15 +197,17 @@ func (s *UserService) LoginByOpenID(openID string) (*LoginResponse, error) {
 	return &LoginResponse{
 		Token: token,
 		UserInfo: UserInfo{
-			ID:       user.ID,
-			UID:      user.UID,
-			OpenID:   user.OpenID,
-			Nickname: user.Nickname,
-			Avatar:   user.Avatar,
-			Phone:    user.Phone,
-			Gender:   user.Gender,
-			Balance:  toFloat(user.Balance),
-			Points:   user.Points,
+			ID:                      user.ID,
+			UID:                     user.UID,
+			OpenID:                  user.OpenID,
+			Nickname:                user.Nickname,
+			Avatar:                  user.Avatar,
+			Phone:                   user.Phone,
+			Gender:                  user.Gender,
+			Balance:                 toFloat(user.Balance),
+			Points:                  user.Points,
+			DefaultAddress:          user.DefaultAddress,
+			DefaultAddressUpdatedAt: user.DefaultAddressUpdatedAt,
 		},
 	}, nil
 }
@@ -245,21 +262,42 @@ func (s *UserService) GetUserInfo(userID uint) (*UserInfo, error) {
 	}
 
 	return &UserInfo{
-		ID:       user.ID,
-		UID:      user.UID,
-		OpenID:   user.OpenID,
-		Nickname: user.Nickname,
-		Avatar:   user.Avatar,
-		Phone:    user.Phone,
-		Gender:   user.Gender,
-		Balance:  toFloat(user.Balance),
-		Points:   user.Points,
+		ID:                      user.ID,
+		UID:                     user.UID,
+		OpenID:                  user.OpenID,
+		Nickname:                user.Nickname,
+		Avatar:                  user.Avatar,
+		Phone:                   user.Phone,
+		Gender:                  user.Gender,
+		Balance:                 toFloat(user.Balance),
+		Points:                  user.Points,
+		DefaultAddress:          user.DefaultAddress,
+		DefaultAddressUpdatedAt: user.DefaultAddressUpdatedAt,
 	}, nil
 }
 
 // UpdateUserInfo 更新用户信息
 func (s *UserService) UpdateUserInfo(userID uint, updates map[string]interface{}) error {
 	return s.db.Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error
+}
+
+// UpdateDefaultAddress 保存用户默认地址
+func (s *UserService) UpdateDefaultAddress(userID uint, address string) error {
+	address = model.NormalizeJSONOrNull(address)
+	updates := map[string]interface{}{
+		"default_address":            address,
+		"default_address_updated_at": time.Now(),
+	}
+	return s.db.Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error
+}
+
+// GetDefaultAddress 返回用户默认地址
+func (s *UserService) GetDefaultAddress(userID uint) (string, *time.Time, error) {
+	var user model.User
+	if err := s.db.Select("default_address", "default_address_updated_at").First(&user, userID).Error; err != nil {
+		return "", nil, err
+	}
+	return user.DefaultAddress, user.DefaultAddressUpdatedAt, nil
 }
 
 // GetUserByOpenID 根据OpenID获取用户
@@ -279,7 +317,7 @@ func toFloat(d decimal.Decimal) float64 {
 // ListUsers 管理员获取用户列表（简化版）
 func (s *UserService) ListUsers() ([]model.User, error) {
 	var users []model.User
-	if err := s.db.Order("id asc").Find(&users).Error; err != nil {
+	if err := s.db.Order("id desc").Find(&users).Error; err != nil {
 		return nil, err
 	}
 	return users, nil
@@ -298,7 +336,7 @@ func (s *UserService) ListUsersPaged(page, size int) ([]model.User, int64, error
 		return nil, 0, err
 	}
 	var users []model.User
-	if err := s.db.Order("id asc").Limit(size).Offset((page - 1) * size).Find(&users).Error; err != nil {
+	if err := s.db.Order("id desc").Limit(size).Offset((page - 1) * size).Find(&users).Error; err != nil {
 		return nil, 0, err
 	}
 	return users, total, nil
@@ -328,4 +366,68 @@ func (s *UserService) ChangePassword(userID uint, oldPassword, newPassword strin
 	}
 
 	return s.db.Model(&user).Updates(map[string]interface{}{"password_hash": hashed}).Error
+}
+
+// ResetPasswordAdmin 允许管理员直接重置指定用户的密码
+func (s *UserService) ResetPasswordAdmin(userID uint, newPassword string) error {
+	if newPassword == "" {
+		return errors.New("new password cannot be empty")
+	}
+
+	hashed, err := utils.HashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+
+	return s.db.Model(&model.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
+		"password_hash": hashed,
+	}).Error
+}
+
+// CreateAdminUser 管理端创建新用户（通常用于后台账号）
+func (s *UserService) CreateAdminUser(input CreateAdminUserInput) (*model.User, error) {
+	if input.Username == "" {
+		return nil, errors.New("username 不能为空")
+	}
+	if input.Password == "" {
+		return nil, errors.New("password 不能为空")
+	}
+	if len(input.Password) < 6 {
+		return nil, errors.New("password 至少 6 位")
+	}
+	if input.Phone == "" {
+		return nil, errors.New("phone 不能为空")
+	}
+	if input.Role == "" {
+		input.Role = "user"
+	}
+	if input.Status == 0 {
+		input.Status = 1
+	}
+
+	hashed, err := utils.HashPassword(input.Password)
+	if err != nil {
+		return nil, err
+	}
+
+	username := input.Username
+	openID := fmt.Sprintf("manual_%s", utils.GenerateUID())
+	user := model.User{
+		Username:     &username,
+		PasswordHash: hashed,
+		Phone:        input.Phone,
+		Nickname:     input.Nickname,
+		Role:         input.Role,
+		Status:       input.Status,
+		OpenID:       openID,
+	}
+	if user.Nickname == "" {
+		user.Nickname = input.Username
+	}
+
+	if err := s.db.Create(&user).Error; err != nil {
+		return nil, err
+	}
+
+	return &user, nil
 }

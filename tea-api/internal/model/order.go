@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/shopspring/decimal"
+	"gorm.io/gorm"
 )
 
 // Order 订单模型
@@ -32,12 +33,18 @@ type Order struct {
 	User User `gorm:"foreignKey:UserID"`
 }
 
+// BeforeSave ensures the JSON column always holds valid content even if client submits blanks.
+func (o *Order) BeforeSave(tx *gorm.DB) error {
+	o.AddressInfo = NormalizeJSONOrNull(o.AddressInfo)
+	return nil
+}
+
 // OrderItem 订单项模型
 type OrderItem struct {
 	BaseModel
 	OrderID     uint            `gorm:"index;not null" json:"order_id"`
 	ProductID   uint            `gorm:"index;not null" json:"product_id"`
-	SkuID       uint            `gorm:"index" json:"sku_id"`
+	SkuID       *uint           `gorm:"index" json:"sku_id"`
 	ProductName string          `gorm:"type:varchar(100);not null" json:"product_name"`
 	SkuName     string          `gorm:"type:varchar(100)" json:"sku_name"`
 	Price       decimal.Decimal `gorm:"type:decimal(10,2);not null" json:"price"`
@@ -61,10 +68,10 @@ type Cart struct {
 // CartItem 购物车项目模型
 type CartItem struct {
 	BaseModel
-	CartID    uint `gorm:"index;not null" json:"cart_id"`
-	ProductID uint `gorm:"index;not null" json:"product_id"`
-	SkuID     uint `gorm:"index" json:"sku_id"`
-	Quantity  int  `gorm:"not null" json:"quantity"`
+	CartID    uint  `gorm:"index;not null" json:"cart_id"`
+	ProductID uint  `gorm:"index;not null" json:"product_id"`
+	SkuID     *uint `gorm:"index" json:"sku_id"`
+	Quantity  int   `gorm:"not null" json:"quantity"`
 
 	Cart    Cart       `gorm:"foreignKey:CartID"`
 	Product Product    `gorm:"foreignKey:ProductID"`

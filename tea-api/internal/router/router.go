@@ -1,10 +1,6 @@
 package router
 
 import (
-	"fmt"
-	"math/rand"
-	"time"
-
 	"github.com/gin-gonic/gin"
 
 	"tea-api/internal/handler"
@@ -41,6 +37,7 @@ func SetupRouter() *gin.Engine {
 	storeHandler := handler.NewStoreHandler()
 	invHandler := handler.NewStoreInventoryHandler()
 	modelHandler := handler.NewModelHandler()
+	uploadHandler := handler.NewUploadHandler()
 
 	// API路由组
 	api := r.Group("/api/v1")
@@ -55,6 +52,8 @@ func SetupRouter() *gin.Engine {
 		userGroup.GET("/interest-records", middleware.AuthMiddleware(), accrualHandler.UserInterestRecords)
 		userGroup.GET("/info", middleware.AuthMiddleware(), userHandler.GetUserInfo)
 		userGroup.PUT("/info", middleware.AuthMiddleware(), userHandler.UpdateUserInfo)
+		userGroup.GET("/default-address", middleware.AuthMiddleware(), userHandler.GetDefaultAddress)
+		userGroup.PUT("/default-address", middleware.AuthMiddleware(), userHandler.UpdateDefaultAddress)
 		userGroup.GET("/:id", userHandler.GetUserByID)
 	}
 
@@ -63,6 +62,10 @@ func SetupRouter() *gin.Engine {
 	adminGroup.Use(middleware.AuthMiddleware(), middleware.RequireRoles("admin"))
 	{
 		adminGroup.GET("/users", userHandler.AdminListUsers)
+		adminGroup.POST("/users", userHandler.AdminCreateUser)
+		adminGroup.PUT("/users/:id", userHandler.AdminUpdateUser)
+		adminGroup.POST("/users/:id/reset-password", userHandler.AdminResetPassword)
+		adminGroup.POST("/uploads", uploadHandler.UploadMedia)
 		// 门店订单统计
 		adminGroup.GET("/stores/:id/orders/stats", storeHandler.OrderStats)
 		// 门店库存管理
@@ -248,13 +251,7 @@ func SetupRouter() *gin.Engine {
 	api.POST("/auth/login", handler.AuthLogin)
 	api.POST("/auth/dev-login", userHandler.DevLogin)
 	api.GET("/auth/me", middleware.AuthMiddleware(), userHandler.GetUserInfo)
-	api.GET("/auth/captcha", func(c *gin.Context) {
-		// 简易开发用验证码：返回随机 4 位数字和一个瞬时 id
-		rand.Seed(time.Now().UnixNano())
-		code := fmt.Sprintf("%04d", rand.Intn(10000))
-		id := fmt.Sprintf("%d", time.Now().UnixNano())
-		c.JSON(200, gin.H{"id": id, "code": code})
-	})
+	api.GET("/auth/captcha", handler.AuthCaptcha)
 
 	// NOTE: legacy API-Server compatibility routes were intentionally removed to avoid
 	// registering duplicate handlers that are already implemented in the main codebase.

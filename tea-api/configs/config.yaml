@@ -1,12 +1,12 @@
 server:
-  port: ":8080"
+  port: ":9292"
   mode: "debug" # debug, release, test
   read_timeout: 60
   write_timeout: 60
 
 database:
   host: "127.0.0.1"
-  port: 3306
+  port: 3308
   username: "root"
   password: "gs963852"
   dbname: "tea_shop"
@@ -20,7 +20,7 @@ database:
 redis:
   host: "127.0.0.1"
   port: 6379
-  password: ""
+  password: "123456"
   db: 0
   pool_size: 100
   min_idle_conns: 10
@@ -90,14 +90,14 @@ upload:
   local:
     path: "uploads"
   oss:
-    endpoint: "your_oss_endpoint"
-    access_key_id: "your_access_key_id"
-    access_key_secret: "your_access_key_secret"
-    bucket_name: "your_bucket_name"
+    endpoint: "oss-cn-beijing.aliyuncs.com"
+    access_key_id: "LTAI5tHCHCCYN4Fda2y19mmc"
+    access_key_secret: "I174tiyXYjOskbxfpSyKx63IGIDVK4"
+    bucket_name: "zdw-img"
 
 system:
   env: "local" # local, dev, test, prod
-  addr: "localhost:8080"
+  addr: "localhost:9292"
   db_type: "mysql"
   use_multipoint: false
   use_redis: true

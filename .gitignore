@@ -28,3 +28,10 @@ deploy/test.html
 *.pyc
 *.exe
 *.db
+
+# CI diagnostics outputs and backups
+build-ci-logs/
+build-ci-logs-backup/
+
+# prevent committing secrets accidentally
+*.bmiwj

@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -32,7 +33,8 @@ func Test_Accrual_RedisLock_Skips_Duplicate(t *testing.T) {
 	// 初始化 DB
 	database.InitDatabase()
 	db := database.GetDB()
-	u := model.User{BaseModel: model.BaseModel{UID: utils.GenerateUID()}, OpenID: "u_" + utils.GenerateUID(), Phone: "p_" + utils.GenerateUID(), Nickname: "rl", Status: 1, Balance: decimal.NewFromFloat(1000)}
+	phone := fmt.Sprintf("138%08d", time.Now().UnixNano()%1e8) // 保持 11 位，避免 phone 唯一索引冲突
+	u := model.User{BaseModel: model.BaseModel{UID: utils.GenerateUID()}, OpenID: "u_" + utils.GenerateUID(), Phone: phone, Nickname: "rl", Status: 1, Balance: decimal.NewFromFloat(1000)}
 	if err := db.Create(&u).Error; err != nil {
 		t.Fatalf("create user: %v", err)
 	}

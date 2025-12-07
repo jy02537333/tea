@@ -35,7 +35,7 @@ func (s *CartService) GetOrCreateCart(userID uint) (*model.Cart, error) {
 }
 
 // AddItem 向购物车添加商品（同款同SKU合并数量）
-func (s *CartService) AddItem(userID uint, productID, skuID uint, quantity int) (*model.CartItem, error) {
+func (s *CartService) AddItem(userID uint, productID uint, skuID *uint, quantity int) (*model.CartItem, error) {
 	if quantity <= 0 {
 		return nil, errors.New("数量必须大于0")
 	}
@@ -53,9 +53,11 @@ func (s *CartService) AddItem(userID uint, productID, skuID uint, quantity int) 
 	}
 
 	// 校验SKU（可选）
-	if skuID != 0 {
+	// skuID is optional pointer; if provided, validate it
+	var skuPtr *uint
+	if skuID != nil {
 		var sku model.ProductSku
-		if err := s.db.First(&sku, skuID).Error; err != nil {
+		if err := s.db.First(&sku, *skuID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil, errors.New("SKU不存在")
 			}
@@ -67,6 +69,7 @@ func (s *CartService) AddItem(userID uint, productID, skuID uint, quantity int) 
 		if sku.Status != 1 {
 			return nil, errors.New("SKU未上架")
 		}
+		skuPtr = skuID
 	}
 
 	cart, err := s.GetOrCreateCart(userID)
@@ -74,12 +77,16 @@ func (s *CartService) AddItem(userID uint, productID, skuID uint, quantity int) 
 		return nil, err
 	}
 
-	// 查询是否已存在相同条目
+	// 查询是否已存在相同条目（处理 sku_id NULL 的情况）
 	var item model.CartItem
-	err = s.db.Where("cart_id = ? AND product_id = ? AND sku_id = ?", cart.ID, productID, skuID).First(&item).Error
+	if skuPtr == nil {
+		err = s.db.Where("cart_id = ? AND product_id = ? AND sku_id IS NULL", cart.ID, productID).First(&item).Error
+	} else {
+		err = s.db.Where("cart_id = ? AND product_id = ? AND sku_id = ?", cart.ID, productID, *skuID).First(&item).Error
+	}
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			item = model.CartItem{CartID: cart.ID, ProductID: productID, SkuID: skuID, Quantity: quantity}
+			item = model.CartItem{CartID: cart.ID, ProductID: productID, SkuID: skuPtr, Quantity: quantity}
 			if err := s.db.Create(&item).Error; err != nil {
 				return nil, fmt.Errorf("添加到购物车失败: %w", err)
 			}

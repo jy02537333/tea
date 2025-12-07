@@ -55,7 +55,7 @@ type UserCoupon struct {
 	BaseModel
 	UserID   uint       `gorm:"index;not null" json:"user_id"`
 	CouponID uint       `gorm:"index;not null" json:"coupon_id"`
-	OrderID  uint       `gorm:"index" json:"order_id"`
+	OrderID  *uint      `gorm:"index" json:"order_id"`
 	Status   int        `gorm:"type:tinyint;default:1" json:"status"` // 1:未使用 2:已使用 3:已过期
 	UsedAt   *time.Time `json:"used_at"`
 

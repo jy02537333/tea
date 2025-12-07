@@ -52,10 +52,10 @@ func initDatabase() error {
 	// support TEA_DSN or per-value env overrides
 	dsn := env.Get("TEA_DSN", "")
 	if dsn == "" {
-		host := env.Get("TEA_DATABASE_HOST", "10.8.0.14")
-		port := env.Get("TEA_DATABASE_PORT", "3310")
+		host := env.Get("TEA_DATABASE_HOST", "127.0.0.1")
+		port := env.Get("TEA_DATABASE_PORT", "3308")
 		user := env.Get("TEA_DATABASE_USERNAME", "root")
-		pass := env.Get("TEA_DATABASE_PASSWORD", "my-secret-pw")
+		pass := env.Get("TEA_DATABASE_PASSWORD", "gs963852")
 		dbname := env.Get("TEA_DATABASE_DBNAME", "tea_shop")
 		charset := env.Get("TEA_DATABASE_CHARSET", "utf8mb4")
 		parseTime := env.Get("TEA_DATABASE_PARSETIME", "True")
@@ -199,7 +199,7 @@ func main() {
 	api.PUT("/categories/:id", updateCategory)
 	api.DELETE("/categories/:id", deleteCategory)
 
-	port := ":8082"
+	port := ":9292"
 	fmt.Printf("🔗 服务器运行在: http://localhost%s\n", port)
 	fmt.Printf("🔗 健康检查: http://localhost%s/api/v1/health\n", port)
 

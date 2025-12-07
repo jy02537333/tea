@@ -7,7 +7,7 @@
 
 主要改动文件
 - `API-Server/auth.go`
-  - 引入 `github.com/redis/go-redis/v9`，在 `init()` 初始化 Redis 客户端（优先使用环境变量 `REDIS_ADDR/REDIS_PASS/REDIS_DB`，未设置时默认 `10.8.0.14:6379`）。
+   - 引入 `github.com/redis/go-redis/v9`，在 `init()` 初始化 Redis 客户端（优先使用环境变量 `REDIS_ADDR/REDIS_PASS/REDIS_DB`，未设置时默认 `127.0.0.1:6379`）。
   - 新增路由：`/auth/captcha` 与 `/api/v1/auth/captcha`（返回 JSON `{id, code}`，开发模式明文），并将验证码写入 Redis（key=`captcha:{id}`，TTL=5min）。
   - 在 `/auth/login` 中校验 `captcha_id` 与 `captcha_code`（从 Redis 读取并一次性删除），并生成 JWT（原行为保留）。
 
@@ -25,7 +25,7 @@
    ```
 2. 启动后端 API-Server（在 `API-Server` 目录）
    ```powershell
-   $env:REDIS_ADDR='10.8.0.14:6379'  # 或覆盖为本地 redis 地址
+   $env:REDIS_ADDR='127.0.0.1:6379'  # 或覆盖为本地 redis 地址
    $env:REDIS_DB='0'
    $env:PORT='8082'
    go run .

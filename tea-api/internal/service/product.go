@@ -16,6 +16,8 @@ type ProductService struct {
 	db *gorm.DB
 }
 
+var ErrProductNotFound = errors.New("product not found")
+
 func NewProductService() *ProductService {
 	return &ProductService{
 		db: database.GetDB(),
@@ -202,7 +204,7 @@ func (s *ProductService) GetProduct(id uint) (*model.Product, error) {
 	var product model.Product
 	if err := s.db.Preload("Category").Preload("Skus").First(&product, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("商品不存在")
+			return nil, ErrProductNotFound
 		}
 		return nil, fmt.Errorf("获取商品详情失败: %w", err)
 	}
