@@ -14,7 +14,8 @@
   - API-Server (数据库版/mock)：8080
   - simple-server / auth-server（内存/演示）: 8080
 
----
+
+> Linux / macOS 说明：如果你在类 Unix 环境，建议参考 `doc/启动命令.md` 与根目录脚本 `run-tea-api.sh`（一键启动 API）以及 `tea-api/cmd/e2e_single_sku_order`（验证主链路）。本文其余内容维持 Windows + PowerShell 原始说明，后续会逐步清理。
 
 ## 前置准备
 go run simple-server.go
@@ -33,7 +34,7 @@ python -m http.server 9294
   ```
   如果不设置，后端会使用内置的开发默认密钥 `dev_secret_change_me`（仅限本地调试，不要用于生产）。
 Invoke-RestMethod -Uri "http://localhost:9292/api/v1/health" -Method GET
-# 或访问 Admin-FE 页面 http://localhost:9294
+# 或访问 Admin-FE 页面 http://localhost:9094
 ---
 
 ## 1. 克隆/切换到项目目录
@@ -59,7 +60,7 @@ go run simple-server.go
 Invoke-RestMethod -Uri "http://localhost:9292/api/v1/health" -Method GET
 Invoke-RestMethod -Uri "http://localhost:9292/admin/users" -Method GET
 # 使用 python 的 http.server 快速启动静态服务（端口 8081）
-python -m http.server 8081
+python -m http.server 9094
 ```
 
 验证：
@@ -88,17 +89,17 @@ go run auth-server.go
 ```powershell
 # 在项目根运行（会监听 8080）
 go run database-server.go
-Get-NetTCPConnection -LocalPort 9294,9292,9292 -State Listen | Format-Table -AutoSize
+Get-NetTCPConnection -LocalPort 9094,9292,9093 -State Listen | Format-Table -AutoSize
 3) 启动 Admin-FE（同上）
 
 ```powershell
 cd Admin-FE
 python -m http.server 8081
 ```
-Start-Process -NoNewWindow -FilePath python -ArgumentList '-m','http.server','9294' -WorkingDirectory 'D:\developTool\work\go\tea\Admin-FE'
+Start-Process -NoNewWindow -FilePath python -ArgumentList '-m','http.server','9094' -WorkingDirectory 'D:\developTool\work\go\tea\Admin-FE'
 4) 验证：
 Invoke-RestMethod -Uri "http://localhost:9292/api/v1/health" -Method GET
-Invoke-RestMethod -Uri "http://localhost:9294" -Method GET
+Invoke-RestMethod -Uri "http://localhost:9094" -Method GET
 Invoke-RestMethod -Uri "http://localhost:8080/api/v1/health" -Method GET
 Invoke-RestMethod -Uri "http://localhost:8080/admin/users" -Method GET
 ```
@@ -201,7 +202,7 @@ Start-Process -NoNewWindow -FilePath go -ArgumentList 'run','simple-server.go'
 Start-Process -NoNewWindow -FilePath python -ArgumentList '-m','http.server','8081' -WorkingDirectory 'D:\developTool\work\go\tea\Admin-FE'
 Start-Sleep -Seconds 2
 Invoke-RestMethod -Uri "http://localhost:8080/api/v1/health" -Method GET
-Invoke-RestMethod -Uri "http://localhost:8081" -Method GET
+Invoke-RestMethod -Uri "http://localhost:9094" -Method GET
 ```
 
 ---
