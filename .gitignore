@@ -35,11 +35,10 @@ build-ci-logs-backup/
 
 # prevent committing secrets accidentally
 *.bmiwj
-# ignore backup tarballs
-deleted_backups/*.tar.gz
 
 # ignore backup tarballs
 deleted_backups/*.tar.gz
 
-# ignore backup tarballs
-deleted_backups/*.tar.gz
+# ignore build outputs and local-only configs
+tea-api/dist/
+tea-api/configs/config.mysql.local.yaml

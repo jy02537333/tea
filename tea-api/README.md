@@ -83,6 +83,8 @@ mysql -u root -p tea_shop < scripts/init.sql
 ```
 
 3. 修改配置文件 `configs/config.yaml`，设置正确的数据库连接信息。
+    - 本地开发建议复制示例：`cp configs/config.mysql.local.example.yaml configs/config.mysql.local.yaml`，并按需填写本地账号口令。
+    - 注意：`configs/config.mysql.local.yaml` 已加入 `.gitignore`，请勿将本地口令提交到仓库。
 
 ### 5. 启动服务
 
