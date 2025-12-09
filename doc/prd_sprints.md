@@ -7,6 +7,7 @@
 ---
 
 ## Sprint A（第1-3周） — 核心下单能力
+
 目标：实现商品浏览、门店列表、购物车、下单与支付前端流程及后端基础接口。
 
 - 前端任务
@@ -26,6 +27,7 @@
   - 并发下单场景：库存预占与回滚
 
 ### Sprint A — 关键 API（草案）
+
 - 用户鉴权说明：绝大多数用户相关或订单创建接口需要 `Authorization: Bearer <token>`（JWT 或 session token）。
 
 - GET /api/v1/products
@@ -79,6 +81,7 @@
 ---
 
 ## Sprint B（第4-5周） — 用户与会员体系
+
 目标：实现用户注册、登录、个人中心、钱包/茶币/积分/优惠券功能。支持会员开通购买流程。
 
 - 前端任务
@@ -171,6 +174,7 @@
 ---
 
 ## Sprint C（第6-8周） — 后台管理 + 分销体系 + 门店后台
+
 目标：实现平台后台的商品/订单/门店管理；分销的基础链路（分享、关联、佣金累积）；门店接单与打印功能。
 
 - 前端任务（后台/门店后台）
@@ -231,6 +235,7 @@
 ---
 
 ## Sprint D（第9-11周） — QA、性能、安全、灰度上线
+
 目标：修复 BUG、完善监控日志、进行压测、完成上线准备与回滚策略。
 
 - 任务清单
@@ -242,6 +247,7 @@
 ---
 
 ## 通用注意事项与接口设计原则
+
 - 采用 RESTful 风格，错误码统一：`{code, message, data}`；HTTP 状态码与业务码分离（200 + code 表示成功）。
 - 分页统一：`page`, `size`；返回 `total`。
 - 时间字段统一使用 UTC ISO8601 格式。
@@ -251,6 +257,7 @@
 ---
 
 ## 后续工作（可选）
+
 - 将上面的接口草案转为 OpenAPI (Swagger) 文档，自动生成后端路由与前端 Mock 数据。
 - 根据实际开发团队人数与每 Sprint 周期把任务拆成更细的工单（JIRA/Trello 格式），并分配负责人与估时。
 
@@ -261,6 +268,7 @@
 说明：以下为针对新补充的数据库表（`permissions`、`role_permissions`、`partner_levels`、`user_bank_accounts`、`withdrawal_requests` 等）设计的管理与用户端接口契约草案，便于快速生成 OpenAPI（Swagger）并对接前后端。
 
 鉴权与安全：
+
 - 管理后台接口均需 `Authorization: Bearer <token>` 且用户需具备 `admin` 或对应管理角色权限。
 - 用户发起提现需登录且通过二次验证（如支付密码或短信验证码），敏感操作管理员审批需要记录 `operator_id` 与审批日志。
 - 幂等：对可能被重复提交的 POST 接口（提现、权限分配等）建议支持 `Idempotency-Key` 请求头。
@@ -367,6 +375,7 @@
 ### 提现申请（withdrawal_requests）
 
 用户端：
+
 - POST /api/v1/users/{user_id}/withdrawals
   - 描述：发起提现申请
   - Headers: `Idempotency-Key` 推荐
@@ -378,6 +387,7 @@
   - 描述：用户查看自己的提现记录（分页）
 
 管理员端：
+
 - GET /api/v1/admin/withdrawals
   - 描述：管理员分页查询提现申请，支持过滤 `status`, `user_id`, `date_from`, `date_to`
 
@@ -410,6 +420,7 @@
 ---
 
 下一步建议：
+
 - 将本草案转为 OpenAPI YAML（我可以帮生成）并同步到 `doc/api/partner_admin_openapi.yaml`。
 - 或者我可按你偏好生成 `tea-api` 服务端的接口 stub（Go Gin/chi）与前端 Mock。
 
@@ -421,6 +432,7 @@
 该规范覆盖：佣金计算预览、佣金记录持久化、佣金解冻（系统/管理员触发）、提现申请与审批、合伙人等级与平台财务配置查询等接口，并对货币使用“分（整数）”做了统一约定。
 
 关键信息（摘录）
+
 - 文档路径：`doc/openapi/commission.yaml`
 - 约定：所有金额字段使用整数“分”（schema 名称：`MoneyCents`）
 - 幂等：`POST /commissions` 与 `POST /withdrawals` 建议支持 `Idempotency-Key` 请求头
@@ -515,6 +527,3 @@ Body:
 ```
 
 备注：详细 schema 与全部接口定义见 `doc/openapi/commission.yaml`，可用于生成 Mock Server 与客户端 SDK。
-
-
-
