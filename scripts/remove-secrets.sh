@@ -20,6 +20,11 @@ SENSITIVE_FILES=(
   "tea-api/configs/config.mysql.local.yaml"
 )
 
+# 需要整目录或通配删除的路径（glob）
+SENSITIVE_GLOBS=(
+  "tea-api/dist/**"
+)
+
 "git" checkout "$BRANCH"
 for f in "${SENSITIVE_FILES[@]}"; do
   if [ -f "$f" ] || [ -f "$ROOT/$f" ]; then
@@ -52,8 +57,12 @@ if command -v git-filter-repo >/dev/null 2>&1; then
   for p in "${SENSITIVE_FILES[@]}"; do
     printf "%s\n" "$p" >> "$tmp_paths_file"
   done
-  # 运行过滤（invert-paths 删除指定文件）
-  git filter-repo --invert-paths --paths-from-file "$tmp_paths_file" || {
+  # 运行过滤（invert-paths 删除指定文件/目录）
+  args=(--invert-paths --paths-from-file "$tmp_paths_file")
+  for g in "${SENSITIVE_GLOBS[@]}"; do
+    args+=(--path-glob "$g")
+  done
+  git filter-repo "${args[@]}" || {
     echo "git-filter-repo 失败，请检查版本。"
     rm -f "$tmp_paths_file"
     exit 1
