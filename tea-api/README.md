@@ -304,17 +304,17 @@ GET /health
 
 ### 财务对账（管理端）
 
-- GET `/api/v1/admin/finance/summary` 对账概要
-        - 筛选参数：
-            - `start`、`end`: 时间范围（按创建时间）
-            - `store_id`：按门店过滤（可选）
-            - `method`：按支付方式过滤（1微信 2支付宝，可选）
-            - `group`: 可选，`day|store|method` 返回对应维度的明细 `rows`
-        - 返回：
-            - `summary`: `total_payments_count/amount`、`total_refunds_count/amount`、`net_amount`
-            - 当 `group=day` 时，返回 `rows`：`date,pay_count,pay_amount,refund_count,refund_amount,net_amount`
-            - 当 `group=store` 时，返回 `rows`：`store_id,store_name,pay_count,pay_amount,refund_count,refund_amount,net_amount`
-            - 当 `group=method` 时，返回 `rows`：`method,pay_count,pay_amount,refund_count,refund_amount,net_amount`
+ - GET `/api/v1/admin/finance/summary` 对账概要
+     - 筛选参数：
+     - `start`、`end`: 时间范围（按创建时间）
+     - `store_id`：按门店过滤（可选）
+     - `method`：按支付方式过滤（1微信 2支付宝，可选）
+     - `group`: 可选，`day|store|method` 返回对应维度的明细 `rows`
+     - 返回：
+     - `summary`: `total_payments_count/amount`、`total_refunds_count/amount`、`net_amount`
+     - 当 `group=day` 时，返回 `rows`：`date,pay_count,pay_amount,refund_count,refund_amount,net_amount`
+     - 当 `group=store` 时，返回 `rows`：`store_id,store_name,pay_count,pay_amount,refund_count,refund_amount,net_amount`
+     - 当 `group=method` 时，返回 `rows`：`method,pay_count,pay_amount,refund_count,refund_amount,net_amount`
 - GET `/api/v1/admin/finance/summary/export?format=csv|xlsx&group=day|store|method` 导出汇总
     - 支持 `day|store|method` 三种维度，导出对应明细；`group=store` 导出包含 `Store Name`
 
