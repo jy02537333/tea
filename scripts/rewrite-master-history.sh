@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# rewrite-master-history.sh
-# 目的：在维护窗口内重写目标分支（默认 master）的 Git 历史，移除
-#  - 超过指定阈值（默认 100M）的所有 blob
-#  - 指定的敏感文件/目录（见下方 SENSITIVE_PATHS / GLOB_PATHS）
-# 风险：历史重写为破坏性操作；推送后所有协作者需重新克隆或硬重置对齐
+# 文件用途：
+# - 在“维护窗口”内对指定分支（默认 master）进行一次性历史重写，移除超阈值大文件与敏感路径。
+# - 自动处理 git-filter-repo 安装、备份分支创建、origin 恢复与安全强推；输出对齐与回滚提示。
+# - 供仓库管理员或维护者执行，需事先与团队沟通并临时放宽主分支保护策略。
+# 风险说明：历史重写为破坏性操作；推送后所有协作者需重新克隆或硬重置对齐新历史。
 
 TARGET_BRANCH="${TARGET_BRANCH:-master}"
 STRIP_THRESHOLD="${STRIP_THRESHOLD:-100M}"

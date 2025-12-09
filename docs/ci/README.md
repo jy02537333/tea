@@ -32,3 +32,11 @@ Notes & tips:
   - 在仓库根目录运行：`scripts/remove-large-files.sh`（默认阈值 100M，可传参自定义：`scripts/remove-large-files.sh 120M`）
   - 完成后按提示安全推送当前分支：`git push --force-with-lease origin $(git rev-parse --abbrev-ref HEAD)`
   - 建议将产生大文件的路径加入 `.gitignore`，避免再次提交。
+
+## 维护工具用途摘要（Repository Hygiene Toolkit）
+
+- `scripts/remove-large-files.sh`: 当前分支历史大文件清理（剥离 `>100M` blob），用于解除 GitHub 100MB push 阻断；缺少 `git-filter-repo` 时会自动下载到 `~/.local/bin`；执行后需 `--force-with-lease` 推送并通知协作者对齐历史。
+- `scripts/remove-secrets.sh`: 按 push protection 告警从工作区与历史移除敏感路径（`--paths-from-file` + `--path-glob`），自动恢复 `origin` 并安全推送；适用于被阻断的功能分支自助修复。
+- `scripts/rewrite-master-history.sh`: 维护窗口内重写主分支历史的一键脚本，含备份分支创建、过滤规则、垃圾回收、远端恢复与安全强推；输出协作者对齐与回滚提示。
+- `docs/ci/history-rewrite-maintenance-plan.md`: 主分支历史重写的作业计划与操作手册（步骤、脚本引用、风险、迁移、回滚、沟通模版）。
+- `docs/ci/history-rewrite-notice.md`: 历史重写维护窗口的中/英通知模版，维护前/开始/完成阶段可直接复用。
