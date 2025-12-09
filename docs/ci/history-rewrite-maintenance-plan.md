@@ -93,17 +93,29 @@ git push --force-with-lease origin "$BRANCH"
 echo "Done. Rewritten history pushed."
 ```
 
+或使用一键脚本（默认目标 master，阈值 100M，可通过环境变量覆盖）：
+
+```bash
+# 覆盖变量示例：TARGET_BRANCH=master STRIP_THRESHOLD=120M
+chmod +x scripts/rewrite-master-history.sh
+TARGET_BRANCH=master STRIP_THRESHOLD=100M scripts/rewrite-master-history.sh
+```
+
 ## 验证清单
+
 - GitHub Push Protection 未再阻断（无超大文件、无敏感文件提示）。
 - 基本 CI 构建通过（本计划不涉及业务代码变更）。
 - 仓库大小显著下降（可选）。
 
 ## 协作者迁移指引
+
 - 建议重新克隆：
+
 ```bash
 git clone https://github.com/<owner>/<repo>.git
 ```
 - 或在现有克隆中硬重置：
+
 ```bash
 git fetch origin
 git checkout master
@@ -114,6 +126,7 @@ git reset --hard origin/master
   - 重置对齐后再 `git am /tmp/patches/*.patch` 重新应用。
 
 ## 回滚预案
+
 - 本地立即回滚：
   - 将备份分支强推覆盖：
     ```bash
@@ -134,14 +147,17 @@ git reset --hard origin/master
 
 - 维护完成：
   > 历史清理已完成。请执行以下操作对齐新历史：
+  >
   > ```bash
   > git fetch origin
   > git checkout master
   > git reset --hard origin/master
   > ```
+  >
   > 如需继续未完成的分支开发，可先导出补丁再应用（见计划文档“协作者迁移指引”）。
 
 ## 附录：辅助排查命令
+
 - 查找特定 blob-id 对应路径：
 ```bash
 git rev-list --all --objects | grep <blobid>
