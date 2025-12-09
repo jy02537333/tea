@@ -37,3 +37,6 @@ build-ci-logs-backup/
 *.bmiwj
 # ignore backup tarballs
 deleted_backups/*.tar.gz
+
+# ignore backup tarballs
+deleted_backups/*.tar.gz
