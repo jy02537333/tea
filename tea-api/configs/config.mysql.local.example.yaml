@@ -1,0 +1,50 @@
+server:
+  port: ":9292"
+  mode: "debug"
+
+system:
+  env: "local"
+  addr: "localhost:9292"
+  db_type: "mysql"
+  use_multipoint: false
+  use_redis: true
+
+# Local MySQL settings (example). Copy this file to
+# configs/config.mysql.local.yaml and fill with your local values.
+database:
+  host: "127.0.0.1"
+  port: 3308
+  username: "root"
+  password: "change_me"
+  dbname: "tea_shop"
+  charset: "utf8mb4"
+  parse_time: true
+  loc: "Local"
+  max_idle_conns: 10
+  max_open_conns: 100
+  conn_max_lifetime: 300
+
+redis:
+  host: "127.0.0.1"
+  port: 6379
+  password: ""
+  db: 0
+  pool_size: 50
+  min_idle_conns: 5
+
+# Sensitive keys should not live in repo configs.
+# Prefer environment variables or a separate, ignored local file.
+wechat:
+  app_id: ""
+  app_secret: ""
+  mch_id: ""
+  api_key: ""
+  cert_path: ""
+  key_path: ""
+  notify_url: ""
+
+alipay:
+  app_id: ""
+  private_key: ""
+  public_key: ""
+  notify_url: ""
