@@ -43,24 +43,32 @@ type SoftDeleteModel struct {
 // User 用户模型
 type User struct {
 	BaseModel
-	Username     string          `gorm:"type:varchar(100);uniqueIndex" json:"username"`
-	PasswordHash string          `gorm:"type:varchar(255)" json:"-"`
-	OpenID       string          `gorm:"type:varchar(50);uniqueIndex" json:"open_id"`
-	UnionID      string          `gorm:"type:varchar(50);index" json:"union_id"`
-	Phone        string          `gorm:"type:varchar(20);uniqueIndex" json:"phone"`
-	Nickname     string          `gorm:"type:varchar(50)" json:"nickname"`
-	Avatar       string          `gorm:"type:varchar(500)" json:"avatar"`
-	Gender       int             `gorm:"type:tinyint;default:0" json:"gender"` // 0:未知 1:男 2:女
-	Birthday     *time.Time      `json:"birthday"`
-	Province     string          `gorm:"type:varchar(50)" json:"province"`
-	City         string          `gorm:"type:varchar(50)" json:"city"`
-	Country      string          `gorm:"type:varchar(50)" json:"country"`
-	Status       int             `gorm:"type:tinyint;default:1" json:"status"` // 1:正常 2:禁用
-	LastLoginAt  *time.Time      `json:"last_login_at"`
-	Balance      decimal.Decimal `gorm:"type:decimal(12,2);default:0" json:"balance"`
-	InterestRate decimal.Decimal `gorm:"type:decimal(8,6);default:0" json:"interest_rate"` // 用户定制日利率，>0 时覆盖默认
-	Points       int             `gorm:"default:0" json:"points"`
-	Role         string          `gorm:"type:varchar(30);default:'user';index" json:"role"` // 简化角色标识，详尽权限通过关联表
+	Username                *string         `gorm:"type:varchar(100);uniqueIndex" json:"username"`
+	PasswordHash            string          `gorm:"type:varchar(255)" json:"-"`
+	OpenID                  string          `gorm:"type:varchar(50);uniqueIndex" json:"open_id"`
+	UnionID                 string          `gorm:"type:varchar(50);index" json:"union_id"`
+	Phone                   string          `gorm:"type:varchar(20);uniqueIndex" json:"phone"`
+	Nickname                string          `gorm:"type:varchar(50)" json:"nickname"`
+	Avatar                  string          `gorm:"type:varchar(500)" json:"avatar"`
+	Gender                  int             `gorm:"type:tinyint;default:0" json:"gender"` // 0:未知 1:男 2:女
+	Birthday                *time.Time      `json:"birthday"`
+	Province                string          `gorm:"type:varchar(50)" json:"province"`
+	City                    string          `gorm:"type:varchar(50)" json:"city"`
+	Country                 string          `gorm:"type:varchar(50)" json:"country"`
+	DefaultAddress          string          `gorm:"type:json" json:"default_address"`
+	DefaultAddressUpdatedAt *time.Time      `json:"default_address_updated_at"`
+	Status                  int             `gorm:"type:tinyint;default:1" json:"status"` // 1:正常 2:禁用
+	LastLoginAt             *time.Time      `json:"last_login_at"`
+	Balance                 decimal.Decimal `gorm:"type:decimal(12,2);default:0" json:"balance"`
+	InterestRate            decimal.Decimal `gorm:"type:decimal(8,6);default:0" json:"interest_rate"` // 用户定制日利率，>0 时覆盖默认
+	Points                  int             `gorm:"default:0" json:"points"`
+	Role                    string          `gorm:"type:varchar(30);default:'user';index" json:"role"` // 简化角色标识，详尽权限通过关联表
+}
+
+// BeforeSave normalizes JSON columns to ensure they persist valid values.
+func (u *User) BeforeSave(tx *gorm.DB) error {
+	u.DefaultAddress = NormalizeJSONOrNull(u.DefaultAddress)
+	return nil
 }
 
 // Role 角色模型

@@ -2,6 +2,8 @@
 
 基于 Go + Gin + GORM + MySQL + Redis 构建的茶叶店小程序后端API服务。
 
+> **Git 推送方式约定：** 本仓库统一使用 `HTTPS + GitHub Personal Access Token (PAT)` 推送代码，请将远程设置为 `https://github.com/jy02537333/tea.git`，避免 SSH key 配置问题。详情见 `docs/ci/README.md` 中“Git 推送方式约定（统一使用 Token）”小节。
+
 ## 功能特性
 
 - 🔐 微信小程序登录认证
@@ -14,7 +16,7 @@
 - 📊 数据统计分析
 - 📝 操作日志记录
 - 🔄 提现管理系统
- - 💹 资金计息（按日复利、调度、导出、权限）
+    - 💹 资金计息（按日复利、调度、导出、权限）
 
 ## 技术栈
 
@@ -28,7 +30,7 @@
 
 ## 项目结构
 
-```
+```text
 tea-api/
 ├── cmd/                    # 应用入口
 ├── internal/              # 内部应用代码
@@ -48,8 +50,6 @@ tea-api/
 ├── go.mod
 └── go.sum
 ```
-
-## 快速开始
 
 ### 1. 环境要求
 
@@ -73,25 +73,31 @@ go mod tidy
 ### 4. 配置数据库
 
 1. 创建 MySQL 数据库：
+
 ```sql
 CREATE DATABASE tea_shop CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-2. 执行初始化脚本：
+1. 执行初始化脚本：
+
 ```bash
 mysql -u root -p tea_shop < scripts/init.sql
 ```
 
-3. 修改配置文件 `configs/config.yaml`，设置正确的数据库连接信息。
+1. 修改配置文件 `configs/config.yaml`，设置正确的数据库连接信息。
+    - 本地开发建议复制示例：`cp configs/config.mysql.local.example.yaml configs/config.mysql.local.yaml`，并按需填写本地账号口令。
+    - 注意：`configs/config.mysql.local.yaml` 已加入 `.gitignore`，请勿将本地口令提交到仓库。
 
 ### 5. 启动服务
 
 #### Windows 用户
+
 ```bash
 scripts\start.bat
 ```
 
 #### Linux/Mac 用户
+
 ```bash
 go run ./cmd -config=configs/config.yaml
 ```
@@ -103,15 +109,27 @@ go run ./cmd -config=configs/config.yaml
 - RBAC 权限与缓存说明：`doc/rbac.md`
 - 计息功能说明：`doc/accrual.md`
 
+### 常用脚本
+
+- 生成加密密码：`go run ./scripts/hash_password <password>`
+- 创建管理员账号（尊重 `TEA_DSN`/`TEA_DATABASE_*` 环境变量）：`go run ./scripts/seed_admin --config=configs/config.yaml`
+- 为指定商品补充 SKU：`go run ./scripts/seed_skus --config=configs/config.mysql.local.yaml --product=1`
+
+- 仓库卫生与维护工具（历史重写/大文件/敏感信息清理）：详见 `docs/ci/README.md` 的“维护工具用途摘要（Repository Hygiene Toolkit）”小节。
+
+脚本目录已拆分为独立子模块，运行时请在 `tea-api` 目录下执行 `go run ./scripts/<name>` 形式，避免旧的 `go run scripts/*.go` 调用方式。
+
 ## API 文档
 
 ### 基础信息
-- Base URL: `http://localhost:8080/api/v1`
+
+- Base URL: `http://localhost:9292/api/v1`
 - 认证方式: Bearer Token (JWT)
 
 ### 用户相关接口
 
 #### 用户登录
+
 ```http
 POST /user/login
 Content-Type: application/json
@@ -122,12 +140,14 @@ Content-Type: application/json
 ```
 
 #### 获取用户信息
+
 ```http
 GET /user/info
 Authorization: Bearer <token>
 ```
 
 #### 更新用户信息
+
 ```http
 PUT /user/info
 Authorization: Bearer <token>
@@ -140,11 +160,13 @@ Content-Type: application/json
 ```
 
 ### 健康检查
+
 ```http
 GET /health
 ```
 
 ### 购物车（需登录）
+
 - GET /cart 获取购物车条目列表
 - POST /cart/items 添加条目
     - 参数: { "product_id": number, "sku_id"?: number, "quantity": number>0 }
@@ -155,7 +177,9 @@ GET /health
 说明：同一商品+SKU 会自动合并数量；创建时会校验商品/SKU是否存在且已上架。
 
 ### 订单（需登录）
-- ### 门店（部分）
+
+### 门店（部分）
+
 - GET /stores 门店列表（支持 ?status=1&page=1&limit=20&lat=..&lng=..，返回 distance_km）
 - GET /stores/:id 门店详情
 - POST /stores 创建门店（需登录）
@@ -189,6 +213,7 @@ GET /health
             - 行为：将订单置为 已取消(5)，PayStatus=已退款(4)；若未发货则回补库存；自动回滚已使用的用户优惠券
 
 规则说明：
+
 - 下单会校验商品/SKU是否上架，且库存足够；采用乐观扣减（库存>=数量）更新。
 - 可选使用用户优惠券：支持满减、折扣、免单，校验有效期与门槛，按券类型计算优惠后生成 `discount_amount` 与 `pay_amount`（以数字返回）。
 - 可选绑定门店：传 `store_id` 时校验门店启用；`order_type` 支持 1商城 2堂食 3外卖（默认1）。若门店已为该商品配置覆盖价，则按覆盖价计算行项目与订单金额；同时扣减门店维度库存。
@@ -214,6 +239,7 @@ GET /health
 - GET /admin/stores/:id/orders/stats 门店订单统计（需管理权限）
 
 说明：
+
 - 门店与商品的绑定记录模型为 `StoreProduct(store_id, product_id, stock, price_override)`，(store_id, product_id) 唯一。
 - `price_override` 留空或 "0" 表示不覆盖，使用商品原价。
 - 订单从购物车创建时，如包含 `store_id`，系统将优先使用覆盖价并扣减门店库存；取消订单会回补门店库存。
@@ -332,7 +358,7 @@ GET /health
 
 示例：
 
-1) 手动计提
+1. 手动计提
 
 POST /api/v1/admin/accrual/run
 {
@@ -340,13 +366,14 @@ POST /api/v1/admin/accrual/run
     "rate": 0.001
 }
 
-2) 导出英文 XLSX，仅导出部分字段并打包 zip
+1. 导出英文 XLSX，仅导出部分字段并打包 zip
 
 GET /api/v1/admin/accrual/export?start=2025-11-01&end=2025-11-12&format=xlsx&lang=en&fields=user_id,date,interest_amount&zip=1
 
 更多详情参见 `doc/accrual.md`。
 
 ### 优惠券（简化演示）
+
 - GET /coupons 列表（支持 ?status=1）
 - POST /coupons 创建（需登录；仅用于演示）
 - POST /coupons/grant 发券给用户（需登录；仅用于演示）
@@ -355,6 +382,7 @@ GET /api/v1/admin/accrual/export?start=2025-11-01&end=2025-11-12&format=xlsx&lan
 ## 数据库设计
 
 项目采用统一的审计字段设计：
+
 - `id`: 主键ID
 - `uid`: 全局唯一标识
 - `created_at`: 创建时间
@@ -365,6 +393,7 @@ GET /api/v1/admin/accrual/export?start=2025-11-01&end=2025-11-12&format=xlsx&lan
 - `is_deleted`: 删除标记
 
 主要数据表：
+
 - `users`: 用户表
 - `roles`: 角色表
 - `permissions`: 权限表
@@ -388,7 +417,7 @@ GET /api/v1/admin/accrual/export?start=2025-11-01&end=2025-11-12&format=xlsx&lan
 - `AuthMiddleware`: JWT 认证中间件
 - `CORSMiddleware`: 跨域处理中间件
 - `DetailedAccessLogMiddleware`: 访问日志中间件
- - `OperationLogMiddleware`: 管理端变更操作日志（可配置开关 / 白名单 / 黑名单）
+- `OperationLogMiddleware`: 管理端变更操作日志（可配置开关 / 白名单 / 黑名单）
 
 ### 日志接口（需 rbac:view）
 
@@ -403,7 +432,7 @@ GET /api/v1/admin/accrual/export?start=2025-11-01&end=2025-11-12&format=xlsx&lan
 
 `configs/config.yaml`
 
-```
+```yaml
 observability:
     operationlog:
         enabled: true
@@ -433,12 +462,13 @@ observability:
    - 配置生产数据库连接
    - 设置强密码和密钥
 
-2. 编译生产版本：
+1. 编译生产版本：
+
 ```bash
 CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o tea-api ./cmd
 ```
 
-3. 使用进程管理工具（如 systemd、supervisor）管理服务。
+1. 使用进程管理工具（如 systemd、supervisor）管理服务。
 
 ## 许可证
 
@@ -447,3 +477,32 @@ MIT License
 ## 贡献
 
 欢迎提交 Issue 和 Pull Request！
+
+## 开发者注意事项
+
+### 遇到 Push Protection 阻塞时的自助处理
+
+如果在 `git push` 时被 GitHub 的 Push Protection 阻塞（例如误提交了本地密码文件或数据库配置），可以使用本仓库提供的脚本进行自助修复：
+
+1. **先在 GitHub 上撤销/轮换泄露的密钥或密码**  
+    - 例如：删除或重置对应的 PAT、Access Key、数据库密码等。  
+    - 确保外部服务侧已完成密钥旋转后再继续下面步骤。
+
+2. **在被阻塞的分支上运行脚本（以当前分支为例）**  
+
+    ```bash
+    cd /path/to/tea
+    bash scripts/remove-secrets.sh
+    ```
+
+    - 脚本会：
+      - 删除工作区和历史中的敏感文件（根据内部维护的名单与 glob 规则）；
+      - 补充 `.gitignore`，避免后续再次提交同类型文件；
+      - 通过 `git-filter-repo`（或 fallback 至 BFG）重写当前分支历史；
+      - 使用 `git gc` 清理历史垃圾；
+      - 最后对当前分支执行 `git push --force-with-lease`。
+
+3. **注意事项**  
+    - 该脚本默认只针对「当前分支或指定分支」重写历史，不会修改 `master` 等其他分支。  
+    - 历史重写完成并推送后，协作者需要重新拉取或重置到最新分支（例如 `git fetch && git reset --hard origin/<branch>`），以避免分叉历史。  
+    - 如果 Push Protection 仍然阻塞，请到 GitHub 的提示页面或 Secret Scanning 页面查看剩余告警，并根据提示联系仓库管理员处理。

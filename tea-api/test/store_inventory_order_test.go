@@ -42,10 +42,19 @@ func Test_Store_Inventory_Order_Deduction(t *testing.T) {
 	resp.Body.Close()
 	userAuth := "Bearer " + login.Data.Token
 
+	// 防止历史测试遗留的购物车/商品干扰当前用例
+	req, _ := http.NewRequest("DELETE", ts.URL+"/api/v1/cart/clear", nil)
+	req.Header.Set("Authorization", userAuth)
+	if respClr, err := http.DefaultClient.Do(req); err == nil {
+		respClr.Body.Close()
+	} else {
+		t.Fatalf("clear cart err: %v", err)
+	}
+
 	// 创建门店
 	st := map[string]any{"name": "库存门店", "status": 1}
 	sb, _ := json.Marshal(st)
-	req, _ := http.NewRequest("POST", ts.URL+"/api/v1/stores", bytes.NewReader(sb))
+	req, _ = http.NewRequest("POST", ts.URL+"/api/v1/stores", bytes.NewReader(sb))
 	req.Header.Set("Authorization", userAuth)
 	req.Header.Set("Content-Type", "application/json")
 	respS, err := http.DefaultClient.Do(req)

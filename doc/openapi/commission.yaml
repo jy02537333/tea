@@ -1,0 +1,394 @@
+openapi: 3.0.3
+info:
+  title: 茶心阁 — 佣金分配与结算 API
+  version: 1.0.0
+  description: |
+    基于需求文档 2.3 节（直接推广 30%-45%，间接推广 10%，升级差价奖励）构建的佣金/结算相关接口。
+    约定：所有货币在传输/存储层使用分单位（整型，单位：分）。返回给客户端可同时包含以元为单位的字符串（非强制）。
+servers:
+  - url: /api/v1
+paths:
+  /partner-levels:
+    get:
+      summary: 查询合伙人/会员等级与佣金配置
+      responses:
+        '200':
+          description: 合伙人等级列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerLevelListResponse'
+
+  /commission/settings:
+    get:
+      summary: 查询平台财务设置（提现门槛、手续费、结算阈值等）
+      responses:
+        '200':
+          description: 平台财务设置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformFinancialSettings'
+
+  /orders/{orderId}/commissions/calculate:
+    post:
+      summary: 计算订单产生的佣金分配（不持久化）
+      description: |
+        基于订单金额与适用优惠、运费等计算出按规则分配给直接推广人、间接团队奖励、以及升级差价奖励的明细。可用于预览与幂等性检查。
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommissionCalculationInput'
+      responses:
+        '200':
+          description: 佣金计算结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionCalculationResult'
+
+  /commissions:
+    post:
+      summary: 持久化并创建佣金记录（在订单完成后调用）
+      description: |
+        将已计算的佣金记录写入系统（create），并创建对应的冻结流水（status = frozen）。请求应支持 `Idempotency-Key` 以保证幂等性。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCommissionRecordsRequest'
+      responses:
+        '201':
+          description: 创建成功，返回创建的佣金记录容器
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateCommissionRecordsResponse'
+    get:
+      summary: 列表：按用户或订单查询佣金记录
+      parameters:
+        - name: user_id
+          in: query
+          schema:
+            type: string
+        - name: order_id
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [frozen, available, paid, reversed]
+      responses:
+        '200':
+          description: 佣金记录列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CommissionRecord'
+
+  /commissions/{commissionId}/unfreeze:
+    post:
+      summary: 将冻结佣金解冻为可提现（管理员或系统定时任务调用）
+      parameters:
+        - name: commissionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 解冻成功
+
+  /withdrawals:
+    post:
+      summary: 申请提现
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WithdrawalRequest'
+      responses:
+        '201':
+          description: 提现申请已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WithdrawalResponse'
+    get:
+      summary: 提现查询（用户/管理员）
+      parameters:
+        - name: user_id
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected, paid]
+      responses:
+        '200':
+          description: 提现列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WithdrawalResponse'
+
+  /withdrawals/{withdrawalId}/approve:
+    post:
+      summary: 管理员批准提现（包含手续费计算与实际放款）
+      parameters:
+        - name: withdrawalId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                approve:
+                  type: boolean
+                  default: true
+                note:
+                  type: string
+      responses:
+        '200':
+          description: 批准结果
+
+components:
+  schemas:
+    MoneyCents:
+      type: integer
+      description: 金额，单位：分（整型）
+
+    PartnerLevel:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        price_cents:
+          $ref: '#/components/schemas/MoneyCents'
+        direct_commission_rate:
+          type: number
+          format: float
+          description: 直接佣金比例（0-1），例：0.30 表示 30%
+        team_commission_rate:
+          type: number
+          format: float
+          description: 团队管理奖比例（0-1），例：0.10 表示 10%
+        discount_rate:
+          type: number
+          format: float
+          description: 拿货/消费折扣比例
+
+    PartnerLevelListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerLevel'
+
+    PlatformFinancialSettings:
+      type: object
+      properties:
+        withdraw_min_cents:
+          $ref: '#/components/schemas/MoneyCents'
+        withdrawal_fee_rate:
+          type: number
+          format: float
+          description: 手续费比例（例如 0.01 表示 1%）
+        commission_payout_min_cents:
+          $ref: '#/components/schemas/MoneyCents'
+        monthly_invoice_threshold_cents:
+          $ref: '#/components/schemas/MoneyCents'
+
+    CommissionCalculationInput:
+      type: object
+      required: [order_id, payer_user_id, items]
+      properties:
+        order_id:
+          type: string
+        payer_user_id:
+          type: string
+        referrer_user_id:
+          type: string
+          description: 直接推荐人（可能为空）
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              sku_id:
+                type: string
+              unit_price_cents:
+                $ref: '#/components/schemas/MoneyCents'
+              quantity:
+                type: integer
+              discount_cents:
+                $ref: '#/components/schemas/MoneyCents'
+        shipping_cents:
+          $ref: '#/components/schemas/MoneyCents'
+        coupon_cents:
+          $ref: '#/components/schemas/MoneyCents'
+        order_level_discount_cents:
+          $ref: '#/components/schemas/MoneyCents'
+
+    CommissionBreakdownItem:
+      type: object
+      properties:
+        recipient_user_id:
+          type: string
+        commission_type:
+          type: string
+          enum: [direct, indirect, upgrade]
+        rate:
+          type: number
+          format: float
+        calculation_basis_cents:
+          $ref: '#/components/schemas/MoneyCents'
+        gross_amount_cents:
+          $ref: '#/components/schemas/MoneyCents'
+        fee_cents:
+          $ref: '#/components/schemas/MoneyCents'
+        net_amount_cents:
+          $ref: '#/components/schemas/MoneyCents'
+
+    CommissionCalculationResult:
+      type: object
+      properties:
+        order_id:
+          type: string
+        total_commission_cents:
+          $ref: '#/components/schemas/MoneyCents'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommissionBreakdownItem'
+      example:
+        order_id: "ord_20251208_0001"
+        total_commission_cents: 35000
+        items:
+          - recipient_user_id: "user_123"
+            commission_type: direct
+            rate: 0.30
+            calculation_basis_cents: 100000
+            gross_amount_cents: 30000
+            fee_cents: 300
+            net_amount_cents: 29700
+          - recipient_user_id: "user_456"
+            commission_type: indirect
+            rate: 0.10
+            calculation_basis_cents: 30000
+            gross_amount_cents: 3000
+            fee_cents: 30
+            net_amount_cents: 2970
+
+    CreateCommissionRecordsRequest:
+      type: object
+      required: [order_id, calculated_at, breakdown]
+      properties:
+        order_id:
+          type: string
+        calculated_at:
+          type: string
+          format: date-time
+        breakdown:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommissionBreakdownItem'
+
+    CreateCommissionRecordsResponse:
+      type: object
+      properties:
+        created_count:
+          type: integer
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommissionRecord'
+
+    CommissionRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        order_id:
+          type: string
+        recipient_user_id:
+          type: string
+        commission_type:
+          type: string
+        rate:
+          type: number
+          format: float
+        gross_amount_cents:
+          $ref: '#/components/schemas/MoneyCents'
+        fee_cents:
+          $ref: '#/components/schemas/MoneyCents'
+        net_amount_cents:
+          $ref: '#/components/schemas/MoneyCents'
+        status:
+          type: string
+          enum: [frozen, available, paid, reversed]
+        available_at:
+          type: string
+          format: date-time
+
+    WithdrawalRequest:
+      type: object
+      required: [user_id, amount_cents, bank_account_id]
+      properties:
+        user_id:
+          type: string
+        amount_cents:
+          $ref: '#/components/schemas/MoneyCents'
+        bank_account_id:
+          type: string
+        note:
+          type: string
+
+    WithdrawalResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        amount_cents:
+          $ref: '#/components/schemas/MoneyCents'
+        fee_cents:
+          $ref: '#/components/schemas/MoneyCents'
+        net_amount_cents:
+          $ref: '#/components/schemas/MoneyCents'
+        status:
+          type: string
+          enum: [pending, approved, rejected, paid]

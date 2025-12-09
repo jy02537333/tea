@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -316,6 +317,10 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 		if sid, err2 := strconv.ParseUint(sidStr, 10, 32); err2 == nil && sid > 0 {
 			product, err := h.productService.GetProductForStore(uint(id), uint(sid))
 			if err != nil {
+				if errors.Is(err, service.ErrProductNotFound) {
+					response.Error(c, http.StatusNotFound, "商品不存在")
+					return
+				}
 				response.Error(c, http.StatusInternalServerError, "获取商品详情失败", err.Error())
 				return
 			}
@@ -326,6 +331,10 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 
 	product, err := h.productService.GetProduct(uint(id))
 	if err != nil {
+		if errors.Is(err, service.ErrProductNotFound) {
+			response.Error(c, http.StatusNotFound, "商品不存在")
+			return
+		}
 		response.Error(c, http.StatusInternalServerError, "获取商品详情失败", err.Error())
 		return
 	}

@@ -1,36 +1,80 @@
-import api, { unwrapResponse } from './api';
-import { PaginationResponse, Product, ApiResponse } from './types';
+import { api, PaginatedResult, unwrap, unwrapPagination } from './api';
+import type { Category } from './categories';
 
-export async function getProducts(params: { page?: number; limit?: number; category_id?: number; status?: number; keyword?: string; store_id?: number }): Promise<PaginationResponse<Product>> {
+export interface Product {
+  id: number;
+  name: string;
+  description?: string;
+  category_id: number;
+  category?: Category;
+  price: string;
+  original_price?: string;
+  images?: string;
+  status: number;
+  stock: number;
+  sales?: number;
+  sort?: number;
+  is_hot?: boolean;
+  is_new?: boolean;
+  is_recommend?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProductListParams {
+  page?: number;
+  limit?: number;
+  category_id?: number;
+  status?: number | string;
+  keyword?: string;
+}
+
+export interface ProductPayload {
+  name: string;
+  description?: string;
+  category_id: number;
+  price: number;
+  original_price?: number;
+  images?: string;
+  status: number;
+  stock?: number;
+  sort?: number;
+  is_hot?: boolean;
+  is_new?: boolean;
+  is_recommend?: boolean;
+}
+
+export interface UpdateStockPayload {
+  stock: number;
+  action: 'add' | 'sub' | 'set';
+}
+
+export async function getProducts(params: ProductListParams): Promise<PaginatedResult<Product>> {
   const res = await api.get('/api/v1/products', { params });
-  return unwrapResponse<PaginationResponse<Product>>(res);
+  return unwrapPagination<Product>(res);
 }
 
-export async function getProduct(id: number, store_id?: number): Promise<Product> {
-  const res = await api.get(`/api/v1/products/${id}`, { params: store_id ? { store_id } : {} });
-  return unwrapResponse<Product>(res);
+export async function getProduct(id: number) {
+  const res = await api.get(`/api/v1/products/${id}`);
+  return unwrap<Product>(res);
 }
 
-export async function createProduct(payload: Partial<Product>): Promise<Product> {
+export async function createProduct(payload: ProductPayload) {
   const res = await api.post('/api/v1/products', payload);
-  return unwrapResponse<Product>(res);
+  return unwrap<Product>(res);
 }
 
-export async function updateProduct(id: number, payload: Partial<Product>): Promise<void> {
+export async function updateProduct(id: number, payload: ProductPayload) {
   const res = await api.put(`/api/v1/products/${id}`, payload);
-  // some endpoints return empty success; unwrap to keep types consistent
-  return unwrapResponse<void>(res);
+  return unwrap<Product>(res);
 }
 
-export async function deleteProduct(id: number): Promise<void> {
+export async function deleteProduct(id: number) {
   const res = await api.delete(`/api/v1/products/${id}`);
-  return unwrapResponse<void>(res);
+  return unwrap(res);
 }
 
-export async function updateProductStock(id: number, stock: number, action: 'add' | 'sub' | 'set'): Promise<void> {
-  const res = await api.put(`/api/v1/products/${id}/stock`, { stock, action });
-  return unwrapResponse<void>(res);
+export async function updateProductStock(id: number, payload: UpdateStockPayload) {
+  const res = await api.put(`/api/v1/products/${id}/stock`, payload);
+  return unwrap(res);
 }
-
-// backward-compatible alias used by example pages
-export const listProducts = getProducts;

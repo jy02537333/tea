@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 
@@ -164,6 +165,72 @@ func (h *UserHandler) UpdateUserInfo(c *gin.Context) {
 	utils.Success(c, "更新成功")
 }
 
+// GetDefaultAddress 读取用户默认地址
+func (h *UserHandler) GetDefaultAddress(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.Unauthorized(c, "请先登录")
+		return
+	}
+	uid, ok := userID.(uint)
+	if !ok {
+		utils.ServerError(c, "用户ID格式错误")
+		return
+	}
+
+	address, updatedAt, err := h.userService.GetDefaultAddress(uid)
+	if err != nil {
+		utils.Error(c, utils.CodeError, "获取地址失败: "+err.Error())
+		return
+	}
+
+	var parsed interface{}
+	if address != "" {
+		if err := json.Unmarshal([]byte(address), &parsed); err != nil {
+			parsed = address
+		}
+	}
+
+	utils.Success(c, gin.H{
+		"address":    parsed,
+		"raw":        address,
+		"updated_at": updatedAt,
+	})
+}
+
+// UpdateDefaultAddress 写入用户默认地址
+func (h *UserHandler) UpdateDefaultAddress(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.Unauthorized(c, "请先登录")
+		return
+	}
+	uid, ok := userID.(uint)
+	if !ok {
+		utils.ServerError(c, "用户ID格式错误")
+		return
+	}
+
+	var req struct {
+		Address json.RawMessage `json:"address"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.Address) == 0 {
+		utils.InvalidParam(c, "address 不能为空")
+		return
+	}
+	if !json.Valid(req.Address) {
+		utils.InvalidParam(c, "address 必须是合法 JSON")
+		return
+	}
+
+	if err := h.userService.UpdateDefaultAddress(uid, string(req.Address)); err != nil {
+		utils.Error(c, utils.CodeError, "保存地址失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, "ok")
+}
+
 // ChangePassword 用户修改自己的密码（需要登录）
 func (h *UserHandler) ChangePassword(c *gin.Context) {
 	userID, exists := c.Get("user_id")
@@ -241,6 +308,130 @@ func (h *UserHandler) AdminListUsers(c *gin.Context) {
 		return
 	}
 	utils.PageSuccess(c, users, total, page, size)
+}
+
+// AdminCreateUser 管理端创建新用户
+func (h *UserHandler) AdminCreateUser(c *gin.Context) {
+	var req struct {
+		Username string `json:"username" binding:"required"`
+		Password string `json:"password" binding:"required"`
+		Phone    string `json:"phone" binding:"required"`
+		Nickname string `json:"nickname"`
+		Role     string `json:"role"`
+		Status   *int   `json:"status"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.InvalidParam(c, err.Error())
+		return
+	}
+
+	username := strings.TrimSpace(req.Username)
+	password := strings.TrimSpace(req.Password)
+	phone := strings.TrimSpace(req.Phone)
+	nickname := strings.TrimSpace(req.Nickname)
+	role := strings.TrimSpace(req.Role)
+
+	var status int
+	if req.Status != nil {
+		status = *req.Status
+	}
+
+	user, err := h.userService.CreateAdminUser(service.CreateAdminUserInput{
+		Username: username,
+		Password: password,
+		Phone:    phone,
+		Nickname: nickname,
+		Role:     role,
+		Status:   status,
+	})
+	if err != nil {
+		utils.Error(c, utils.CodeError, "创建用户失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, user)
+}
+
+// AdminUpdateUser 管理端更新用户基本信息
+func (h *UserHandler) AdminUpdateUser(c *gin.Context) {
+	userIDStr := c.Param("id")
+	userID, err := strconv.ParseUint(userIDStr, 10, 32)
+	if err != nil || userID == 0 {
+		utils.InvalidParam(c, "用户ID格式错误")
+		return
+	}
+
+	var req struct {
+		Nickname *string `json:"nickname"`
+		Phone    *string `json:"phone"`
+		Role     *string `json:"role"`
+		Status   *int    `json:"status"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.InvalidParam(c, err.Error())
+		return
+	}
+
+	updates := make(map[string]interface{})
+	if req.Nickname != nil {
+		updates["nickname"] = strings.TrimSpace(*req.Nickname)
+	}
+	if req.Phone != nil {
+		updates["phone"] = strings.TrimSpace(*req.Phone)
+	}
+	if req.Role != nil {
+		updates["role"] = strings.TrimSpace(*req.Role)
+	}
+	if req.Status != nil {
+		updates["status"] = *req.Status
+	}
+
+	if len(updates) == 0 {
+		utils.InvalidParam(c, "没有可更新字段")
+		return
+	}
+
+	if err := h.userService.UpdateUserInfo(uint(userID), updates); err != nil {
+		utils.Error(c, utils.CodeError, "更新用户信息失败: "+err.Error())
+		return
+	}
+
+	userInfo, err := h.userService.GetUserInfo(uint(userID))
+	if err != nil {
+		utils.Error(c, utils.CodeError, "读取用户信息失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, userInfo)
+}
+
+// AdminResetPassword 管理端重置用户密码
+func (h *UserHandler) AdminResetPassword(c *gin.Context) {
+	userIDStr := c.Param("id")
+	userID, err := strconv.ParseUint(userIDStr, 10, 32)
+	if err != nil || userID == 0 {
+		utils.InvalidParam(c, "用户ID格式错误")
+		return
+	}
+
+	var req struct {
+		NewPassword string `json:"new_password" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.InvalidParam(c, "new_password 不能为空")
+		return
+	}
+	if len(req.NewPassword) < 6 {
+		utils.InvalidParam(c, "新密码至少 6 位")
+		return
+	}
+
+	if err := h.userService.ResetPasswordAdmin(uint(userID), req.NewPassword); err != nil {
+		utils.Error(c, utils.CodeError, "重置密码失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, gin.H{"message": "密码已重置"})
 }
 
 // Refresh 刷新JWT Token

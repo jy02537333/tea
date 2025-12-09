@@ -3,6 +3,7 @@ package test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -33,7 +34,9 @@ func Test_Accrual_Concurrency_Idempotent(t *testing.T) {
 
 	db := database.GetDB()
 	// 准备用户
-	u := model.User{BaseModel: model.BaseModel{UID: utils.GenerateUID()}, OpenID: "u_" + utils.GenerateUID(), Phone: "p_" + utils.GenerateUID(), Nickname: "cc", Status: 1, Balance: decimal.NewFromFloat(1000)}
+	// phone 字段在 MySQL 中长度有限制，这里用固定的 11 位手机号避免插入失败
+	phone := fmt.Sprintf("138%08d", time.Now().UnixNano()%1e8)
+	u := model.User{BaseModel: model.BaseModel{UID: utils.GenerateUID()}, OpenID: "u_" + utils.GenerateUID(), Phone: phone, Nickname: "cc", Status: 1, Balance: decimal.NewFromFloat(1000)}
 	if err := db.Create(&u).Error; err != nil {
 		t.Fatalf("create user: %v", err)
 	}

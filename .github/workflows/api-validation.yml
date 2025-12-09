@@ -1,0 +1,244 @@
+name: API Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ master, feat/ci-diagnostics ]
+
+jobs:
+  api-validation:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: gs963852
+          MYSQL_DATABASE: tea_shop
+        ports:
+          - 3308:3306
+        options: >-
+          --health-cmd='mysqladmin ping --silent' --health-interval=10s --health-timeout=5s --health-retries=12
+      redis:
+        image: redis:6
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd='redis-cli ping' --health-interval=10s --health-timeout=5s --health-retries=12
+      rabbitmq:
+        image: rabbitmq:3-management
+        ports:
+          - 5672:5672
+          - 15672:15672
+        options: >-
+          --health-cmd='rabbitmq-diagnostics -q ping' --health-interval=10s --health-timeout=5s --health-retries=12
+
+    env:
+      # 服务内使用的默认地址/端口 （在容器网络中使用服务名）
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: root
+      MYSQL_PASSWORD: gs963852
+      MYSQL_DB: tea_shop
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: "123456"
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      API_BIND_ADDR: 0.0.0.0:9292
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Setup Node (for frontend validation scripts if any)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Wait for services
+        run: |
+          for i in {1..30}; do
+            nc -z mysql 3306 && nc -z redis 6379 && nc -z rabbitmq 5672 && break || sleep 2;
+          done
+
+      - name: Show env (debug)
+        run: |
+          echo "MYSQL: $MYSQL_HOST:$MYSQL_PORT/$MYSQL_DB"
+          redis-cli -h redis ping || true
+
+      - name: Build tea-api
+        working-directory: tea-api
+        run: |
+          go env
+          go build -o tea-api ./...
+
+      - name: Start tea-api (background)
+        working-directory: tea-api
+        run: |
+          # use CI-friendly config via env; the app should read env or default config
+          ./tea-api &
+          # wait for port
+          for i in {1..30}; do
+            nc -z localhost 9292 && break || sleep 2;
+          done
+
+      - name: Run seeders
+        working-directory: tea-api
+        run: |
+          # Example seeder used during local validation; adjust as needed
+          go run scripts/seed_skus.go -product 1 -sku_name "默认规格" -sku_code "SKU-P1-001" -price "99.00" -stock 20 || true
+
+      - name: Run API validation script
+        run: |
+          sh scripts/run_api_validation.sh || true
+
+      - name: Install utils for assertions
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq curl || true
+
+      - name: Run API assertion checks
+        run: |
+          bash scripts/assert_api_validation.sh
+
+      - name: Upload validation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-validation-logs
+          path: |
+            build-ci-logs/api_validation/**
+            build-ci-logs/admin_login_response.json
+            build-ci-logs/**
+
+      - name: Upload tmp responses (if exist)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-validation-temp
+          path: |
+            /tmp/cart_no_sku.json
+            /tmp/cart_with_sku.json
+            || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          pkill -f tea-api || true
+
+  cli-e2e:
+    name: CLI E2E (cart-order-pay)
+    needs: api-validation
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: gs963852
+          MYSQL_DATABASE: tea_shop
+        ports:
+          - 3308:3306
+        options: >-
+          --health-cmd='mysqladmin ping --silent' --health-interval=10s --health-timeout=5s --health-retries=12
+      redis:
+        image: redis:6
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd='redis-cli ping' --health-interval=10s --health-timeout=5s --health-retries=12
+      rabbitmq:
+        image: rabbitmq:3-management
+        ports:
+          - 5672:5672
+          - 15672:15672
+        options: >-
+          --health-cmd='rabbitmq-diagnostics -q ping' --health-interval=10s --health-timeout=5s --health-retries=12
+
+    env:
+      BASE_URL: http://127.0.0.1:9292/api/v1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24'
+
+      - name: Install MySQL client
+        run: |
+          sudo apt-get update && sudo apt-get install -y mysql-client
+
+      - name: Wait for services
+        run: |
+          for i in {1..30}; do
+            nc -z 127.0.0.1 3308 && nc -z 127.0.0.1 6379 && nc -z 127.0.0.1 5672 && break || sleep 2;
+          done
+
+      - name: Prepare database schema and seed data
+        env:
+          MYSQL_PWD: gs963852
+        run: |
+          mysql -h 127.0.0.1 -P 3308 -u root -e "CREATE DATABASE IF NOT EXISTS tea_shop DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+          mysql -h 127.0.0.1 -P 3308 -u root -D tea_shop < tea-api/sql迁移.sql
+          mysql -h 127.0.0.1 -P 3308 -u root < tea-api/scripts/init.sql
+
+      - name: Seed admin user and default SKU
+        working-directory: tea-api
+        env:
+          SEED_ADMIN_USER: admin
+          SEED_ADMIN_PASS: pass
+        run: |
+          go run ./scripts/seed_admin -config configs/config.yaml
+          go run ./scripts/seed_skus -config configs/config.yaml -product 1 -sku_name "默认规格" -sku_code "ci-sku-001" -price "19.90" -stock 50
+
+      - name: Start tea-api via helper script
+        run: |
+          bash run-tea-api.sh
+
+      - name: Capture admin token for CLI E2E
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          path = "build-ci-logs/admin_login_response.json"
+          token = ""
+          try:
+            with open(path, "r", encoding="utf-8") as fh:
+              data = json.load(fh)
+            if isinstance(data, dict):
+              data = data.get("data") or data
+              if isinstance(data, dict):
+                token = data.get("token") or ""
+          except FileNotFoundError:
+            pass
+
+          if not token:
+            raise SystemExit(f"token not found in {path}")
+
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
+              env_file.write(f"TOKEN={token}\n")
+          PY
+
+      - name: Run CLI E2E flow (cart -> order -> pay)
+        working-directory: tea-api
+        run: |
+          go run ./cmd/e2e_single_sku_order -base-url "$BASE_URL"
+
+      - name: Upload E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-e2e-logs
+          path: |
+            build-ci-logs/**
+
+      - name: Stop tea-api
+        if: always()
+        run: |
+          if [ -f build-ci-logs/tea-api.pid ]; then
+            kill "$(cat build-ci-logs/tea-api.pid)" || true
+          fi
+          pkill -f tea-api-main || true

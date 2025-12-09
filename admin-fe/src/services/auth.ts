@@ -1,40 +1,43 @@
-import api, { setToken, unwrapResponse } from './api';
-import { User, ApiResponse } from './types';
+import { api, setToken, unwrap } from './api';
+import { User } from '../types/user';
 
-export interface LoginPayload {
-  code?: string; // wechat code
-  username?: string;
-  password?: string;
-  openid?: string; // dev
-}
-
-export interface LoginResponse {
+interface LoginResponse {
   token: string;
   user?: User;
 }
 
-export async function login(payload: LoginPayload): Promise<LoginResponse> {
-  const res = await api.post('/api/v1/user/login', payload);
-  const data = unwrapResponse<LoginResponse>(res);
-  if ((data as any)?.token) setToken((data as any).token);
+export interface PasswordLoginPayload {
+  username: string;
+  password: string;
+  captcha_id: string;
+  captcha_code: string;
+}
+
+export interface CaptchaResponse {
+  id: string;
+  image: string;
+}
+
+export async function login(payload: PasswordLoginPayload) {
+  const res = await api.post('/api/v1/auth/login', payload);
+  const data = unwrap<LoginResponse>(res);
+  if (data.token) setToken(data.token);
   return data;
 }
 
-export async function devLogin(openid: string): Promise<LoginResponse> {
+export async function devLogin(openid: string) {
   const res = await api.post('/api/v1/user/dev-login', { openid });
-  const data = unwrapResponse<LoginResponse>(res);
-  if ((data as any)?.token) setToken((data as any).token);
+  const data = unwrap<LoginResponse>(res);
+  if (data.token) setToken(data.token);
   return data;
 }
 
-export async function getUserInfo(): Promise<User> {
+export async function getUserInfo() {
   const res = await api.get('/api/v1/user/info');
-  return unwrapResponse<User>(res);
+  return unwrap<User>(res);
 }
 
-export async function refreshToken(): Promise<{ token: string } | null> {
-  const res = await api.post('/api/v1/user/refresh');
-  const data = unwrapResponse<{ token: string }>(res);
-  if (data?.token) setToken(data.token);
-  return data;
+export async function fetchCaptcha() {
+  const res = await api.get('/api/v1/auth/captcha');
+  return unwrap<CaptchaResponse>(res);
 }

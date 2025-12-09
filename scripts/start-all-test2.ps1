@@ -20,7 +20,7 @@ $AdminPort = 8081
 $WxPort = 8082
 
 # 测试环境2 的环境变量（按需修改）
-$TeaDsn = 'root:gs963852@tcp(127.0.0.1:3306)/tea_shop?charset=utf8mb4&parseTime=True&loc=Local'
+$TeaDsn = 'root:gs963852@tcp(127.0.0.1:3308)/tea_shop?charset=utf8mb4&parseTime=True&loc=Local'
 $RedisHost = '127.0.0.1'
 $RedisPort = 6379
 $RedisPass = ''

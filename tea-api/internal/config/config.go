@@ -235,21 +235,21 @@ func LoadConfig(path string) error {
 	_ = viper.BindEnv("rabbitmq.vhost", "TEA_RABBITMQ_VHOST")
 
 	// Set safe defaults for test/dev environment so tests use the shared endpoints
-	viper.SetDefault("database.host", "10.8.0.14")
-	viper.SetDefault("database.port", 3310)
+	viper.SetDefault("database.host", "127.0.0.1")
+	viper.SetDefault("database.port", 3308)
 	viper.SetDefault("database.username", "root")
-	viper.SetDefault("database.password", "my-secret-pw")
+	viper.SetDefault("database.password", "gs963852")
 	viper.SetDefault("database.dbname", "tea_shop")
 	viper.SetDefault("database.charset", "utf8mb4")
 	viper.SetDefault("database.parse_time", true)
 	viper.SetDefault("database.loc", "Local")
 
-	viper.SetDefault("redis.host", "10.8.0.14")
+	viper.SetDefault("redis.host", "127.0.0.1")
 	viper.SetDefault("redis.port", 6379)
 	viper.SetDefault("redis.password", "123456")
 	viper.SetDefault("redis.db", 0)
 
-	viper.SetDefault("rabbitmq.host", "10.8.0.14")
+	viper.SetDefault("rabbitmq.host", "127.0.0.1")
 	viper.SetDefault("rabbitmq.port", 5672)
 	viper.SetDefault("rabbitmq.username", "guest")
 	viper.SetDefault("rabbitmq.password", "guest")

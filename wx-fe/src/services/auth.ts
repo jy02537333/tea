@@ -12,3 +12,8 @@ export async function getUserInfo(): Promise<User> {
   const res = await api.get('/api/v1/user/info');
   return unwrapResponse<User>(res);
 }
+
+export async function updateUserInfo(updates: Partial<Pick<User, 'nickname' | 'avatar'>> & { gender?: number }): Promise<string | undefined> {
+  const res = await api.put('/api/v1/user/info', updates);
+  return unwrapResponse<string | undefined>(res);
+}

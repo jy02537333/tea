@@ -1,0 +1,229 @@
+openapi: 3.0.1
+info:
+  title: 茶心阁 - OSS 上传 API 片段
+  version: 1.0.0
+  description: |
+    阿里云 OSS 上传相关接口片段（后台为前端提供上传凭证 / STS 临时凭证 / 回调验证）。
+servers:
+  - url: /
+tags:
+  - name: storage
+    description: 对象存储（OSS）相关接口
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    OSSPolicyRequest:
+      type: object
+      properties:
+        business_type:
+          type: string
+          description: 业务类型，影响 object key 前缀（示例：product_image, brand_logo, store_banner）
+        file_name:
+          type: string
+          description: 原始文件名（可选），用于建议的 object key 命名
+        content_type:
+          type: string
+          description: 文件 MIME 类型（可选）
+        max_size_bytes:
+          type: integer
+          description: 允许的最大文件大小（字节），后端可基于业务覆盖默认值
+      required:
+        - business_type
+    OSSPolicyResponse:
+      type: object
+      properties:
+        upload_mode:
+          type: string
+          description: 上传模式，`form` 或 `sts`（表单直传或临时 STS）
+        host:
+          type: string
+          description: OSS 表单上传的 host（含 bucket 域名）
+        dir:
+          type: string
+          description: 建议的 object key 前缀（例如：products/2025/12/08/）
+        policy:
+          type: string
+          description: base64 编码的 policy（仅当 upload_mode == form 时存在）
+        signature:
+          type: string
+          description: policy 对应的签名（仅当 upload_mode == form 时存在）
+        accessKeyId:
+          type: string
+          description: 用于表单直传或 STS 的 AccessKeyId
+        accessKeySecret:
+          type: string
+          description: STS 时可能返回的临时 secret（仅当 upload_mode == sts 时存在）
+        securityToken:
+          type: string
+          description: STS 临时 Token（仅当 upload_mode == sts 时存在）
+        expiration:
+          type: string
+          format: date-time
+          description: 凭证过期时间（ISO 8601）
+        callback:
+          type: object
+          description: 可选的回调配置，后端在表单直传时返回给前端用于回调验证
+          properties:
+            callback_url:
+              type: string
+            callback_body:
+              type: string
+    OSSCallbackVerification:
+      type: object
+      properties:
+        filename:
+          type: string
+        size:
+          type: integer
+        mime_type:
+          type: string
+        object_key:
+          type: string
+        bucket:
+          type: string
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+paths:
+  /api/v1/admin/storage/oss/policy:
+    post:
+      tags:
+        - storage
+      summary: 生成 OSS 上传凭证（Policy 或 STS）
+      description: |
+        后台为管理后台（admin-fe）生成 OSS 表单上传 policy or STS 临时凭证。
+        - 推荐表单直传（upload_mode=form）用于单文件/小文件上传。
+        - 当需要更细粒度权限或多文件场景时，可返回 STS（upload_mode=sts）。
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OSSPolicyRequest'
+      responses:
+        '200':
+          description: 成功，返回上传凭证
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OSSPolicyResponse'
+              examples:
+                formExample:
+                  summary: 表单直传示例
+                  value:
+                    upload_mode: form
+                    host: https://your-bucket.oss-cn-hangzhou.aliyuncs.com
+                    dir: products/2025/12/08/
+                    policy: eyJleHBpcmF0aW9uIjoiMjAyNS0xMi0wOFQwMDowMDowMFoiLCJjb25kaXRpb25zIjpbWyJzdGFydHMtd2l0aCIsIiIkb2JqZWN0IiwiIl1dfQ==
+                    signature: dGVzdHNpZ25hdHVyZQ==
+                    accessKeyId: LTAIxxxxxxxxxxxx
+                    expiration: '2025-12-08T01:00:00Z'
+                    callback:
+                      callback_url: https://api.yoursite.com/api/v1/admin/storage/oss/callback
+                      callback_body: '{"filename":"${object}","size":${size},"mime_type":"${mimeType}"}'
+                stsExample:
+                  summary: STS 临时凭证示例
+                  value:
+                    upload_mode: sts
+                    accessKeyId: LTAIxxxxxxxxxxxx
+                    accessKeySecret: xxxxxxxxxxxxxxxxx
+                    securityToken: xxxx-xxxx-xxxx
+                    expiration: '2025-12-08T01:00:00Z'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/storage/oss/sts:
+    post:
+      tags:
+        - storage
+      summary: （可选）只返回 STS 临时凭证
+      description: 管理后台在需要客户端使用 SDK/多文件或复杂权限时可以单独请求 STS。返回包括 `accessKeyId`/`accessKeySecret`/`securityToken`/`expiration` 与建议上传目录 `dir`。
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                business_type:
+                  type: string
+                duration_seconds:
+                  type: integer
+              required:
+                - business_type
+      responses:
+        '200':
+          description: STS 临时凭证
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessKeyId:
+                    type: string
+                  accessKeySecret:
+                    type: string
+                  securityToken:
+                    type: string
+                  expiration:
+                    type: string
+                    format: date-time
+                  dir:
+                    type: string
+        '401':
+          description: 未授权
+
+  /api/v1/admin/storage/oss/callback:
+    post:
+      tags:
+        - storage
+      summary: OSS 回调处理（可选）
+      description: |
+        当使用表单直传时，OSS 可以配置 callback 回调到后端。后端需要验证回调来源并返回 200 表示接受。
+        验证方式建议：
+        - 使用 OSS 回调提供的签名（Authorization/Date/OSS headers）按阿里云回调验证方式校验，或
+        - 在 callback 中带 `x-backend-signature` 由后端校验回调内容和签名（二选一，务必在文档中明示）。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OSSCallbackVerification'
+      responses:
+        '200':
+          description: 回调接收成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        '400':
+          description: 参数错误或验证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

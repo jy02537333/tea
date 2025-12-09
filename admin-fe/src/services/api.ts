@@ -1,61 +1,60 @@
 import axios from 'axios';
 
-const BASE_URL = (typeof (import.meta as any) !== 'undefined' && (import.meta as any).env?.VITE_API_BASE_URL) || process.env.VITE_API_BASE_URL || 'http://localhost:8080';
+const runtimeConfig = typeof window !== 'undefined' ? (window as any).__TEA_RUNTIME_CONFIG__ : undefined;
+const runtimeBaseUrl = runtimeConfig?.apiBaseUrl;
+const envBaseUrl = (import.meta as any)?.env?.VITE_API_BASE_URL;
+const inferredBaseUrl = typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:9292` : 'http://localhost:9292';
+const BASE_URL = runtimeBaseUrl || envBaseUrl || inferredBaseUrl;
 
 export const api = axios.create({
   baseURL: BASE_URL,
-  headers: { 'Content-Type': 'application/json' },
   timeout: 30000,
 });
 
-// Token helpers
 export function setToken(token: string | null) {
   if (token) {
     localStorage.setItem('token', token);
-    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    api.defaults.headers.common.Authorization = `Bearer ${token}`;
   } else {
     localStorage.removeItem('token');
-    delete api.defaults.headers.common['Authorization'];
+    delete api.defaults.headers.common.Authorization;
   }
 }
 
-// load token on startup
 const saved = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 if (saved) {
-  api.defaults.headers.common['Authorization'] = `Bearer ${saved}`;
+  setToken(saved);
 }
 
-// Request interceptor example
-api.interceptors.request.use((config) => {
-  // allow explicit override
-  return config;
-});
-
-// Response interceptor: simple 401 handling
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
-    if (err?.response?.status === 401) {
-      // frontend should handle redirect to login
+  (error) => {
+    if (error?.response?.status === 401) {
       setToken(null);
-      // optionally dispatch an event
-      window.dispatchEvent(new Event('unauthorized'));
+      window.dispatchEvent(new CustomEvent('unauthorized'));
     }
-    return Promise.reject(err);
+    return Promise.reject(error);
   }
 );
 
-export default api;
+export function unwrap<T>(response: any): T {
+  if (response?.data?.data) return response.data.data as T;
+  return response?.data as T;
+}
 
-// Helper to unwrap responses consistently and satisfy strict typing in services.
-export function unwrapResponse<T>(res: any): T {
-  // prefer { data: ... } wrapper
-  if (res && res.data && typeof res.data === 'object' && 'data' in res.data) {
-    return res.data.data as T;
-  }
-  // fallback when server responds without wrapper
-  if (res && typeof res.data !== 'undefined') {
-    return res.data as T;
-  }
-  return res as T;
+export interface PaginatedResult<T> {
+  list: T[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export function unwrapPagination<T>(response: any): PaginatedResult<T> {
+  const payload = response?.data ?? {};
+  return {
+    list: (payload.data as T[]) ?? [],
+    total: payload.total ?? 0,
+    page: payload.page ?? 1,
+    limit: payload.limit ?? 20,
+  };
 }

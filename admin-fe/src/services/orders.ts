@@ -1,49 +1,66 @@
+import { api, PaginatedResult, unwrap } from './api';
 
-import api, { unwrapResponse } from './api';
-import { OrderSummary, Order, PaginatedResponse } from './types';
-
-export async function createOrderFromCart(payload: { delivery_type: number; address_info?: string; remark?: string; user_coupon_id?: number; store_id?: number; order_type?: number }): Promise<OrderSummary> {
-  const res = await api.post('/api/v1/orders/from-cart', payload);
-  return unwrapResponse<OrderSummary>(res);
+export interface AdminOrder {
+  id: number;
+  order_no: string;
+  store_id: number;
+  user_id: number;
+  pay_amount: number;
+  status: number;
+  pay_status: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
-export async function listOrders(params: { page?: number; limit?: number; status?: number; store_id?: number }): Promise<PaginatedResponse<OrderSummary>> {
-  const res = await api.get('/api/v1/orders', { params });
-  return unwrapResponse<PaginatedResponse<OrderSummary>>(res);
+export interface AdminOrderItem {
+  id: number;
+  product_id: number;
+  product_name: string;
+  sku_name?: string;
+  quantity: number;
+  price: number | string;
+  amount: number | string;
 }
 
-export async function getOrder(id: number): Promise<Order> {
-  const res = await api.get(`/api/v1/orders/${id}`);
-  return unwrapResponse<Order>(res);
+export interface AdminOrderDetail {
+  order: AdminOrder;
+  items: AdminOrderItem[];
 }
 
-export async function cancelOrder(id: number, reason?: string): Promise<void> {
-  const res = await api.post(`/api/v1/orders/${id}/cancel`, { reason });
-  return unwrapResponse<void>(res);
+export interface AdminOrderListParams {
+  page?: number;
+  limit?: number;
+  store_id?: number;
+  status?: number;
 }
 
-export async function payOrder(id: number): Promise<void> {
-  const res = await api.post(`/api/v1/orders/${id}/pay`);
-  return unwrapResponse<void>(res);
-}
-
-export async function receiveOrder(id: number): Promise<void> {
-  const res = await api.post(`/api/v1/orders/${id}/receive`);
-  return unwrapResponse<void>(res);
-}
-
-// Admin specific
-export async function adminListOrders(params: { page?: number; limit?: number; status?: number; store_id?: number }): Promise<PaginatedResponse<OrderSummary>> {
+export async function getAdminOrders(params: AdminOrderListParams): Promise<PaginatedResult<AdminOrder>> {
   const res = await api.get('/api/v1/admin/orders', { params });
-  return unwrapResponse<PaginatedResponse<OrderSummary>>(res);
+  const payload = res.data ?? {};
+  const list: AdminOrder[] = payload.data ?? [];
+  const limit = payload.limit ?? payload.size ?? params.limit ?? (list.length || 20);
+  return {
+    list,
+    total: payload.total ?? list.length,
+    page: payload.page ?? params.page ?? 1,
+    limit,
+  };
 }
 
-export async function adminExportOrders(params: { status?: number; store_id?: number }) {
-  const res = await api.get('/api/v1/admin/orders/export', { params, responseType: 'blob' });
-  return res.data; // blob
-}
-
-export async function adminGetOrder(id: number): Promise<Order> {
+export async function getAdminOrderDetail(id: number) {
   const res = await api.get(`/api/v1/admin/orders/${id}`);
-  return unwrapResponse<Order>(res);
+  return unwrap<AdminOrderDetail>(res);
+}
+
+export async function exportAdminOrders(params: AdminOrderListParams = {}) {
+  const res = await api.get('/api/v1/admin/orders/export', {
+    params,
+    responseType: 'blob',
+  });
+  return res.data as Blob;
+}
+
+export async function postOrderAction(id: number, action: string, body?: Record<string, any>) {
+  const res = await api.post(`/api/v1/orders/${id}/${action}`, body ?? {});
+  return unwrap(res);
 }

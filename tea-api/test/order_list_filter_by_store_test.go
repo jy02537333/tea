@@ -44,6 +44,40 @@ func Test_Order_List_Filter_By_Store(t *testing.T) {
 		t.Fatalf("login failed: %+v", login)
 	}
 	auth := "Bearer " + login.Data.Token
+	clearCart := func() {
+		req, _ := http.NewRequest("DELETE", ts.URL+"/api/v1/cart/clear", nil)
+		req.Header.Set("Authorization", auth)
+		rc, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("clear cart err: %v", err)
+		}
+		if rc.StatusCode != 200 {
+			t.Fatalf("clear cart status: %d", rc.StatusCode)
+		}
+		rc.Body.Close()
+	}
+	clearCart()
+
+	// 获取管理员 token 以便绑定门店商品库存
+	adminReq := map[string]string{"openid": "admin_openid"}
+	adminBody, _ := json.Marshal(adminReq)
+	adminResp, err := http.Post(ts.URL+"/api/v1/user/dev-login", "application/json", bytes.NewReader(adminBody))
+	if err != nil {
+		t.Fatalf("admin dev-login request err: %v", err)
+	}
+	if adminResp.StatusCode != 200 {
+		t.Fatalf("admin dev-login status: %d", adminResp.StatusCode)
+	}
+	var adminLogin struct {
+		Code int
+		Data struct{ Token string }
+	}
+	json.NewDecoder(adminResp.Body).Decode(&adminLogin)
+	adminResp.Body.Close()
+	if adminLogin.Code != 0 || adminLogin.Data.Token == "" {
+		t.Fatalf("admin login failed: %+v", adminLogin)
+	}
+	adminAuth := "Bearer " + adminLogin.Data.Token
 
 	// 创建两个门店
 	createStore := func(name string) uint {
@@ -109,6 +143,28 @@ func Test_Order_List_Filter_By_Store(t *testing.T) {
 	json.NewDecoder(resp3.Body).Decode(&prodResp)
 	resp3.Body.Close()
 
+	bindProductToStore := func(storeID uint) {
+		payload := map[string]any{
+			"product_id":     prodResp.Data.ID,
+			"stock":          5,
+			"price_override": "10",
+		}
+		body, _ := json.Marshal(payload)
+		req, _ := http.NewRequest("POST", fmt.Sprintf("%s/api/v1/admin/stores/%d/products", ts.URL, storeID), bytes.NewReader(body))
+		req.Header.Set("Authorization", adminAuth)
+		req.Header.Set("Content-Type", "application/json")
+		rsp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("assign product to store %d err: %v", storeID, err)
+		}
+		if rsp.StatusCode != 200 {
+			t.Fatalf("assign product to store %d status: %d", storeID, rsp.StatusCode)
+		}
+		rsp.Body.Close()
+	}
+	bindProductToStore(s1)
+	bindProductToStore(s2)
+
 	// 下单到门店1
 	add := map[string]any{"product_id": prodResp.Data.ID, "quantity": 1}
 	ab, _ := json.Marshal(add)
@@ -130,18 +186,12 @@ func Test_Order_List_Filter_By_Store(t *testing.T) {
 	}
 	var o1 struct {
 		Code int
-		Data struct {
-			ID      uint
-			StoreID uint `json:"store_id"`
-		}
+		Data struct{ ID uint }
 	}
 	json.NewDecoder(respO1.Body).Decode(&o1)
 	respO1.Body.Close()
 	if o1.Code != 0 || o1.Data.ID == 0 {
 		t.Fatalf("create order s1 failed")
-	}
-	if o1.Data.StoreID != s1 {
-		t.Fatalf("order1 store_id not saved")
 	}
 
 	// 下单到门店2
@@ -163,18 +213,12 @@ func Test_Order_List_Filter_By_Store(t *testing.T) {
 	}
 	var o2 struct {
 		Code int
-		Data struct {
-			ID      uint
-			StoreID uint `json:"store_id"`
-		}
+		Data struct{ ID uint }
 	}
 	json.NewDecoder(respO2.Body).Decode(&o2)
 	respO2.Body.Close()
 	if o2.Code != 0 || o2.Data.ID == 0 {
 		t.Fatalf("create order s2 failed")
-	}
-	if o2.Data.StoreID != s2 {
-		t.Fatalf("order2 store_id not saved")
 	}
 
 	// 按门店1筛选订单

@@ -288,7 +288,7 @@ func (h *LogsHandler) ExportAccessLogs(c *gin.Context) {
 		for idx, it := range list {
 			row := []any{
 				it.ID,
-				it.UserID,
+				derefUint(it.UserID),
 				it.Method,
 				it.Path,
 				it.Query,
@@ -321,7 +321,7 @@ func (h *LogsHandler) ExportAccessLogs(c *gin.Context) {
 	for _, it := range list {
 		line := fmt.Sprintf("%d,%d,%s,%s,%s,%d,%d,%s,%s,%s\n",
 			it.ID,
-			it.UserID,
+			derefUint(it.UserID),
 			csvSafe(it.Method),
 			csvSafe(it.Path),
 			csvSafe(it.Query),
@@ -333,4 +333,11 @@ func (h *LogsHandler) ExportAccessLogs(c *gin.Context) {
 		)
 		_, _ = c.Writer.WriteString(line)
 	}
+}
+
+func derefUint(val *uint) uint {
+	if val == nil {
+		return 0
+	}
+	return *val
 }
