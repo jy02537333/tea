@@ -55,7 +55,7 @@ type UserStatistics struct {
 // AccessLog 访问日志模型
 type AccessLog struct {
 	BaseModel
-	UserID     uint   `gorm:"index" json:"user_id"`
+	UserID     *uint  `gorm:"index" json:"user_id"`
 	Method     string `gorm:"type:varchar(10);not null" json:"method"`
 	Path       string `gorm:"type:varchar(500);not null" json:"path"`
 	Query      string `gorm:"type:text" json:"query"`

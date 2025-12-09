@@ -52,10 +52,11 @@ func Test_Accrual_Uses_UserInterestRate_And_Export_XLSX(t *testing.T) {
 
 	// 准备一个用户：余额>0，个性化日利率>0
 	db := database.GetDB()
+	phone := fmt.Sprintf("138%08d", time.Now().UnixNano()%1e8)
 	u := model.User{
 		BaseModel:    model.BaseModel{UID: utils.GenerateUID()},
 		OpenID:       "rate_user_" + utils.GenerateUID(),
-		Phone:        "test-" + utils.GenerateUID(),
+		Phone:        phone, // 保持 11 位且随机避免唯一索引冲突
 		Nickname:     "rate user",
 		Status:       1,
 		Balance:      decimal.NewFromFloat(1000.00),

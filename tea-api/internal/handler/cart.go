@@ -19,9 +19,9 @@ func NewCartHandler() *CartHandler {
 }
 
 type addCartItemReq struct {
-	ProductID uint `json:"product_id" binding:"required"`
-	SkuID     uint `json:"sku_id"`
-	Quantity  int  `json:"quantity" binding:"required"`
+	ProductID uint  `json:"product_id" binding:"required"`
+	SkuID     *uint `json:"sku_id"`
+	Quantity  int   `json:"quantity" binding:"required"`
 }
 
 // AddItem 添加购物车条目

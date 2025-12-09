@@ -2,6 +2,8 @@
 
 基于 Go + Gin + GORM + MySQL + Redis 构建的茶叶店小程序后端API服务。
 
+> **Git 推送方式约定：** 本仓库统一使用 `HTTPS + GitHub Personal Access Token (PAT)` 推送代码，请将远程设置为 `https://github.com/jy02537333/tea.git`，避免 SSH key 配置问题。详情见 `docs/ci/README.md` 中“Git 推送方式约定（统一使用 Token）”小节。
+
 ## 功能特性
 
 - 🔐 微信小程序登录认证
@@ -294,17 +296,17 @@ GET /health
 
 ### 财务对账（管理端）
 
- - GET `/api/v1/admin/finance/summary` 对账概要
-     - 筛选参数：
-     - `start`、`end`: 时间范围（按创建时间）
-     - `store_id`：按门店过滤（可选）
-     - `method`：按支付方式过滤（1微信 2支付宝，可选）
-     - `group`: 可选，`day|store|method` 返回对应维度的明细 `rows`
-     - 返回：
-     - `summary`: `total_payments_count/amount`、`total_refunds_count/amount`、`net_amount`
-     - 当 `group=day` 时，返回 `rows`：`date,pay_count,pay_amount,refund_count,refund_amount,net_amount`
-     - 当 `group=store` 时，返回 `rows`：`store_id,store_name,pay_count,pay_amount,refund_count,refund_amount,net_amount`
-     - 当 `group=method` 时，返回 `rows`：`method,pay_count,pay_amount,refund_count,refund_amount,net_amount`
+- GET `/api/v1/admin/finance/summary` 对账概要
+    - 筛选参数：
+        - `start`、`end`: 时间范围（按创建时间）
+        - `store_id`：按门店过滤（可选）
+        - `method`：按支付方式过滤（1微信 2支付宝，可选）
+        - `group`: 可选，`day|store|method` 返回对应维度的明细 `rows`
+    - 返回：
+        - `summary`: `total_payments_count/amount`、`total_refunds_count/amount`、`net_amount`
+        - 当 `group=day` 时，返回 `rows`：`date,pay_count,pay_amount,refund_count,refund_amount,net_amount`
+        - 当 `group=store` 时，返回 `rows`：`store_id,store_name,pay_count,pay_amount,refund_count,refund_amount,net_amount`
+        - 当 `group=method` 时，返回 `rows`：`method,pay_count,pay_amount,refund_count,refund_amount,net_amount`
 - GET `/api/v1/admin/finance/summary/export?format=csv|xlsx&group=day|store|method` 导出汇总
     - 支持 `day|store|method` 三种维度，导出对应明细；`group=store` 导出包含 `Store Name`
 
@@ -364,7 +366,7 @@ POST /api/v1/admin/accrual/run
     "rate": 0.001
 }
 
-2. 导出英文 XLSX，仅导出部分字段并打包 zip
+1. 导出英文 XLSX，仅导出部分字段并打包 zip
 
 GET /api/v1/admin/accrual/export?start=2025-11-01&end=2025-11-12&format=xlsx&lang=en&fields=user_id,date,interest_amount&zip=1
 
@@ -415,7 +417,7 @@ GET /api/v1/admin/accrual/export?start=2025-11-01&end=2025-11-12&format=xlsx&lan
 - `AuthMiddleware`: JWT 认证中间件
 - `CORSMiddleware`: 跨域处理中间件
 - `DetailedAccessLogMiddleware`: 访问日志中间件
- - `OperationLogMiddleware`: 管理端变更操作日志（可配置开关 / 白名单 / 黑名单）
+- `OperationLogMiddleware`: 管理端变更操作日志（可配置开关 / 白名单 / 黑名单）
 
 ### 日志接口（需 rbac:view）
 
@@ -475,3 +477,32 @@ MIT License
 ## 贡献
 
 欢迎提交 Issue 和 Pull Request！
+
+## 开发者注意事项
+
+### 遇到 Push Protection 阻塞时的自助处理
+
+如果在 `git push` 时被 GitHub 的 Push Protection 阻塞（例如误提交了本地密码文件或数据库配置），可以使用本仓库提供的脚本进行自助修复：
+
+1. **先在 GitHub 上撤销/轮换泄露的密钥或密码**  
+    - 例如：删除或重置对应的 PAT、Access Key、数据库密码等。  
+    - 确保外部服务侧已完成密钥旋转后再继续下面步骤。
+
+2. **在被阻塞的分支上运行脚本（以当前分支为例）**  
+
+    ```bash
+    cd /path/to/tea
+    bash scripts/remove-secrets.sh
+    ```
+
+    - 脚本会：
+      - 删除工作区和历史中的敏感文件（根据内部维护的名单与 glob 规则）；
+      - 补充 `.gitignore`，避免后续再次提交同类型文件；
+      - 通过 `git-filter-repo`（或 fallback 至 BFG）重写当前分支历史；
+      - 使用 `git gc` 清理历史垃圾；
+      - 最后对当前分支执行 `git push --force-with-lease`。
+
+3. **注意事项**  
+    - 该脚本默认只针对「当前分支或指定分支」重写历史，不会修改 `master` 等其他分支。  
+    - 历史重写完成并推送后，协作者需要重新拉取或重置到最新分支（例如 `git fetch && git reset --hard origin/<branch>`），以避免分叉历史。  
+    - 如果 Push Protection 仍然阻塞，请到 GitHub 的提示页面或 Secret Scanning 页面查看剩余告警，并根据提示联系仓库管理员处理。

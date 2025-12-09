@@ -5,10 +5,10 @@ server:
   write_timeout: 60
 
 database:
-  host: "10.8.0.14"
-  port: 3310
+  host: "127.0.0.1"
+  port: 3308
   username: "root"
-  password: "my-secret-pw"
+  password: "gs963852"
   dbname: "tea_shop"
   charset: "utf8mb4"
   parse_time: true
@@ -18,7 +18,7 @@ database:
   conn_max_lifetime: 300
 
 redis:
-  host: "10.8.0.14"
+  host: "127.0.0.1"
   port: 6379
   password: "123456"
   db: 0
@@ -74,10 +74,10 @@ upload:
   local:
     path: "uploads"
   oss:
-    endpoint: "your_oss_endpoint"
-    access_key_id: "your_access_key_id"
-    access_key_secret: "your_access_key_secret"
-    bucket_name: "your_bucket_name"
+    endpoint: "oss-cn-beijing.aliyuncs.com"
+    access_key_id: "LTAI5tHCHCCYN4Fda2y19mmc"
+    access_key_secret: "I174tiyXYjOskbxfpSyKx63IGIDVK4"
+    bucket_name: "zdw-img"
 
 system:
   env: "local" # local, dev, test, prod

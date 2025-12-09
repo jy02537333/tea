@@ -44,6 +44,15 @@ func Test_Store_Order_Stats(t *testing.T) {
 	}
 	userAuth := "Bearer " + login.Data.Token
 
+	// 清理历史购物车，避免残留商品影响下单次数
+	reqClr, _ := http.NewRequest("DELETE", ts.URL+"/api/v1/cart/clear", nil)
+	reqClr.Header.Set("Authorization", userAuth)
+	if respClr, err := http.DefaultClient.Do(reqClr); err != nil {
+		t.Fatalf("clear cart err: %v", err)
+	} else {
+		respClr.Body.Close()
+	}
+
 	// 创建门店
 	st := map[string]any{"name": "统计门店", "address": "X", "latitude": 31.2, "longitude": 121.4, "status": 1}
 	sb, _ := json.Marshal(st)
@@ -95,6 +104,35 @@ func Test_Store_Order_Stats(t *testing.T) {
 	json.NewDecoder(resp3.Body).Decode(&prodResp)
 	resp3.Body.Close()
 
+	// 管理员登录并绑定门店商品库存
+	adminReq := map[string]string{"openid": "admin_openid"}
+	abA, _ := json.Marshal(adminReq)
+	respA, err := http.Post(ts.URL+"/api/v1/user/dev-login", "application/json", bytes.NewReader(abA))
+	if err != nil {
+		t.Fatalf("dev-login admin err: %v", err)
+	}
+	var adminLogin struct {
+		Code int
+		Data struct{ Token string }
+	}
+	json.NewDecoder(respA.Body).Decode(&adminLogin)
+	respA.Body.Close()
+	if adminLogin.Data.Token == "" {
+		t.Fatalf("admin login failed")
+	}
+	adminAuth := "Bearer " + adminLogin.Data.Token
+
+	upReq := map[string]any{"product_id": prodResp.Data.ID, "stock": 10, "price_override": "10.00"}
+	upb, _ := json.Marshal(upReq)
+	req, _ = http.NewRequest("POST", fmt.Sprintf("%s/api/v1/admin/stores/%d/products", ts.URL, storeID), bytes.NewReader(upb))
+	req.Header.Set("Authorization", adminAuth)
+	req.Header.Set("Content-Type", "application/json")
+	respUp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("bind store product err: %v", err)
+	}
+	respUp.Body.Close()
+
 	// 下两单（各1件，单价10）
 	add := map[string]any{"product_id": prodResp.Data.ID, "quantity": 1}
 	ab, _ := json.Marshal(add)
@@ -116,6 +154,9 @@ func Test_Store_Order_Stats(t *testing.T) {
 	}
 	json.NewDecoder(respO1.Body).Decode(&o1)
 	respO1.Body.Close()
+	if respO1.StatusCode != http.StatusOK || o1.Code != 0 || o1.Data.ID == 0 {
+		t.Fatalf("first order failed status=%d code=%d id=%d", respO1.StatusCode, o1.Code, o1.Data.ID)
+	}
 
 	// 第二单
 	req, _ = http.NewRequest("POST", ts.URL+"/api/v1/cart/items", bytes.NewReader(ab))
@@ -134,46 +175,62 @@ func Test_Store_Order_Stats(t *testing.T) {
 	}
 	json.NewDecoder(respO2.Body).Decode(&o2)
 	respO2.Body.Close()
+	if respO2.StatusCode != http.StatusOK || o2.Code != 0 || o2.Data.ID == 0 {
+		t.Fatalf("second order failed status=%d code=%d id=%d", respO2.StatusCode, o2.Code, o2.Data.ID)
+	}
 
 	// 用户支付两单
 	pay := func(id uint) {
 		req, _ := http.NewRequest("POST", fmt.Sprintf("%s/api/v1/orders/%d/pay", ts.URL, id), nil)
 		req.Header.Set("Authorization", userAuth)
-		if _, err := http.DefaultClient.Do(req); err != nil {
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
 			t.Fatalf("pay err: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("pay status=%d", resp.StatusCode)
+		}
+		var pr struct{ Code int }
+		if err := json.NewDecoder(resp.Body).Decode(&pr); err == nil && pr.Code != 0 {
+			t.Fatalf("pay code=%d", pr.Code)
 		}
 	}
 	pay(o1.Data.ID)
 	pay(o2.Data.ID)
 
-	// 管理员登录，发货并完成两单
-	adminReq := map[string]string{"openid": "admin_openid"}
-	abA, _ := json.Marshal(adminReq)
-	respA, err := http.Post(ts.URL+"/api/v1/user/dev-login", "application/json", bytes.NewReader(abA))
-	if err != nil {
-		t.Fatalf("dev-login admin err: %v", err)
-	}
-	var adminLogin struct {
-		Code int
-		Data struct{ Token string }
-	}
-	json.NewDecoder(respA.Body).Decode(&adminLogin)
-	respA.Body.Close()
-	if adminLogin.Data.Token == "" {
-		t.Fatalf("admin login failed")
-	}
-	adminAuth := "Bearer " + adminLogin.Data.Token
-
 	shipAndComplete := func(id uint) {
 		req, _ := http.NewRequest("POST", fmt.Sprintf("%s/api/v1/orders/%d/deliver", ts.URL, id), nil)
 		req.Header.Set("Authorization", adminAuth)
-		if _, err := http.DefaultClient.Do(req); err != nil {
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
 			t.Fatalf("deliver err: %v", err)
+		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			t.Fatalf("deliver status=%d", resp.StatusCode)
+		}
+		var dr struct{ Code int }
+		json.NewDecoder(resp.Body).Decode(&dr)
+		resp.Body.Close()
+		if dr.Code != 0 {
+			t.Fatalf("deliver code=%d", dr.Code)
 		}
 		req, _ = http.NewRequest("POST", fmt.Sprintf("%s/api/v1/orders/%d/complete", ts.URL, id), nil)
 		req.Header.Set("Authorization", adminAuth)
-		if _, err := http.DefaultClient.Do(req); err != nil {
+		resp2, err := http.DefaultClient.Do(req)
+		if err != nil {
 			t.Fatalf("complete err: %v", err)
+		}
+		if resp2.StatusCode != http.StatusOK {
+			resp2.Body.Close()
+			t.Fatalf("complete status=%d", resp2.StatusCode)
+		}
+		var cr struct{ Code int }
+		json.NewDecoder(resp2.Body).Decode(&cr)
+		resp2.Body.Close()
+		if cr.Code != 0 {
+			t.Fatalf("complete code=%d", cr.Code)
 		}
 	}
 	shipAndComplete(o1.Data.ID)

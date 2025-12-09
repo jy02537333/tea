@@ -40,3 +40,13 @@ Notes & tips:
 - `scripts/rewrite-master-history.sh`: 维护窗口内重写主分支历史的一键脚本，含备份分支创建、过滤规则、垃圾回收、远端恢复与安全强推；输出协作者对齐与回滚提示。
 - `docs/ci/history-rewrite-maintenance-plan.md`: 主分支历史重写的作业计划与操作手册（步骤、脚本引用、风险、迁移、回滚、沟通模版）。
 - `docs/ci/history-rewrite-notice.md`: 历史重写维护窗口的中/英通知模版，维护前/开始/完成阶段可直接复用。
+
+## Git 推送方式约定（统一使用 Token）
+
+- 推荐：所有开发者统一使用 HTTPS+GitHub Personal Access Token（PAT）进行推送，避免 SSH key 配置差异导致 push 失败。
+- 远程地址形态示例：`https://github.com/jy02537333/tea.git`（而非 `git@github.com:jy02537333/tea.git`）。
+- 首次推送：执行 `git push` 时，Git 会提示输入用户名和密码：
+  - 用户名：填写你的 GitHub 用户名。
+  - 密码：填写 PAT（注意不要使用真实登录密码）。
+- 建议：在本地 Git Credential Helper 中缓存 PAT，避免每次输入；如需旋转或撤销 PAT，可在 GitHub "Settings → Developer settings → Personal access tokens" 中管理。
+- 若 push 因 push protection / secret scan 被阻断，请参考 `tea-api/README.md` 中“开发者注意事项 / 遇到 Push Protection 阻塞时的自助处理”小节，使用 `scripts/remove-secrets.sh` 自助修复后再使用 HTTPS+Token 方式强推。

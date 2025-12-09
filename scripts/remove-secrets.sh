@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 文件用途：
-# - 针对“当前分支或指定分支”，从工作区与历史中移除敏感文件/目录（基于 push protection 告警）。
-# - 使用 git-filter-repo 的 --paths-from-file 与 --path-glob 精确删除路径，并恢复 origin 远端。
-# - 默认仅在分支内重写历史（非主分支），适合被阻断的分支自助修复；推送采用 --force-with-lease。
-# 注意：推送后协作者需要重新对齐历史；在执行前请确保相关密钥已在提供方完成旋转/吊销。
-
 # 目标分支（默认当前分支）
 BRANCH="${1:-$(git rev-parse --abbrev-ref HEAD)}"
 ROOT="$(git rev-parse --show-toplevel)"

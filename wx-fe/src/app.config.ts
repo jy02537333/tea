@@ -1,7 +1,18 @@
 export default {
   pages: [
-    'src/pages/product-list/index',
-    'src/pages/order-detail/index',
+    'pages/login/index',
+    'pages/index/index',
+    'pages/category/index',
+    'pages/product-list/index',
+    'pages/product-detail/index',
+    'pages/order-detail/index',
+    'pages/cart/index',
+    'pages/checkout/index',
+    'pages/orders/index',
+    'pages/address/index',
+    'pages/membership/index',
+    'pages/after-sale/index',
+    'pages/profile/index',
     // add other pages here as needed
   ],
   window: {
@@ -9,5 +20,15 @@ export default {
     navigationBarBackgroundColor: '#fff',
     navigationBarTitleText: 'Tea App',
     navigationBarTextStyle: 'black',
+  },
+  tabBar: {
+    color: '#666666',
+    selectedColor: '#07c160',
+    backgroundColor: '#ffffff',
+    list: [
+      { pagePath: 'pages/index/index', text: '首页' },
+      { pagePath: 'pages/cart/index', text: '购物车' },
+      { pagePath: 'pages/profile/index', text: '我的' },
+    ],
   },
 };

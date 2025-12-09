@@ -1,17 +1,30 @@
-import api, { unwrapResponse } from './api';
-import { AccrualSummary } from './types';
+import { api, unwrap } from './api';
 
-export async function runAccrual(payload: { date?: string; rate?: number; user_id?: number } = {}): Promise<{ updated: number }> {
-  const res = await api.post('/api/v1/admin/accrual/run', payload);
-  return unwrapResponse<{ updated: number }>(res);
+export interface AccrualSummaryResponse {
+  record_count: number;
+  user_count: number;
+  total_interest: string;
+  today_orders?: number;
 }
 
-export async function accrualSummary(params: { start?: string; end?: string } = {}): Promise<AccrualSummary> {
+export interface RunAccrualResponse {
+  updated: number;
+}
+
+export async function getAccrualSummary(params: { start: string; end: string }) {
   const res = await api.get('/api/v1/admin/accrual/summary', { params });
-  return unwrapResponse<AccrualSummary>(res);
+  return unwrap<AccrualSummaryResponse>(res);
 }
 
-export async function accrualExport(params: { start?: string; end?: string; format?: string; lang?: string; fields?: string; zip?: number } = {}) {
-  const res = await api.get('/api/v1/admin/accrual/export', { params, responseType: 'blob' });
-  return res.data; // blob
+export async function runAccrual(payload: { date?: string; rate?: number }) {
+  const res = await api.post('/api/v1/admin/accrual/run', payload);
+  return unwrap<RunAccrualResponse>(res);
+}
+
+export async function exportAccrual(params: { start: string; end: string; format?: string }) {
+  const res = await api.get('/api/v1/admin/accrual/export', {
+    params,
+    responseType: 'blob',
+  });
+  return res.data as Blob;
 }

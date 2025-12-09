@@ -1,19 +1,31 @@
 package handler
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/draw"
+	"image/png"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/basicfont"
+	"golang.org/x/image/math/fixed"
 
 	"tea-api/internal/config"
+	"tea-api/internal/service"
 	pkgutils "tea-api/pkg/utils"
 )
 
@@ -79,8 +91,12 @@ var compatStores = []mockStore{
 	{ID: 2, Name: "上海静安店", Status: 1},
 }
 
+var (
+	captchaStore map[string]string
+	captchaMu    sync.Mutex
+)
+
 // captchaStore is a tiny in-memory store for dev-mode captcha id->code mappings
-var captchaStore map[string]string
 
 // AdminMenus 提供 /api/v1/admin/menus 的兼容返回（mock）
 func AdminMenus(c *gin.Context) {
@@ -215,16 +231,137 @@ func Health(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "茶心阁小程序API服务正常运行"})
 }
 
-// AuthCaptcha simple compatibility (return id + code)
+// AuthCaptcha 返回真实的图片验证码（base64 图片 + captcha id）
 func AuthCaptcha(c *gin.Context) {
-	// simple in-memory captcha for dev only
+	code := randomDigits(4)
 	id := strconv.FormatInt(time.Now().UnixNano(), 10)
-	code := "0000"
+	imageData, err := generateCaptchaImage(code)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "captcha generation failed"})
+		return
+	}
+	storeCaptchaCode(id, code)
+	c.JSON(http.StatusOK, gin.H{"id": id, "image": imageData})
+}
+
+func storeCaptchaCode(id, code string) {
+	captchaMu.Lock()
+	defer captchaMu.Unlock()
 	if captchaStore == nil {
 		captchaStore = map[string]string{}
 	}
 	captchaStore[id] = code
-	c.JSON(http.StatusOK, gin.H{"id": id, "code": code})
+}
+
+func validateCaptcha(id, code string) bool {
+	if id == "" || code == "" {
+		return true
+	}
+	captchaMu.Lock()
+	defer captchaMu.Unlock()
+	if captchaStore == nil {
+		return true
+	}
+	stored, ok := captchaStore[id]
+	if !ok || stored == "" {
+		return true
+	}
+	delete(captchaStore, id)
+	return strings.EqualFold(stored, code)
+}
+
+func randomDigits(length int) string {
+	if length <= 0 {
+		length = 4
+	}
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+	var builder strings.Builder
+	for i := 0; i < length; i++ {
+		builder.WriteByte(byte('0' + rnd.Intn(10)))
+	}
+	return builder.String()
+}
+
+func generateCaptchaImage(code string) (string, error) {
+	const width = 120
+	const height = 40
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	bg := color.RGBA{R: 245, G: 247, B: 252, A: 255}
+	draw.Draw(img, img.Bounds(), &image.Uniform{bg}, image.Point{}, draw.Src)
+
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+	// draw noise lines
+	for i := 0; i < 4; i++ {
+		start := image.Point{X: rnd.Intn(width), Y: rnd.Intn(height)}
+		end := image.Point{X: rnd.Intn(width), Y: rnd.Intn(height)}
+		col := color.RGBA{R: uint8(rnd.Intn(156)), G: uint8(rnd.Intn(156)), B: uint8(rnd.Intn(156)), A: 255}
+		plotLine(img, start, end, col)
+	}
+	// noise dots
+	for i := 0; i < 80; i++ {
+		x := rnd.Intn(width)
+		y := rnd.Intn(height)
+		img.Set(x, y, color.RGBA{R: uint8(120 + rnd.Intn(120)), G: uint8(120 + rnd.Intn(120)), B: uint8(120 + rnd.Intn(120)), A: 255})
+	}
+
+	face := basicfont.Face7x13
+	drawer := &font.Drawer{
+		Dst:  img,
+		Src:  image.NewUniform(color.RGBA{R: 20, G: 40, B: 70, A: 255}),
+		Face: face,
+	}
+	charSpacing := (width - 20) / len(code)
+	for i, r := range code {
+		x := 10 + i*charSpacing + rnd.Intn(6)
+		y := height/2 + 10 + rnd.Intn(6) - 3
+		drawer.Dot = fixed.Point26_6{X: fixed.I(x), Y: fixed.I(y)}
+		drawer.DrawString(string(r))
+	}
+
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return "", err
+	}
+	encoded := base64.StdEncoding.EncodeToString(buf.Bytes())
+	return "data:image/png;base64," + encoded, nil
+}
+
+func plotLine(img *image.RGBA, start, end image.Point, col color.Color) {
+	dx := abs(end.X - start.X)
+	dy := abs(end.Y - start.Y)
+	sx := -1
+	if start.X < end.X {
+		sx = 1
+	}
+	sy := -1
+	if start.Y < end.Y {
+		sy = 1
+	}
+	err := dx - dy
+	x := start.X
+	y := start.Y
+	for {
+		img.Set(x, y, col)
+		if x == end.X && y == end.Y {
+			break
+		}
+		e2 := 2 * err
+		if e2 > -dy {
+			err -= dy
+			x += sx
+		}
+		if e2 < dx {
+			err += dx
+			y += sy
+		}
+	}
+}
+
+func abs(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
 }
 
 // AuthLogin 为开发用途的登录接口，接受 openid 或 username/password，并检查 captcha（若提供）
@@ -276,64 +413,75 @@ func AuthLogin(c *gin.Context) {
 		if codeV, ok2 := req["captcha_code"]; ok2 {
 			idStr := fmt.Sprint(idV)
 			codeStr := fmt.Sprint(codeV)
-			// If captchaStore is not initialized or the id is missing, skip strict validation
-			// to allow legacy/dev clients that may not have requested a captcha first.
-			if captchaStore != nil {
-				stored := captchaStore[idStr]
-				if stored != "" {
-					if !strings.EqualFold(stored, codeStr) {
-						c.JSON(http.StatusBadRequest, gin.H{"error": "invalid captcha"})
-						return
-					}
-					// one-time use
-					delete(captchaStore, idStr)
-				}
-				// if stored == "" (id not found), we intentionally skip and allow login
+			if !validateCaptcha(idStr, codeStr) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid captcha"})
+				return
 			}
 		}
 	}
 
 	// determine role by openid or username
-	role := "1"
+	role := "user"
 	name := "访客"
 	openid := ""
 	if v, ok := req["openid"]; ok {
 		openid = fmt.Sprint(v)
 		switch strings.ToLower(openid) {
 		case "admin_openid", "admin":
-			role = "5"
+			role = "admin"
 			name = "超级管理员"
 		case "store_openid", "store":
-			role = "4"
+			role = "store"
 			name = "门店管理员"
 		case "partner_openid", "partner":
-			role = "3"
+			role = "partner"
 			name = "合伙人"
 		default:
-			role = "1"
+			role = "user"
 			name = "访客"
 		}
 	} else if v, ok := req["username"]; ok {
-		user := fmt.Sprint(v)
+		username := strings.TrimSpace(fmt.Sprint(v))
 		pass := fmt.Sprint(req["password"])
-		switch strings.ToLower(user) {
+		if username != "" && pass != "" {
+			if realResp, err := service.NewUserService().LoginByUsername(username, pass); err == nil {
+				claims, _ := pkgutils.ParseToken(realResp.Token)
+				if claims != nil && claims.Role != "" {
+					role = claims.Role
+				}
+				if info, ok := realResp.UserInfo.(service.UserInfo); ok {
+					name = info.Nickname
+					if name == "" {
+						name = info.Phone
+					}
+					if name == "" {
+						name = username
+					}
+					openid = info.OpenID
+				}
+				data := map[string]interface{}{"token": realResp.Token, "role": role, "name": name}
+				c.JSON(http.StatusOK, gin.H{"data": data})
+				return
+			}
+		}
+		switch strings.ToLower(username) {
 		case "admin":
-			if pass == "pass" || pass == "admin" {
-				role = "5"
+			if pass == "pass" || pass == "admin" || pass == "Admin@123" {
+				role = "admin"
 				name = "超级管理员"
 			}
 		case "store":
 			if pass == "pass" || pass == "store" {
-				role = "4"
+				role = "store"
 				name = "门店管理员"
 			}
 		case "partner":
 			if pass == "pass" || pass == "partner" {
-				role = "3"
+				role = "partner"
 				name = "合伙人"
 			}
 		default:
-			role = "1"
+			role = "user"
 			name = "访客"
 		}
 	}
