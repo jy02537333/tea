@@ -14,7 +14,11 @@ if [ "$CONFIRM" != "YES" ]; then
 fi
 
 # 敏感文件列表（根据 push 阻断日志）
-SENSITIVE_FILES=("pwd.bmiwj" "wx-fe/pwd2.bmiwj")
+SENSITIVE_FILES=(
+  "pwd.bmiwj"
+  "wx-fe/pwd2.bmiwj"
+  "tea-api/configs/config.mysql.local.yaml"
+)
 
 "git" checkout "$BRANCH"
 for f in "${SENSITIVE_FILES[@]}"; do
