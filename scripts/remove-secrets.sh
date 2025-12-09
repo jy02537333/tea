@@ -44,7 +44,8 @@ REMOTE_URL="$(git remote get-url origin 2>/dev/null || true)"
 if command -v git-filter-repo >/dev/null 2>&1; then
   echo "使用 git-filter-repo 清理历史..."
   # 备份当前分支并创建同名新分支（避免覆盖）
-  git branch -m "${BRANCH}" "${BRANCH}-backup" || true
+  backup_branch="${BRANCH}-backup-$(date +%Y%m%d%H%M%S)"
+  git branch -m "${BRANCH}" "${backup_branch}" || true
   git checkout -b "${BRANCH}"
   # 将敏感路径写入临时文件供过滤使用
   tmp_paths_file="$(mktemp)"
