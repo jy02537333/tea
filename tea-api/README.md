@@ -55,7 +55,6 @@ tea-api/
 - MySQL 8.0+
 - Redis 7.0+
 
-
 ### 2. 克隆项目
 
 ```bash
@@ -87,10 +86,7 @@ mysql -u root -p tea_shop < scripts/init.sql
     - 本地开发建议复制示例：`cp configs/config.mysql.local.example.yaml configs/config.mysql.local.yaml`，并按需填写本地账号口令。
     - 注意：`configs/config.mysql.local.yaml` 已加入 `.gitignore`，请勿将本地口令提交到仓库。
 
- 
-
 ### 5. 启动服务
-
 
 #### Windows 用户
 
@@ -108,12 +104,10 @@ go run ./cmd -config=configs/config.yaml
 
 ## 文档索引
 
-
 - RBAC 权限与缓存说明：`doc/rbac.md`
 - 计息功能说明：`doc/accrual.md`
 
 ### 常用脚本
-
 
 - 生成加密密码：`go run ./scripts/hash_password <password>`
 - 创建管理员账号（尊重 `TEA_DSN`/`TEA_DATABASE_*` 环境变量）：`go run ./scripts/seed_admin --config=configs/config.yaml`
@@ -125,12 +119,10 @@ go run ./cmd -config=configs/config.yaml
 
 ## API 文档
 
-
 ### 基础信息
 
 - Base URL: `http://localhost:9292/api/v1`
 - 认证方式: Bearer Token (JWT)
-
 
 ### 用户相关接口
 
@@ -146,7 +138,6 @@ Content-Type: application/json
 ```
 
 #### 获取用户信息
-
 
 ```http
 GET /user/info
@@ -167,7 +158,6 @@ Content-Type: application/json
 ```
 
 ### 健康检查
-
 
 ```http
 GET /health
