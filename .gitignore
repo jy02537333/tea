@@ -40,3 +40,6 @@ deleted_backups/*.tar.gz
 
 # ignore backup tarballs
 deleted_backups/*.tar.gz
+
+# ignore backup tarballs
+deleted_backups/*.tar.gz
