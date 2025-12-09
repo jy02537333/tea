@@ -19,8 +19,9 @@ require (
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.1
-	tea-test v0.0.0
 )
+
+require tea-test v0.0.0
 
 replace tea-test => ../
 

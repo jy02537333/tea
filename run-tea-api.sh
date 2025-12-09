@@ -65,7 +65,7 @@ RESP_FILE="$LOG_DIR/admin_login_response.json"
 
 # First attempt: username/password
 curl -sS -H "Content-Type: application/json" -d '{"username":"admin","password":"pass"}' "$LOGIN_URL" -o "$RESP_FILE" || true
-TOKEN=$(python3 - <<'PY'
+TOKEN=$(python3 - "$RESP_FILE" <<'PY'
 import sys, json
 try:
     obj = json.load(open(sys.argv[1]))
@@ -75,12 +75,12 @@ except Exception:
 data = obj.get('data') or obj
 print((data.get('token') if isinstance(data, dict) else "") or "")
 PY
-"$RESP_FILE")
+)
 
 # If token empty, try openid login
 if [ -z "$TOKEN" ]; then
   curl -sS -H "Content-Type: application/json" -d '{"openid":"admin_openid"}' "$LOGIN_URL" -o "$RESP_FILE" || true
-  TOKEN=$(python3 - <<'PY'
+  TOKEN=$(python3 - "$RESP_FILE" <<'PY'
 import sys, json
 try:
     obj = json.load(open(sys.argv[1]))
@@ -90,7 +90,7 @@ except Exception:
 data = obj.get('data') or obj
 print((data.get('token') if isinstance(data, dict) else "") or "")
 PY
-"$RESP_FILE")
+  )
 fi
 
 if [ -z "$TOKEN" ]; then

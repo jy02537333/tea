@@ -184,6 +184,8 @@ func SetupRouter() *gin.Engine {
 	cartGroup.Use(middleware.AuthMiddleware())
 	{
 		cartGroup.GET("", cartHandler.List)
+		// 兼容两种写法：POST /cart 与 POST /cart/items 均视为“加入购物车”
+		cartGroup.POST("/", cartHandler.AddItem)
 		cartGroup.POST("/items", cartHandler.AddItem)
 		cartGroup.PUT("/items/:id", cartHandler.UpdateQuantity)
 		cartGroup.DELETE("/items/:id", cartHandler.Remove)
@@ -264,6 +266,13 @@ func SetupRouter() *gin.Engine {
 	{
 		payGroup.POST("/intents", paymentHandler.CreateIntent)
 	}
+
+	userPaymentsGroup := api.Group("/payments")
+	userPaymentsGroup.Use(middleware.AuthMiddleware())
+	{
+		userPaymentsGroup.POST("/unified-order", paymentHandler.UnifiedOrder)
+	}
+	api.POST("/payments/callback", paymentHandler.Callback)
 	// 模拟回调（仅开发环境）
 	api.POST("/payment/mock-callback", paymentHandler.MockCallback)
 

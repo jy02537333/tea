@@ -35,3 +35,5 @@ build-ci-logs-backup/
 
 # prevent committing secrets accidentally
 *.bmiwj
+# ignore backup tarballs
+deleted_backups/*.tar.gz

@@ -126,6 +126,13 @@ func autoMigrate() error {
 
 		// 资金/利息
 		&model.InterestRecord{},
+		// 佣金与提现相关
+		&model.Commission{},
+		&model.CommissionTransaction{},
+		&model.MembershipPackage{},
+		&model.PartnerLevel{},
+		&model.UserBankAccount{},
+		&model.ReferralClosure{},
 
 		// 提现管理
 		&model.WithdrawRecord{},
