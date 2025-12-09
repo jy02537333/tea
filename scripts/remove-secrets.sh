@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BRANCH="${1:-feat/ci-diagnostics}"
+# 目标分支（默认当前分支）
+BRANCH="${1:-$(git rev-parse --abbrev-ref HEAD)}"
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
@@ -15,8 +16,7 @@ fi
 # 敏感文件列表（根据 push 阻断日志）
 SENSITIVE_FILES=("pwd.bmiwj" "wx-fe/pwd2.bmiwj")
 
-# 1) 删除工作区中的敏感文件并提交（普通提交）
-git checkout "$BRANCH"
+"git" checkout "$BRANCH"
 for f in "${SENSITIVE_FILES[@]}"; do
   if [ -f "$f" ] || [ -f "$ROOT/$f" ]; then
     git rm -f --ignore-unmatch "$f" || true
@@ -33,18 +33,27 @@ fi
 git add -A
 git commit -m "chore(secrets): remove sensitive files from working tree and ignore" || true
 
+REMOTE_URL="$(git remote get-url origin 2>/dev/null || true)"
+
 # 2) 重写历史以彻底删除这些文件
 # 优先使用 git-filter-repo（更快/更可靠），否则 fallback 到 BFG
 if command -v git-filter-repo >/dev/null 2>&1; then
   echo "使用 git-filter-repo 清理历史..."
-  # 备份当前 refs
+  # 备份当前分支并创建同名新分支（避免覆盖）
   git branch -m "${BRANCH}" "${BRANCH}-backup" || true
   git checkout -b "${BRANCH}"
+  # 将敏感路径写入临时文件供过滤使用
+  tmp_paths_file="$(mktemp)"
+  for p in "${SENSITIVE_FILES[@]}"; do
+    printf "%s\n" "$p" >> "$tmp_paths_file"
+  done
   # 运行过滤（invert-paths 删除指定文件）
-  git filter-repo --invert-paths --paths "${SENSITIVE_FILES[@]}" || {
+  git filter-repo --invert-paths --paths-from-file "$tmp_paths_file" || {
     echo "git-filter-repo 失败，请检查版本。"
+    rm -f "$tmp_paths_file"
     exit 1
   }
+  rm -f "$tmp_paths_file"
 else
   echo "未检测到 git-filter-repo，尝试使用 BFG（需预先安装 bfg）..."
   if ! command -v bfg >/dev/null 2>&1; then
@@ -73,6 +82,15 @@ git reflog expire --expire=now --all || true
 git gc --prune=now --aggressive || true
 
 # 4) 强推到远端（使用 --force-with-lease 更安全）
+if ! git remote get-url origin >/dev/null 2>&1; then
+  if [ -n "${REMOTE_URL}" ]; then
+    echo "origin 被移除，重新添加：${REMOTE_URL}"
+    git remote add origin "${REMOTE_URL}"
+  else
+    echo "警告：未能恢复 origin 远端，请手动添加后推送。"
+  fi
+fi
+
 echo "准备强制推送到 origin/${BRANCH} （使用 --force-with-lease）..."
 git push --force-with-lease origin "${BRANCH}"
 
