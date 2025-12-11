@@ -2,6 +2,7 @@ export default {
   pages: [
     'pages/login/index',
     'pages/index/index',
+    'pages/activities/index',
     'pages/category/index',
     'pages/product-list/index',
     'pages/product-detail/index',
@@ -9,8 +10,12 @@ export default {
     'pages/cart/index',
     'pages/checkout/index',
     'pages/orders/index',
+    'pages/store-finance/index',
+    'pages/store-accounts/index',
+    'pages/coupons/index',
     'pages/address/index',
     'pages/membership/index',
+    'pages/membership-orders/index',
     'pages/after-sale/index',
     'pages/profile/index',
     // add other pages here as needed

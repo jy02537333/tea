@@ -182,7 +182,17 @@ func (s *PaymentService) HandleCallback(payload PaymentCallbackPayload) error {
 		order.Status = 2
 		order.PayStatus = 2
 		order.PaidAt = paidAt
-		return tx.Save(&order).Error
+		if err := tx.Save(&order).Error; err != nil {
+			return err
+		}
+
+		// 若该订单关联活动报名记录，则将报名状态从「已报名」更新为「已支付报名」
+		if err := tx.Model(&model.ActivityRegistration{}).
+			Where("order_id = ? AND status = ?", order.ID, 1).
+			Update("status", 2).Error; err != nil {
+			return err
+		}
+		return nil
 	})
 }
 

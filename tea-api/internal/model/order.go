@@ -10,25 +10,27 @@ import (
 // Order 订单模型
 type Order struct {
 	BaseModel
-	OrderNo        string          `gorm:"type:varchar(32);uniqueIndex;not null" json:"order_no"`
-	UserID         uint            `gorm:"index;not null" json:"user_id"`
-	StoreID        uint            `gorm:"index;default:0" json:"store_id"`
-	TotalAmount    decimal.Decimal `gorm:"type:decimal(10,2);not null" json:"total_amount"`
-	PayAmount      decimal.Decimal `gorm:"type:decimal(10,2);not null" json:"pay_amount"`
-	DiscountAmount decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"discount_amount"`
-	DeliveryFee    decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"delivery_fee"`
-	Status         int             `gorm:"type:tinyint;default:1" json:"status"`        // 1:待付款 2:已付款 3:配送中 4:已完成 5:已取消
-	PayStatus      int             `gorm:"type:tinyint;default:1" json:"pay_status"`    // 1:未付款 2:已付款 3:退款中 4:已退款
-	OrderType      int             `gorm:"type:tinyint;default:1" json:"order_type"`    // 1:商城 2:堂食 3:外卖
-	DeliveryType   int             `gorm:"type:tinyint;default:1" json:"delivery_type"` // 1:自取 2:配送
-	DeliveryTime   *time.Time      `json:"delivery_time"`
-	AddressInfo    string          `gorm:"type:json" json:"address_info"`
-	Remark         string          `gorm:"type:text" json:"remark"`
-	PaidAt         *time.Time      `json:"paid_at"`
-	DeliveredAt    *time.Time      `json:"delivered_at"`
-	CompletedAt    *time.Time      `json:"completed_at"`
-	CancelledAt    *time.Time      `json:"cancelled_at"`
-	CancelReason   string          `gorm:"type:varchar(200)" json:"cancel_reason"`
+	OrderNo string `gorm:"type:varchar(32);uniqueIndex;not null" json:"order_no"`
+	UserID  uint   `gorm:"index;not null" json:"user_id"`
+	StoreID uint   `gorm:"index;default:0" json:"store_id"`
+	// MembershipPackageID 若非空则表示会员/合伙人礼包订单
+	MembershipPackageID *uint           `gorm:"index" json:"membership_package_id"`
+	TotalAmount         decimal.Decimal `gorm:"type:decimal(10,2);not null" json:"total_amount"`
+	PayAmount           decimal.Decimal `gorm:"type:decimal(10,2);not null" json:"pay_amount"`
+	DiscountAmount      decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"discount_amount"`
+	DeliveryFee         decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"delivery_fee"`
+	Status              int             `gorm:"type:tinyint;default:1" json:"status"`        // 1:待付款 2:已付款 3:配送中 4:已完成 5:已取消
+	PayStatus           int             `gorm:"type:tinyint;default:1" json:"pay_status"`    // 1:未付款 2:已付款 3:退款中 4:已退款
+	OrderType           int             `gorm:"type:tinyint;default:1" json:"order_type"`    // 1:商城 2:堂食 3:外卖 4:会员订单
+	DeliveryType        int             `gorm:"type:tinyint;default:1" json:"delivery_type"` // 1:自取 2:配送
+	DeliveryTime        *time.Time      `json:"delivery_time"`
+	AddressInfo         string          `gorm:"type:json" json:"address_info"`
+	Remark              string          `gorm:"type:text" json:"remark"`
+	PaidAt              *time.Time      `json:"paid_at"`
+	DeliveredAt         *time.Time      `json:"delivered_at"`
+	CompletedAt         *time.Time      `json:"completed_at"`
+	CancelledAt         *time.Time      `json:"cancelled_at"`
+	CancelReason        string          `gorm:"type:varchar(200)" json:"cancel_reason"`
 
 	User User `gorm:"foreignKey:UserID"`
 }

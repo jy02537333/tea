@@ -28,13 +28,18 @@ func (h *StoreInventoryHandler) Upsert(c *gin.Context) {
 	var req struct {
 		ProductID     uint   `json:"product_id" binding:"required"`
 		Stock         int    `json:"stock"`
+		BizType       *int   `json:"biz_type"`       // 1:服务 2:外卖 3:其他；为空时默认 1
 		PriceOverride string `json:"price_override"` // 可为空字符串表示无覆盖
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "参数错误")
 		return
 	}
-	sp, err := h.svc.Upsert(uint(sid), req.ProductID, req.Stock, req.PriceOverride)
+	bizType := 1
+	if req.BizType != nil && *req.BizType > 0 {
+		bizType = *req.BizType
+	}
+	sp, err := h.svc.Upsert(uint(sid), req.ProductID, req.Stock, req.PriceOverride, bizType)
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, err.Error())
 		return
@@ -50,7 +55,14 @@ func (h *StoreInventoryHandler) List(c *gin.Context) {
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	list, total, err := h.svc.List(uint(sid), page, limit)
+	bizTypeParam := c.Query("biz_type")
+	var bizTypePtr *int
+	if bizTypeParam != "" {
+		if v, err := strconv.Atoi(bizTypeParam); err == nil && v > 0 {
+			bizTypePtr = &v
+		}
+	}
+	list, total, err := h.svc.List(uint(sid), page, limit, bizTypePtr)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return

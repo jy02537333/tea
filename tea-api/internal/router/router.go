@@ -25,6 +25,10 @@ func SetupRouter() *gin.Engine {
 	logsHandler := handler.NewLogsHandler()
 	refundHandler := handler.NewRefundHandler()
 	financeReportHandler := handler.NewFinanceReportHandler()
+	commissionAdminHandler := handler.NewCommissionAdminHandler()
+	membershipAdminHandler := handler.NewMembershipAdminHandler()
+	membershipHandler := handler.NewMembershipHandler()
+	dashboardHandler := handler.NewDashboardHandler()
 	productHandler := handler.NewProductHandler(
 		service.NewProductService(),
 	)
@@ -38,9 +42,15 @@ func SetupRouter() *gin.Engine {
 	invHandler := handler.NewStoreInventoryHandler()
 	modelHandler := handler.NewModelHandler()
 	uploadHandler := handler.NewUploadHandler()
+	activityHandler := handler.NewActivityHandler()
+	ticketHandler := handler.NewTicketHandler()
 
 	// API路由组
 	api := r.Group("/api/v1")
+
+	// 会员相关（小程序/用户侧只读接口）
+	api.GET("/membership-packages", middleware.AuthMiddleware(), membershipHandler.ListPackages)
+	api.POST("/membership-orders", middleware.AuthMiddleware(), membershipHandler.CreateOrder)
 
 	// 用户相关路由
 	userGroup := api.Group("/user")
@@ -55,12 +65,17 @@ func SetupRouter() *gin.Engine {
 		userGroup.GET("/default-address", middleware.AuthMiddleware(), userHandler.GetDefaultAddress)
 		userGroup.PUT("/default-address", middleware.AuthMiddleware(), userHandler.UpdateDefaultAddress)
 		userGroup.GET("/:id", userHandler.GetUserByID)
+		// 当前用户的可用优惠券列表（小程序「我的-优惠券」只读 Tab 使用）
+		userGroup.GET("/coupons", middleware.AuthMiddleware(), couponHandler.ListMyCoupons)
 	}
 
 	// 管理员路由（仅管理员可访问）
 	adminGroup := api.Group("/admin")
 	adminGroup.Use(middleware.AuthMiddleware(), middleware.RequireRoles("admin"))
 	{
+		// 后台首页待办统计
+		adminGroup.GET("/dashboard/todos", dashboardHandler.Todos)
+
 		adminGroup.GET("/users", userHandler.AdminListUsers)
 		adminGroup.POST("/users", userHandler.AdminCreateUser)
 		adminGroup.PUT("/users/:id", userHandler.AdminUpdateUser)
@@ -68,15 +83,34 @@ func SetupRouter() *gin.Engine {
 		adminGroup.POST("/uploads", uploadHandler.UploadMedia)
 		// 门店订单统计
 		adminGroup.GET("/stores/:id/orders/stats", storeHandler.OrderStats)
+		// 门店订单列表（按门店维度查看订单）
+		adminGroup.GET("/stores/:id/orders", orderHandler.AdminStoreOrders)
 		// 门店库存管理
 		adminGroup.GET("/stores/:id/products", invHandler.List)
 		adminGroup.POST("/stores/:id/products", invHandler.Upsert)
 		adminGroup.DELETE("/stores/:id/products/:pid", invHandler.Delete)
 
+		// 客服工单管理
+		adminGroup.GET("/tickets", ticketHandler.List)
+		adminGroup.GET("/tickets/:id", ticketHandler.Get)
+		adminGroup.POST("/tickets", ticketHandler.Create)
+		adminGroup.PUT("/tickets/:id", ticketHandler.Update)
+
 		// 管理端订单接口（列表 / 导出 / 详情）
 		adminGroup.GET("/orders", orderHandler.AdminList)
 		adminGroup.GET("/orders/export", orderHandler.AdminExport)
 		adminGroup.GET("/orders/:id", orderHandler.AdminDetail)
+
+		// 会员与合伙人配置
+		adminGroup.GET("/membership-packages", membershipAdminHandler.ListPackages)
+		adminGroup.POST("/membership-packages", membershipAdminHandler.CreatePackage)
+		adminGroup.PUT("/membership-packages/:id", membershipAdminHandler.UpdatePackage)
+		adminGroup.DELETE("/membership-packages/:id", membershipAdminHandler.DeletePackage)
+
+		adminGroup.GET("/partner-levels", membershipAdminHandler.ListPartnerLevels)
+		adminGroup.POST("/partner-levels", membershipAdminHandler.CreatePartnerLevel)
+		adminGroup.PUT("/partner-levels/:id", membershipAdminHandler.UpdatePartnerLevel)
+		adminGroup.DELETE("/partner-levels/:id", membershipAdminHandler.DeletePartnerLevel)
 	}
 
 	// 计息相关路由（基于权限控制，允许非 admin 但拥有授权的角色访问）
@@ -157,6 +191,10 @@ func SetupRouter() *gin.Engine {
 		// 支付对账差异
 		financeGroup.GET("/reconcile/diff", middleware.RequirePermission("order:refund"), financeReportHandler.ReconcileDiff)
 		financeGroup.GET("/reconcile/diff/export", middleware.RequirePermission("order:refund"), financeReportHandler.ExportReconcileDiff)
+		// 佣金解冻手动触发，仅限具备财务权限的账号
+		financeGroup.POST("/commission/release", middleware.RequirePermission("order:refund"), commissionAdminHandler.TriggerRelease)
+		// 按订单一键回滚未提现佣金
+		financeGroup.POST("/commission/reverse-order", middleware.RequirePermission("order:refund"), commissionAdminHandler.ReverseOrder)
 	}
 
 	// 商品分类路由
@@ -197,6 +235,7 @@ func SetupRouter() *gin.Engine {
 	orderGroup.Use(middleware.AuthMiddleware())
 	{
 		orderGroup.POST("/from-cart", orderHandler.CreateFromCart)
+		orderGroup.POST("/available-coupons", orderHandler.AvailableCoupons)
 		orderGroup.GET("", orderHandler.List)
 		orderGroup.GET("/:id", orderHandler.Detail)
 		orderGroup.POST("/:id/cancel", orderHandler.Cancel)
@@ -215,10 +254,30 @@ func SetupRouter() *gin.Engine {
 	storeGroup := api.Group("/stores")
 	{
 		storeGroup.GET("", storeHandler.List)
-		storeGroup.GET("/:id", storeHandler.Get)
+		storeGroup.GET(":id", storeHandler.Get)
 		storeGroup.POST("", middleware.AuthMiddleware(), storeHandler.Create)
-		storeGroup.PUT("/:id", middleware.AuthMiddleware(), storeHandler.Update)
-		storeGroup.DELETE("/:id", middleware.AuthMiddleware(), storeHandler.Delete)
+		storeGroup.PUT(":id", middleware.AuthMiddleware(), storeHandler.Update)
+		storeGroup.DELETE(":id", middleware.AuthMiddleware(), storeHandler.Delete)
+		// 门店收款账户管理（需要登录，可按角色控制）
+		storeGroup.GET(":id/accounts", middleware.AuthMiddleware(), storeHandler.ListAccounts)
+		storeGroup.POST(":id/accounts", middleware.AuthMiddleware(), storeHandler.CreateAccount)
+		storeGroup.PUT(":id/accounts/:accountId", middleware.AuthMiddleware(), storeHandler.UpdateAccount)
+		storeGroup.DELETE(":id/accounts/:accountId", middleware.AuthMiddleware(), storeHandler.DeleteAccount)
+		// 门店钱包与提现接口（需要登录，后续可按角色细化权限）
+		storeGroup.GET(":id/wallet", middleware.AuthMiddleware(), storeHandler.Wallet)
+		storeGroup.GET(":id/withdraws", middleware.AuthMiddleware(), storeHandler.ListWithdraws)
+		storeGroup.POST(":id/withdraws", middleware.AuthMiddleware(), storeHandler.ApplyWithdraw)
+		// 门店优惠券接口（需要登录，后续可按角色细化权限）
+		storeGroup.GET(":id/coupons", middleware.AuthMiddleware(), couponHandler.ListStoreCoupons)
+		storeGroup.POST(":id/coupons", middleware.AuthMiddleware(), couponHandler.CreateStoreCoupon)
+		storeGroup.PUT(":id/coupons/:couponId", middleware.AuthMiddleware(), couponHandler.UpdateStoreCoupon)
+		// 门店活动接口（需要登录，后续可按角色细化权限）
+		storeGroup.GET(":id/activities", middleware.AuthMiddleware(), activityHandler.ListStoreActivities)
+		storeGroup.POST(":id/activities", middleware.AuthMiddleware(), activityHandler.CreateStoreActivity)
+		storeGroup.PUT(":id/activities/:activityId", middleware.AuthMiddleware(), activityHandler.UpdateStoreActivity)
+		// 门店活动报名接口（需要登录，后续可按角色细化权限）
+		storeGroup.GET(":id/activities/:activityId/registrations", middleware.AuthMiddleware(), activityHandler.ListActivityRegistrations)
+		storeGroup.POST(":id/activities/:activityId/registrations/:registrationId/refund", middleware.AuthMiddleware(), activityHandler.RefundActivityRegistration)
 	}
 
 	// 优惠券相关路由
@@ -229,11 +288,12 @@ func SetupRouter() *gin.Engine {
 		couponGroup.POST("/grant", middleware.AuthMiddleware(), couponHandler.Grant)
 	}
 
-	// 用户优惠券（需要登录）
-	userCouponGroup := api.Group("/user")
-	userCouponGroup.Use(middleware.AuthMiddleware())
+	// 活动（用户侧）
+	activityGroup := api.Group("/activities")
 	{
-		userCouponGroup.GET("/coupons", couponHandler.ListMyCoupons)
+		activityGroup.GET("", activityHandler.ListActivities)
+		activityGroup.POST(":id/register", middleware.AuthMiddleware(), activityHandler.RegisterActivity)
+		activityGroup.POST(":id/register-with-order", middleware.AuthMiddleware(), activityHandler.RegisterActivityWithOrder)
 	}
 
 	// 健康检查

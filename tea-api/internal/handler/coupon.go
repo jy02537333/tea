@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -16,23 +17,23 @@ type CouponHandler struct{ svc *service.CouponService }
 
 func NewCouponHandler() *CouponHandler { return &CouponHandler{svc: service.NewCouponService()} }
 
-// CreateCoupon 管理端创建优惠券（简化：只需登录）
-func (h *CouponHandler) CreateCoupon(c *gin.Context) {
-	var req struct {
-		Name        string `json:"name"`
-		Type        int    `json:"type"`
-		Amount      string `json:"amount"`
-		Discount    string `json:"discount"`
-		MinAmount   string `json:"min_amount"`
-		TotalCount  int    `json:"total_count"`
-		Status      int    `json:"status"`
-		StartTime   string `json:"start_time"`
-		EndTime     string `json:"end_time"`
-		Description string `json:"description"`
-	}
+type couponRequest struct {
+	Name        string `json:"name"`
+	Type        int    `json:"type"`
+	Amount      string `json:"amount"`
+	Discount    string `json:"discount"`
+	MinAmount   string `json:"min_amount"`
+	TotalCount  int    `json:"total_count"`
+	Status      int    `json:"status"`
+	StartTime   string `json:"start_time"`
+	EndTime     string `json:"end_time"`
+	Description string `json:"description"`
+}
+
+func parseCouponPayload(c *gin.Context) (*model.Coupon, error) {
+	var req couponRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "参数错误")
-		return
+		return nil, err
 	}
 	parseDec := func(s string) (decimal.Decimal, error) {
 		if s == "" {
@@ -42,34 +43,38 @@ func (h *CouponHandler) CreateCoupon(c *gin.Context) {
 	}
 	amount, err := parseDec(req.Amount)
 	if err != nil {
-		response.BadRequest(c, "金额格式不正确")
-		return
+		return nil, errors.New("金额格式不正确")
 	}
 	discount, err := parseDec(req.Discount)
 	if err != nil {
-		response.BadRequest(c, "折扣格式不正确")
-		return
+		return nil, errors.New("折扣格式不正确")
 	}
 	minAmt, err := parseDec(req.MinAmount)
 	if err != nil {
-		response.BadRequest(c, "门槛金额格式不正确")
-		return
+		return nil, errors.New("门槛金额格式不正确")
 	}
 	st, err := time.Parse(time.RFC3339, req.StartTime)
 	if err != nil {
-		response.BadRequest(c, "开始时间格式不正确")
-		return
+		return nil, errors.New("开始时间格式不正确")
 	}
 	et, err := time.Parse(time.RFC3339, req.EndTime)
 	if err != nil {
-		response.BadRequest(c, "结束时间格式不正确")
-		return
+		return nil, errors.New("结束时间格式不正确")
 	}
-	coupon := &model.Coupon{
+	return &model.Coupon{
 		Name: req.Name, Type: req.Type,
 		Amount: amount, Discount: discount, MinAmount: minAmt,
 		TotalCount: req.TotalCount, Status: req.Status,
 		StartTime: st, EndTime: et, Description: req.Description,
+	}, nil
+}
+
+// CreateCoupon 管理端创建优惠券（简化：只需登录）
+func (h *CouponHandler) CreateCoupon(c *gin.Context) {
+	coupon, err := parseCouponPayload(c)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
 	}
 	if err := h.svc.CreateCoupon(coupon); err != nil {
 		response.Error(c, http.StatusBadRequest, err.Error())
@@ -90,6 +95,69 @@ func (h *CouponHandler) ListCoupons(c *gin.Context) {
 		return
 	}
 	response.Success(c, list)
+}
+
+// ListStoreCoupons 门店维度列出优惠券
+func (h *CouponHandler) ListStoreCoupons(c *gin.Context) {
+	status := 0
+	if v := c.Query("status"); v != "" {
+		status = atoi(v)
+	}
+	storeID := uint(atoi(c.Param("id")))
+	if storeID == 0 {
+		response.BadRequest(c, "无效的门店ID")
+		return
+	}
+	list, err := h.svc.ListStoreCoupons(storeID, status)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.Success(c, list)
+}
+
+// CreateStoreCoupon 门店创建本店优惠券
+func (h *CouponHandler) CreateStoreCoupon(c *gin.Context) {
+	storeID := uint(atoi(c.Param("id")))
+	if storeID == 0 {
+		response.BadRequest(c, "无效的门店ID")
+		return
+	}
+	coupon, err := parseCouponPayload(c)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	if err := h.svc.CreateStoreCoupon(storeID, coupon); err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.Success(c, coupon)
+}
+
+// UpdateStoreCoupon 门店编辑本店优惠券
+func (h *CouponHandler) UpdateStoreCoupon(c *gin.Context) {
+	storeID := uint(atoi(c.Param("id")))
+	if storeID == 0 {
+		response.BadRequest(c, "无效的门店ID")
+		return
+	}
+	couponID := uint(atoi(c.Param("couponId")))
+	if couponID == 0 {
+		response.BadRequest(c, "无效的优惠券ID")
+		return
+	}
+	upd, err := parseCouponPayload(c)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	res, err := h.svc.UpdateStoreCoupon(storeID, couponID, upd)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.Success(c, res)
 }
 
 // Grant 给用户发券

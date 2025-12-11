@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm run typecheck",
+    "test:full": "pnpm run typecheck && pnpm run build"
   },
   "dependencies": {
     "@ant-design/icons": "^5.5.3",

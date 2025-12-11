@@ -11,6 +11,7 @@ import (
 	"github.com/xuri/excelize/v2"
 
 	"tea-api/internal/model"
+	"tea-api/internal/service/commission"
 	"tea-api/pkg/database"
 	"tea-api/pkg/utils"
 )
@@ -163,13 +164,13 @@ func (h *WithdrawAdminHandler) Approve(c *gin.Context) {
 		utils.Error(c, utils.CodeError, "记录不存在")
 		return
 	}
-	if rec.Status != 1 { // 仅申请中可受理
+	if rec.Status != model.WithdrawStatusPending { // 仅申请中可受理
 		utils.Error(c, utils.CodeError, "当前状态不可受理")
 		return
 	}
 	uid, _ := c.Get("user_id")
 	now := time.Now()
-	rec.Status = 2
+	rec.Status = model.WithdrawStatusProcessing
 	rec.ProcessedAt = &now
 	if u, ok := uid.(uint); ok {
 		rec.ProcessedBy = u
@@ -195,13 +196,13 @@ func (h *WithdrawAdminHandler) Complete(c *gin.Context) {
 		utils.Error(c, utils.CodeError, "记录不存在")
 		return
 	}
-	if rec.Status != 2 { // 仅处理中可完成
+	if rec.Status != model.WithdrawStatusProcessing { // 仅处理中可完成
 		utils.Error(c, utils.CodeError, "当前状态不可完成")
 		return
 	}
 	uid, _ := c.Get("user_id")
 	now := time.Now()
-	rec.Status = 3
+	rec.Status = model.WithdrawStatusCompleted
 	rec.ProcessedAt = &now
 	if u, ok := uid.(uint); ok {
 		rec.ProcessedBy = u
@@ -211,6 +212,18 @@ func (h *WithdrawAdminHandler) Complete(c *gin.Context) {
 	}
 	if err := db.Save(&rec).Error; err != nil {
 		utils.Error(c, utils.CodeError, err.Error())
+		return
+	}
+
+	// 按时间顺序消费该用户已解冻佣金，直至覆盖本次实际打款金额
+	var opIDPtr *uint
+	if u, ok := uid.(uint); ok && u != 0 {
+		opIDPtr = &u
+	}
+	note := fmt.Sprintf("withdraw %s", rec.WithdrawNo)
+	if _, consumed, err := commission.ConsumeUserAvailableCommissions(rec.UserID, rec.ActualAmount, rec.WithdrawNo, opIDPtr, note); err != nil {
+		// 若佣金不足以完全覆盖本次提现，返回明确错误信息
+		utils.Error(c, utils.CodeError, fmt.Sprintf("insufficient commission: consumed=%s, required=%s, err=%s", consumed.String(), rec.ActualAmount.String(), err.Error()))
 		return
 	}
 	utils.Success(c, rec)
@@ -227,13 +240,13 @@ func (h *WithdrawAdminHandler) Reject(c *gin.Context) {
 		utils.Error(c, utils.CodeError, "记录不存在")
 		return
 	}
-	if rec.Status != 1 && rec.Status != 2 { // 申请中/处理中可拒绝
+	if rec.Status != model.WithdrawStatusPending && rec.Status != model.WithdrawStatusProcessing { // 申请中/处理中可拒绝
 		utils.Error(c, utils.CodeError, "当前状态不可拒绝")
 		return
 	}
 	uid, _ := c.Get("user_id")
 	now := time.Now()
-	rec.Status = 4
+	rec.Status = model.WithdrawStatusRejected
 	rec.ProcessedAt = &now
 	if u, ok := uid.(uint); ok {
 		rec.ProcessedBy = u

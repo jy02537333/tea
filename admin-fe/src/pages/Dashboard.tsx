@@ -4,12 +4,15 @@ import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAccrualSummary, runAccrual } from '../services/accrual';
+import { getDashboardTodos } from '../services/dashboard';
+import { useNavigate } from 'react-router-dom';
 import type { RunAccrualResponse } from '../services/accrual';
 
 const { RangePicker } = DatePicker;
 const DEFAULT_RANGE_DAYS = 7;
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [range, setRange] = useState<[Dayjs, Dayjs]>(() => {
     const end = dayjs();
@@ -25,6 +28,12 @@ export default function DashboardPage() {
   const summaryQuery = useQuery({
     queryKey: ['accrualSummary', params.start, params.end],
     queryFn: () => getAccrualSummary(params),
+    staleTime: 30_000,
+  });
+
+  const todosQuery = useQuery({
+    queryKey: ['dashboardTodos'],
+    queryFn: () => getDashboardTodos(),
     staleTime: 30_000,
   });
 
@@ -88,8 +97,36 @@ export default function DashboardPage() {
         </div>
       </Card>
 
-      <Card title="最近任务 / 操作（占位）">
-        <p>这里可以展示最近计提任务、导出记录或操作日志。</p>
+      <Card title="待办事项">
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Space style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>待处理客服工单</span>
+            <Space>
+              <strong>{todosQuery.data?.ticket_pending_count ?? 0}</strong>
+              <Button type="link" size="small" onClick={() => navigate('/tickets')}>
+                前往处理
+              </Button>
+            </Space>
+          </Space>
+          <Space style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>待发货订单</span>
+            <Space>
+              <strong>{todosQuery.data?.order_to_ship_count ?? 0}</strong>
+              <Button type="link" size="small" onClick={() => navigate('/orders?status=paid')}>
+                查看订单
+              </Button>
+            </Space>
+          </Space>
+          <Space style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>待处理提现</span>
+            <Space>
+              <strong>{todosQuery.data?.withdraw_pending_count ?? 0}</strong>
+              <Button type="link" size="small" onClick={() => navigate('/finance/withdraws?status=pending')}>
+                查看提现
+              </Button>
+            </Space>
+          </Space>
+        </Space>
       </Card>
     </Space>
   );

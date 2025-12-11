@@ -78,3 +78,15 @@ export async function updateProductStock(id: number, payload: UpdateStockPayload
   const res = await api.put(`/api/v1/products/${id}/stock`, payload);
   return unwrap(res);
 }
+
+// 兼容旧版示例页面 `ProductList` 所使用的 listProducts，
+// 返回形如 { data, total, page, limit } 的对象，便于示例代码抽取 data 数组。
+export async function listProducts(params: ProductListParams) {
+  const page = await getProducts(params);
+  return {
+    data: page.list,
+    total: page.total,
+    page: page.page,
+    limit: page.limit,
+  };
+}

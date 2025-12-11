@@ -513,6 +513,21 @@ CREATE TABLE IF NOT EXISTS `user_bank_accounts` (
   CONSTRAINT `fk_user_bank_accounts_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户提现收款账户表（银行卡/支付宝/微信）';
 
+-- 门店银行卡/收款账户
+CREATE TABLE IF NOT EXISTS `store_bank_accounts` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `store_id` BIGINT UNSIGNED NOT NULL,
+  `account_type` VARCHAR(32) DEFAULT 'bank' COMMENT 'bank|alipay|wechat',
+  `account_name` VARCHAR(128) NOT NULL COMMENT '账户开户名',
+  `account_no` VARCHAR(128) NOT NULL COMMENT '账号/收款号（加密/脱敏存储）',
+  `bank_name` VARCHAR(128) DEFAULT NULL COMMENT '银行名称/支付渠道名',
+  `is_default` TINYINT DEFAULT 0 COMMENT '是否默认提现账户',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_store_bank_accounts_store` (`store_id`),
+  CONSTRAINT `fk_store_bank_accounts_store` FOREIGN KEY (`store_id`) REFERENCES `stores`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='门店提现收款账户表（银行卡/支付宝/微信）';
+
 -- 提现申请/请求（用于记录提现流程与发票要求）
 CREATE TABLE IF NOT EXISTS `withdrawal_requests` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

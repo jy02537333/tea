@@ -23,6 +23,46 @@ func NewOrderService() *OrderService {
 	return &OrderService{db: database.GetDB()}
 }
 
+// CreateMembershipOrder 为指定会员套餐创建一笔虚拟订单
+// 该订单不依赖购物车，也不生成实体商品明细，仅用于会员/合伙人礼包购买场景。
+// 约定：OrderType=4 表示会员订单，DeliveryType=1（自取/虚拟），StoreID=0。
+func (s *OrderService) CreateMembershipOrder(userID, packageID uint, remark string) (*model.Order, error) {
+	if userID == 0 || packageID == 0 {
+		return nil, errors.New("非法的用户或套餐")
+	}
+
+	var pkg model.MembershipPackage
+	if err := s.db.Where("id = ? AND type = ?", packageID, "membership").First(&pkg).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("会员套餐不存在或已下架")
+		}
+		return nil, fmt.Errorf("查询会员套餐失败: %w", err)
+	}
+
+	// 暂不做重复购买限制与有效期校验，后续可在此扩展业务规则。
+	order := &model.Order{
+		OrderNo:             generateOrderNo("M"),
+		UserID:              userID,
+		StoreID:             0,
+		MembershipPackageID: &packageID,
+		Status:              1, // 待付款
+		PayStatus:           1, // 未付款
+		OrderType:           4, // 会员订单
+		DeliveryType:        1, // 自取/虚拟
+		AddressInfo:         "{}",
+		Remark:              remark,
+		TotalAmount:         pkg.Price,
+		DiscountAmount:      decimal.NewFromInt(0),
+		DeliveryFee:         decimal.NewFromInt(0),
+		PayAmount:           pkg.Price,
+	}
+
+	if err := s.db.Create(order).Error; err != nil {
+		return nil, fmt.Errorf("创建会员订单失败: %w", err)
+	}
+	return order, nil
+}
+
 // CreateOrderFromCart 从购物车生成订单
 func (s *OrderService) CreateOrderFromCart(userID uint, deliveryType int, addressInfo, remark string, userCouponID uint, storeID uint, orderType int) (*model.Order, error) {
 	if deliveryType != 1 && deliveryType != 2 {
@@ -782,4 +822,46 @@ func (s *OrderService) GetOrderAdmin(orderID uint) (*model.Order, []model.OrderI
 		return nil, nil, err
 	}
 	return &order, items, nil
+}
+
+// AdminListStoreOrders 按门店维度列出订单列表，支持状态、时间区间和订单ID筛选
+// - storeID: 必填，门店 ID
+// - status: 可选，按订单状态过滤（>0 时生效）
+// - page/limit: 分页参数；limit 超出合理范围时回退到 100
+// - startTime/endTime: 可选，按创建时间区间过滤
+// - orderID: 可选，按订单主键精确过滤
+func (s *OrderService) AdminListStoreOrders(storeID uint, status int, page, limit int, startTime, endTime *time.Time, orderID uint) ([]model.Order, int64, error) {
+	if storeID == 0 {
+		return nil, 0, errors.New("store_id 不能为空")
+	}
+	if page < 1 {
+		page = 1
+	}
+	if limit <= 0 || limit > 1000 {
+		limit = 100
+	}
+
+	q := s.db.Model(&model.Order{}).Where("store_id = ?", storeID)
+	if status > 0 {
+		q = q.Where("status = ?", status)
+	}
+	if startTime != nil {
+		q = q.Where("created_at >= ?", *startTime)
+	}
+	if endTime != nil {
+		q = q.Where("created_at <= ?", *endTime)
+	}
+	if orderID > 0 {
+		q = q.Where("id = ?", orderID)
+	}
+
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var orders []model.Order
+	if err := q.Order("id desc").Limit(limit).Offset((page - 1) * limit).Find(&orders).Error; err != nil {
+		return nil, 0, err
+	}
+	return orders, total, nil
 }

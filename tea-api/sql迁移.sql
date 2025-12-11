@@ -362,6 +362,7 @@ CREATE TABLE IF NOT EXISTS `withdraw_records` (
   `is_deleted` TINYINT(1) DEFAULT 0,
 
   `user_id` BIGINT UNSIGNED NOT NULL,
+  `store_id` BIGINT UNSIGNED DEFAULT 0,
   `withdraw_no` VARCHAR(64) NOT NULL,
   `amount` DECIMAL(10,2) NOT NULL,
   `fee` DECIMAL(10,2) DEFAULT 0,
@@ -373,7 +374,8 @@ CREATE TABLE IF NOT EXISTS `withdraw_records` (
   `processed_by` BIGINT UNSIGNED DEFAULT 0,
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_withdraws_withdraw_no` (`withdraw_no`),
-  KEY `idx_withdraws_user_id` (`user_id`)
+  KEY `idx_withdraws_user_id` (`user_id`),
+  KEY `idx_withdraws_store_id` (`store_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `wechat_transfer_records` (

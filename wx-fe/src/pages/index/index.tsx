@@ -73,6 +73,30 @@ export default function IndexPage() {
     void fetchProducts({ store_id: id });
   }
 
+  function goStoreFinance() {
+    if (!currentStoreId) {
+      Taro.showToast({ title: '请先选择门店', icon: 'none' });
+      return;
+    }
+    Taro.navigateTo({ url: `/pages/store-finance/index?store_id=${currentStoreId}` });
+  }
+
+  function goStoreAccounts() {
+    if (!currentStoreId) {
+      Taro.showToast({ title: '请先选择门店', icon: 'none' });
+      return;
+    }
+    Taro.navigateTo({ url: `/pages/store-accounts/index?store_id=${currentStoreId}` });
+  }
+
+  function goStoreActivities() {
+    if (!currentStoreId) {
+      Taro.showToast({ title: '请先选择门店', icon: 'none' });
+      return;
+    }
+    Taro.navigateTo({ url: `/pages/activities/index?store_id=${currentStoreId}` });
+  }
+
   return (
     <View style={{ padding: 12 }}>
       {/* 搜索栏 */}
@@ -89,6 +113,24 @@ export default function IndexPage() {
       <View style={{ marginBottom: 12 }}>
         <Button size="mini" onClick={() => Taro.navigateTo({ url: '/pages/category/index' })}>
           进入分类 / 商品列表
+        </Button>
+      </View>
+
+      <View style={{ marginBottom: 12 }}>
+        <Button size="mini" onClick={goStoreActivities}>
+          查看门店活动
+        </Button>
+      </View>
+
+      <View style={{ marginBottom: 12 }}>
+        <Button size="mini" onClick={goStoreFinance}>
+          查看门店财务流水
+        </Button>
+      </View>
+
+      <View style={{ marginBottom: 12 }}>
+        <Button size="mini" onClick={goStoreAccounts}>
+          门店收款账户设置
         </Button>
       </View>
 

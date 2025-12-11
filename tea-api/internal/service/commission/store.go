@@ -26,7 +26,7 @@ func SaveCommissionRecords(records []CommissionRecord) error {
 		cm := model.Commission{
 			UserID:         uint(r.UserID),
 			CommissionType: r.CommissionType,
-			Status:         "frozen",
+			Status:         StatusFrozen,
 		}
 
 		if r.OrderID != 0 {

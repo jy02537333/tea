@@ -55,7 +55,7 @@ export default function ProfilePage() {
 
   function handleViewCoupons() {
     if (!ensureLoggedIn()) return;
-    Taro.showToast({ title: '优惠券功能开发中', icon: 'none' });
+    Taro.navigateTo({ url: '/pages/coupons/index' }).catch(() => {});
   }
 
   function handleManageAddresses() {

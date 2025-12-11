@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Descriptions, Divider, Drawer, Form, Input, InputNumber, Popconfirm, Select, Space, Table, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AdminOrder, AdminOrderItem, AdminOrderListParams, exportAdminOrders, getAdminOrderDetail, getAdminOrders, postOrderAction } from '../services/orders';
 import { useAuthContext } from '../hooks/useAuth';
@@ -123,13 +124,49 @@ interface FilterValues {
 }
 
 export default function OrdersPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const initialStoreId = searchParams.get('storeId');
+  const initialOrderId = searchParams.get('orderId');
+
   const queryClient = useQueryClient();
   const { hasPermission } = useAuthContext();
-  const [filters, setFilters] = useState<FilterValues>({});
+  const [filters, setFilters] = useState<FilterValues>({
+    store_id: initialStoreId ? Number(initialStoreId) || undefined : undefined,
+  });
   const [pagination, setPagination] = useState({ page: 1, limit: 20 });
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [detailId, setDetailId] = useState<number | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState<boolean>(!!initialOrderId);
+  const [detailId, setDetailId] = useState<number | null>(initialOrderId ? Number(initialOrderId) || null : null);
   const [filterForm] = Form.useForm<FilterValues>();
+
+  // 根据 URL 中的 storeId 初始化筛选表单里的门店 ID
+  useEffect(() => {
+    if (initialStoreId) {
+      const parsed = Number(initialStoreId);
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        filterForm.setFieldsValue({ store_id: parsed });
+      }
+    }
+  }, [filterForm, initialStoreId]);
+
+  // 保持 URL 与当前选中订单同步，便于刷新后还原状态
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (detailId) {
+      params.set('orderId', String(detailId));
+    } else {
+      params.delete('orderId');
+    }
+    if (filters.store_id) {
+      params.set('storeId', String(filters.store_id));
+    } else {
+      params.delete('storeId');
+    }
+    navigate({ search: params.toString() ? `?${params.toString()}` : '' }, { replace: true });
+    // 仅在 detailId 或 filters.store_id 变化时更新 URL
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailId, filters.store_id]);
 
   const listParams: AdminOrderListParams = useMemo(
     () => ({

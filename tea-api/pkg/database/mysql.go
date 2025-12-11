@@ -59,17 +59,13 @@ func InitMySQL() {
 
 	fmt.Println("数据库连接池配置完成")
 
-	// 自动迁移改为手动触发：默认关闭自动在启动时执行迁移，避免在生产或连接远端 DB 时进行 schema 变更。
-	// 若需要在本地临时启用，请设置环境变量 `TEA_AUTO_MIGRATE=1`。
-	if os.Getenv("TEA_AUTO_MIGRATE") == "1" {
-		fmt.Println("TEA_AUTO_MIGRATE=1，开始执行数据库迁移（临时模式）...")
-		if err := autoMigrate(); err != nil {
-			fmt.Printf("数据库迁移失败，但继续启动服务器: %v\n", err)
-		} else {
-			fmt.Println("数据库迁移完成!")
-		}
+	// 启动时自动执行 GORM 迁移，保持 schema 与模型同步。
+	// 若迁移失败，仅打印错误并继续启动，避免影响线上可用性。
+	fmt.Println("开始执行数据库自动迁移...")
+	if err := autoMigrate(); err != nil {
+		fmt.Printf("数据库自动迁移失败，但继续启动服务器: %v\n", err)
 	} else {
-		fmt.Println("跳过自动迁移（启动时未检测到 TEA_AUTO_MIGRATE=1）。如需运行迁移，请运行独立的 migrate 工具或设置环境变量后重启应用。")
+		fmt.Println("数据库自动迁移完成!")
 	}
 }
 
@@ -91,6 +87,7 @@ func autoMigrate() error {
 
 		// 订单管理
 		&model.Store{},
+		&model.StoreBankAccount{},
 		&model.StoreProduct{},
 		&model.Order{},
 		&model.OrderItem{},

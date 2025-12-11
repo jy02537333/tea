@@ -1,5 +1,5 @@
 import api, { unwrapResponse } from './api';
-import { Coupon, PaginationResponse } from './types';
+import { Coupon, PaginationResponse, UserCoupon } from './types';
 
 export async function listCoupons(params: any = {}): Promise<PaginationResponse<Coupon>> {
   const res = await api.get('/api/v1/coupons', { params });
@@ -11,7 +11,7 @@ export async function grantCoupon(payload: any): Promise<Coupon> {
   return unwrapResponse<Coupon>(res);
 }
 
-export async function listMyCoupons(): Promise<Coupon[]> {
+export async function listMyCoupons(): Promise<UserCoupon[]> {
   const res = await api.get('/api/v1/user/coupons');
-  return unwrapResponse<Coupon[]>(res);
+  return unwrapResponse<UserCoupon[]>(res);
 }

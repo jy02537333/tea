@@ -39,6 +39,8 @@ func main() {
 
 	// 启动计息调度器（若启用）
 	scheduler.StartAccrualScheduler()
+	// 启动佣金解冻调度（若启用）
+	scheduler.StartCommissionReleaseScheduler()
 
 	fmt.Println("茶心阁小程序API服务启动成功!")
 	fmt.Printf("服务运行在: %s\n", config.Config.Server.Port)
