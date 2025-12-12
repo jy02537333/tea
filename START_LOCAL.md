@@ -129,35 +129,28 @@ go run .
 ```
 
 验证：
-
 ```powershell
 Invoke-RestMethod -Uri "http://localhost:9292/api/v1/health" -Method GET
 ```
 
 ---
-
 ## 5. 启动 auth-server（开发登录）
-
 如果需要开发登录（获取管理员令牌）并演示受保护接口：
 
-```powershell
 # auth-server 默认监听 8080（和 simple-server 互斥）
 cd D:\developTool\work\go\tea
 go run auth-server.go
 ```
 
-使用示例（获取 token）：见 `项目完成总结.md` 中的“开发登录获取管理员令牌”一节。
 
 ---
 
-## 6. 启动/停止与端口诊断（常用 PowerShell 命令）
 
 查看进程占用端口：
 
 ```powershell
 Get-NetTCPConnection -LocalPort 9094,9292,9093 -State Listen | Format-Table -AutoSize
 ```
-
 根据 PID 停止进程：
 
 ```powershell
@@ -167,7 +160,6 @@ Stop-Process -Id <PID> -Force
 查找使用某端口的进程并停止（一行完成）：
 
 ```powershell
-$pid = (Get-NetTCPConnection -LocalPort 9292 -State Listen).OwningProcess; if($pid){ Stop-Process -Id $pid -Force }
 ```
 
 ---
