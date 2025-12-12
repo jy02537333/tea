@@ -56,6 +56,10 @@ func SetupRouter() *gin.Engine {
 		userGroup.GET("/info", middleware.AuthMiddleware(), userHandler.GetUserInfo)
 		userGroup.PUT("/info", middleware.AuthMiddleware(), userHandler.UpdateUserInfo)
 		userGroup.GET("/:id", userHandler.GetUserByID)
+		// Sprint B 占位接口（用户中心聚合/钱包/积分）
+		api.GET("/users/me/summary", middleware.AuthMiddleware(), handler.UsersMeSummaryMock)
+		api.GET("/wallet", middleware.AuthMiddleware(), handler.WalletSummaryMock)
+		api.GET("/points", middleware.AuthMiddleware(), handler.PointsSummaryMock)
 	}
 
 	// 管理员路由（仅管理员可访问）
@@ -222,6 +226,8 @@ func SetupRouter() *gin.Engine {
 		couponGroup.GET("", couponHandler.ListCoupons)
 		couponGroup.POST("", middleware.AuthMiddleware(), couponHandler.CreateCoupon)
 		couponGroup.POST("/grant", middleware.AuthMiddleware(), couponHandler.Grant)
+		// 用户领取优惠券（占位）
+		couponGroup.POST("/claim", middleware.AuthMiddleware(), couponHandler.Claim)
 	}
 
 	// 用户优惠券（需要登录）

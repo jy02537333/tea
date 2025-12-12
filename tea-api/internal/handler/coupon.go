@@ -130,6 +130,39 @@ func (h *CouponHandler) ListMyCoupons(c *gin.Context) {
 	response.Success(c, list)
 }
 
+// Claim 领取优惠券（占位版：直接返回 Mock 结果，后续对接模板/库存/并发控制）
+func (h *CouponHandler) Claim(c *gin.Context) {
+	var req struct {
+		TemplateID uint `json:"template_id"`
+		UserID     uint `json:"user_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "参数错误")
+		return
+	}
+	// 若未传 user_id，默认当前登录用户
+	if req.UserID == 0 {
+		if v, ok := c.Get("user_id"); ok {
+			if uid, ok2 := v.(uint); ok2 {
+				req.UserID = uid
+			}
+		}
+	}
+	// 占位返回：生成一个临时 coupon_id 与过期时间（30 天）
+	expiresAt := time.Now().Add(30 * 24 * time.Hour).Format(time.RFC3339)
+	c.JSON(http.StatusOK, response.Response{
+		Code:    0,
+		Message: "success",
+		Data: gin.H{
+			"coupon_id":  0,
+			"template_id": req.TemplateID,
+			"user_id":    req.UserID,
+			"expires_at": expiresAt,
+			"mock":       true,
+		},
+	})
+}
+
 func atoi(s string) int {
 	v := 0
 	for i := 0; i < len(s); i++ {
