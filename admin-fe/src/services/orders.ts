@@ -32,6 +32,8 @@ export interface AdminOrderListParams {
   limit?: number;
   store_id?: number;
   status?: number;
+  start_time?: string; // RFC3339
+  end_time?: string;   // RFC3339
 }
 
 export async function getAdminOrders(params: AdminOrderListParams): Promise<PaginatedResult<AdminOrder>> {
