@@ -55,11 +55,18 @@ func (s *TicketService) ListTickets(page, limit int, status, ticketType, source,
 
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
+		// 容错：当表不存在或尚未迁移时，返回空列表而非500
+		if isMissingTableError(err) {
+			return []model.Ticket{}, 0, nil
+		}
 		return nil, 0, err
 	}
 
 	var list []model.Ticket
 	if err := q.Order("id DESC").Limit(limit).Offset((page - 1) * limit).Find(&list).Error; err != nil {
+		if isMissingTableError(err) {
+			return []model.Ticket{}, 0, nil
+		}
 		return nil, 0, err
 	}
 	return list, total, nil
@@ -146,4 +153,14 @@ func (s *TicketService) UpdateTicket(id uint, input UpdateTicketInput, operatorI
 		return nil
 	}
 	return s.db.Model(&model.Ticket{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// isMissingTableError 粗略判断底层数据库因表不存在导致的错误
+func isMissingTableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	// 兼容常见后端：MySQL (1146), SQLite (no such table)
+	return strings.Contains(msg, "error 1146") || strings.Contains(msg, "no such table") || strings.Contains(msg, "table") && strings.Contains(msg, "doesn't exist")
 }

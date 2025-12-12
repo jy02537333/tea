@@ -75,6 +75,17 @@ func SetupRouter() *gin.Engine {
 	{
 		// 后台首页待办统计
 		adminGroup.GET("/dashboard/todos", dashboardHandler.Todos)
+		// 后台首页摘要（今日）
+		adminGroup.GET("/dashboard/summary", dashboardHandler.Summary)
+		// 后台首页订单趋势（按天）
+		adminGroup.GET("/dashboard/order-trends", dashboardHandler.OrderTrends)
+		// 兼容别名（下划线/无连字符），避免部分客户端路径解析异常
+		adminGroup.GET("/dashboard/order_trends", dashboardHandler.OrderTrends)
+		adminGroup.GET("/dashboard/ordertrends", dashboardHandler.OrderTrends)
+		// 探针：验证 dashboard 前缀可达
+		adminGroup.GET("/dashboard/ping", func(c *gin.Context) {
+			c.JSON(200, gin.H{"data": gin.H{"ok": true}})
+		})
 
 		adminGroup.GET("/users", userHandler.AdminListUsers)
 		adminGroup.POST("/users", userHandler.AdminCreateUser)
@@ -112,6 +123,27 @@ func SetupRouter() *gin.Engine {
 		adminGroup.PUT("/partner-levels/:id", membershipAdminHandler.UpdatePartnerLevel)
 		adminGroup.DELETE("/partner-levels/:id", membershipAdminHandler.DeletePartnerLevel)
 	}
+
+	// 调试与容错：为订单趋势提供一个仅鉴权、不做角色校验的别名，便于前端联调
+	// 如生产环境不需要，可移除该别名。
+	api.GET("/admin/dashboard/order-trends-public", middleware.AuthMiddleware(), dashboardHandler.OrderTrends)
+
+	// NoRoute 调试输出：统一打印 404 请求的信息，便于定位未匹配路由
+	r.NoRoute(func(c *gin.Context) {
+		reqID := c.Writer.Header().Get("X-Request-Id")
+		if reqID == "" {
+			if v, ok := c.Get("request_id"); ok {
+				reqID, _ = v.(string)
+			}
+		}
+		c.JSON(404, gin.H{
+			"error":      "not_found",
+			"method":     c.Request.Method,
+			"path":       c.Request.URL.Path,
+			"query":      c.Request.URL.RawQuery,
+			"request_id": reqID,
+		})
+	})
 
 	// 计息相关路由（基于权限控制，允许非 admin 但拥有授权的角色访问）
 	accrualGroup := api.Group("/admin")

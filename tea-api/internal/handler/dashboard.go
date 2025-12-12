@@ -97,7 +97,6 @@ func (h *DashboardHandler) Summary(c *gin.Context) {
 		Where("status = 2 AND refunded_at IS NOT NULL AND DATE(refunded_at) = CURDATE()").
 		Scan(&todayRefund).Error
 
-
 	// 昨日与近7/30日聚合（最小实现，避免复杂 SQL，基于日期条件）
 	// 昨日：DATE(created_at) = CURDATE() - INTERVAL 1 DAY
 	var yPaid int64
@@ -134,11 +133,11 @@ func (h *DashboardHandler) Summary(c *gin.Context) {
 		Scan(&mSales).Error
 
 	c.JSON(http.StatusOK, gin.H{"data": gin.H{
-		"today_order_count":      totalToday,
-		"today_sales_amount":     s.Sum,
-		"today_paid_order_count": paidToday,
-		"today_refund_amount":    todayRefund.Sum,
-		"yesterday_sales_amount": ySales.Sum,
+		"today_order_count":          totalToday,
+		"today_sales_amount":         s.Sum,
+		"today_paid_order_count":     paidToday,
+		"today_refund_amount":        todayRefund.Sum,
+		"yesterday_sales_amount":     ySales.Sum,
 		"yesterday_paid_order_count": yPaid,
 		"yesterday_refund_amount": func() float64 {
 			var r2 sumRow2
@@ -148,7 +147,7 @@ func (h *DashboardHandler) Summary(c *gin.Context) {
 				Scan(&r2).Error
 			return r2.Sum
 		}(),
-		"last7d_sales_amount":    wSales.Sum,
+		"last7d_sales_amount":     wSales.Sum,
 		"last7d_paid_order_count": wPaid,
 		"last7d_refund_amount": func() float64 {
 			var r3 sumRow2
@@ -158,7 +157,7 @@ func (h *DashboardHandler) Summary(c *gin.Context) {
 				Scan(&r3).Error
 			return r3.Sum
 		}(),
-		"last30d_sales_amount":   mSales.Sum,
+		"last30d_sales_amount":     mSales.Sum,
 		"last30d_paid_order_count": mPaid,
 		"last30d_refund_amount": func() float64 {
 			var r4 sumRow2

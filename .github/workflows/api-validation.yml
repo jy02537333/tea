@@ -8,6 +8,8 @@ on:
 
 jobs:
   stateful-api-check:
+    env:
+      CI_SEED: "1"
     runs-on: ubuntu-latest
     services:
       mysql:
@@ -65,6 +67,30 @@ jobs:
             if curl -sS http://127.0.0.1:9292/api/v1/health | grep -q '"status"\s*:\s*"ok"'; then
               echo "API healthy"; break; fi; sleep 2; done
           curl -sS http://127.0.0.1:9292/api/v1/health || true
+      - name: Seed minimal data (conditional)
+        if: env.CI_SEED == '1'
+        run: |
+          echo "Seeding minimal data for stable assertions (CI_SEED=1)"
+          sudo apt-get update -y && sudo apt-get install -y mysql-client || true
+          MYSQL_HOST=127.0.0.1
+          MYSQL_PORT=3306
+          MYSQL_USER=root
+          MYSQL_PASS=root
+          MYSQL_DB=tea
+          cat > /tmp/seed.sql <<'EOF'
+          INSERT INTO stores (id, name, lat, lng, address, open_hours, phone)
+          SELECT 1, '测试门店', 31.2304, 121.4737, '上海某路1号', '09:00-21:00', '12345678'
+          WHERE NOT EXISTS (SELECT 1 FROM stores WHERE id=1);
+
+          INSERT INTO products (id, name, base_price_cents, status, main_image_url)
+          SELECT 1001, '测试商品', 1999, 'on', 'https://example.com/img.jpg'
+          WHERE NOT EXISTS (SELECT 1 FROM products WHERE id=1001);
+
+          INSERT INTO product_skus (id, product_id, sku_name, price_cents, stock, status)
+          SELECT 2001, 1001, '默认SKU', 1999, 100, 'on'
+          WHERE NOT EXISTS (SELECT 1 FROM product_skus WHERE id=2001);
+          EOF
+          mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PASS" "$MYSQL_DB" < /tmp/seed.sql
 
       - name: Run public API validation
         run: |
