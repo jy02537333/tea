@@ -183,6 +183,24 @@ PY
     # GET /cart
     cart_resp=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/cart" || true)
     echo "$cart_resp" > "$OUT_DIR/GET__api_v1_cart.json"
+    # CSV: cart items is list and status 200
+    if [[ -f "$REPORT_FILE" ]]; then
+      cstatus=$(curl -s -o /dev/null -w '%{http_code}' ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/cart" || true)
+      cok=$(python3 - <<'PY'
+import sys, json
+path=sys.argv[1]
+try:
+  c=json.loads(open(path, 'r', encoding='utf-8').read())
+  items=c.get('items')
+  print('true' if isinstance(items, list) else 'false')
+except Exception:
+  print('false')
+PY
+      "$OUT_DIR/GET__api_v1_cart.json")
+      ok_combined=false
+      if [[ "$cstatus" == "200" && "$cok" == "true" ]]; then ok_combined=true; fi
+      record "cart_items" "GET" "$BASE_URL/cart" "$cstatus" "$ok_combined" "items_list=$cok"
+    fi
     # Try to create order from cart items (minimal fields)
     order_body=$(echo "$cart_resp" | python3 - <<'PY'
 import sys, json
@@ -203,6 +221,27 @@ PY
     )
     create_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$order_body" "$BASE_URL/api/v1/orders" || true)
     echo "$create_resp" > "$OUT_DIR/POST__api_v1_orders.json"
+    # CSV: order create returns order_id and status 200/201
+    if [[ -f "$REPORT_FILE" ]]; then
+      ostatus=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$order_body" "$BASE_URL/api/v1/orders" || true)
+      oid=$(python3 - <<'PY'
+import sys, json
+path=sys.argv[1]
+try:
+  d=json.loads(open(path, 'r', encoding='utf-8').read())
+  # support {order_id,...} or {data:{order_id}}
+  oid=d.get('order_id')
+  if not oid and isinstance(d.get('data'), dict):
+    oid=d['data'].get('order_id')
+  print(str(oid) if oid else '')
+except Exception:
+  print('')
+PY
+      "$OUT_DIR/POST__api_v1_orders.json")
+      ok_combined=false
+      if [[ ("$ostatus" == "200" || "$ostatus" == "201") && -n "$oid" ]]; then ok_combined=true; fi
+      record "order_create" "POST" "$BASE_URL/orders" "$ostatus" "$ok_combined" "order_id=${oid:-}"
+    fi
     # Brief summary
     log "Cart+Order minimal flow attempted (product=$prod_id, sku=${sku_id:-})"
   else
