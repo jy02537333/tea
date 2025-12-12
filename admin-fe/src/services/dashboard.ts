@@ -27,12 +27,16 @@ export interface DashboardSummary {
   today_order_count: number;
   today_paid_order_count: number;
   today_sales_amount: number;
+  today_refund_amount: number;
   yesterday_paid_order_count: number;
   yesterday_sales_amount: number;
+  yesterday_refund_amount: number;
   last7d_paid_order_count: number;
   last7d_sales_amount: number;
+  last7d_refund_amount: number;
   last30d_paid_order_count: number;
   last30d_sales_amount: number;
+  last30d_refund_amount: number;
 }
 
 export async function getDashboardSummary() {

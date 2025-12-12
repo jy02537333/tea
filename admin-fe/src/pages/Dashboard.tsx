@@ -113,6 +113,7 @@ export default function DashboardPage() {
               <Statistic title="今日订单数" value={dashSummaryQuery.data?.today_order_count ?? 0} />
               <Statistic title="今日已支付" value={dashSummaryQuery.data?.today_paid_order_count ?? 0} />
               <Statistic title="今日销售额 (￥)" value={(dashSummaryQuery.data?.today_sales_amount ?? 0).toFixed(2)} />
+              <Statistic title="今日退款额 (￥)" value={(dashSummaryQuery.data?.today_refund_amount ?? 0).toFixed(2)} />
             </Space>
           </Card>
         </Col>
@@ -121,10 +122,13 @@ export default function DashboardPage() {
             <Space size={24} wrap>
               <Statistic title="昨日已支付" value={dashSummaryQuery.data?.yesterday_paid_order_count ?? 0} />
               <Statistic title="昨日销售额 (￥)" value={(dashSummaryQuery.data?.yesterday_sales_amount ?? 0).toFixed(2)} />
+              <Statistic title="昨日退款额 (￥)" value={(dashSummaryQuery.data?.yesterday_refund_amount ?? 0).toFixed(2)} />
               <Statistic title="近7日已支付" value={dashSummaryQuery.data?.last7d_paid_order_count ?? 0} />
               <Statistic title="近7日销售额 (￥)" value={(dashSummaryQuery.data?.last7d_sales_amount ?? 0).toFixed(2)} />
+              <Statistic title="近7日退款额 (￥)" value={(dashSummaryQuery.data?.last7d_refund_amount ?? 0).toFixed(2)} />
               <Statistic title="近30日已支付" value={dashSummaryQuery.data?.last30d_paid_order_count ?? 0} />
               <Statistic title="近30日销售额 (￥)" value={(dashSummaryQuery.data?.last30d_sales_amount ?? 0).toFixed(2)} />
+              <Statistic title="近30日退款额 (￥)" value={(dashSummaryQuery.data?.last30d_refund_amount ?? 0).toFixed(2)} />
             </Space>
           </Card>
         </Col>
