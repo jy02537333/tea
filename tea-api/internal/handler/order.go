@@ -22,7 +22,7 @@ type orderService interface {
 	CreateOrderFromCart(userID uint, deliveryType int, addressInfo, remark string, userCouponID uint, storeID uint, orderType int) (*model.Order, error)
 	ListOrders(userID uint, status int, page, limit int, storeID uint) ([]model.Order, int64, error)
 	GetOrder(userID, orderID uint) (*model.Order, []model.OrderItem, error)
-	AdminListOrders(status int, page, limit int, storeID uint) ([]model.Order, int64, error)
+	AdminListOrders(status int, page, limit int, storeID uint, startTime, endTime *time.Time) ([]model.Order, int64, error)
 	GetOrderAdmin(orderID uint) (*model.Order, []model.OrderItem, error)
 	CancelOrder(userID, orderID uint, reason string) error
 	MarkPaid(userID, orderID uint) error
@@ -191,7 +191,24 @@ func (h *OrderHandler) AdminList(c *gin.Context) {
 			storeID = uint(n)
 		}
 	}
-	orders, total, err := h.svc.AdminListOrders(status, page, limit, storeID)
+	var startTimePtr, endTimePtr *time.Time
+	if v := c.Query("start_time"); v != "" {
+		if t, err := time.Parse(time.RFC3339, v); err == nil {
+			startTimePtr = &t
+		} else {
+			response.BadRequest(c, "start_time 格式错误，应为 RFC3339")
+			return
+		}
+	}
+	if v := c.Query("end_time"); v != "" {
+		if t, err := time.Parse(time.RFC3339, v); err == nil {
+			endTimePtr = &t
+		} else {
+			response.BadRequest(c, "end_time 格式错误，应为 RFC3339")
+			return
+		}
+	}
+	orders, total, err := h.svc.AdminListOrders(status, page, limit, storeID, startTimePtr, endTimePtr)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
@@ -209,8 +226,25 @@ func (h *OrderHandler) AdminExport(c *gin.Context) {
 			storeID = uint(n)
 		}
 	}
+	var startTimePtr, endTimePtr *time.Time
+	if v := c.Query("start_time"); v != "" {
+		if t, err := time.Parse(time.RFC3339, v); err == nil {
+			startTimePtr = &t
+		} else {
+			response.BadRequest(c, "start_time 格式错误，应为 RFC3339")
+			return
+		}
+	}
+	if v := c.Query("end_time"); v != "" {
+		if t, err := time.Parse(time.RFC3339, v); err == nil {
+			endTimePtr = &t
+		} else {
+			response.BadRequest(c, "end_time 格式错误，应为 RFC3339")
+			return
+		}
+	}
 	// For export, fetch up to 10000 rows
-	orders, _, err := h.svc.AdminListOrders(status, 1, 10000, storeID)
+	orders, _, err := h.svc.AdminListOrders(status, 1, 10000, storeID, startTimePtr, endTimePtr)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return

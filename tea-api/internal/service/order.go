@@ -782,8 +782,8 @@ func (s *OrderService) GetStoreOrderStats(storeID uint) (*StoreOrderStats, error
 	return &StoreOrderStats{StoreID: storeID, TotalOrders: total, CompletedAmount: completedAmount, StatusCounts: statusItems}, nil
 }
 
-// AdminListOrders 列出所有订单（管理端），支持按 store_id 或 status 过滤
-func (s *OrderService) AdminListOrders(status int, page, limit int, storeID uint) ([]model.Order, int64, error) {
+// AdminListOrders 列出所有订单（管理端），支持按 store_id、status、时间区间过滤
+func (s *OrderService) AdminListOrders(status int, page, limit int, storeID uint, startTime, endTime *time.Time) ([]model.Order, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -796,6 +796,12 @@ func (s *OrderService) AdminListOrders(status int, page, limit int, storeID uint
 	}
 	if storeID != 0 {
 		q = q.Where("store_id = ?", storeID)
+	}
+	if startTime != nil {
+		q = q.Where("created_at >= ?", *startTime)
+	}
+	if endTime != nil {
+		q = q.Where("created_at <= ?", *endTime)
 	}
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
