@@ -194,6 +194,58 @@ else
   log "No auth token; skipping cart/order minimal flow"
 fi
 
+# 6) Store detail menus assertion: pick first store id and check menus
+stores_json=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/stores?page=1&size=10" || true)
+echo "$stores_json" > "$OUT_DIR/GET__api_v1_stores_page_1_size_10.json"
+store_id=$(echo "$stores_json" | python3 - <<'PY'
+import sys, json
+try:
+  data=json.loads(sys.stdin.read())
+  if isinstance(data, dict):
+    items = data.get('data') or []
+    if isinstance(items, list) and items:
+      s = items[0]
+      sid = s.get('id')
+      print(sid if sid is not None else "")
+    else:
+      print("")
+  else:
+    print("")
+except Exception:
+  print("")
+PY
+)
+if [[ -n "$store_id" ]]; then
+  store_detail=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/stores/$store_id" || true)
+  echo "$store_detail" > "$OUT_DIR/GET__api_v1_stores_${store_id}.json"
+  log "Parsed store detail for id=$store_id"
+  python3 - <<'PY'
+import sys, json
+try:
+  data=json.loads(open(sys.argv[1], 'r', encoding='utf-8').read())
+  menus = data.get('menus')
+  if isinstance(menus, list):
+    print(f"menus entries: {len(menus)}")
+    # peek first category structure
+    if menus:
+      cat = menus[0]
+      cat_keys = list(cat.keys()) if isinstance(cat, dict) else []
+      print("menus[0] keys:", cat_keys)
+      items = cat.get('items') if isinstance(cat, dict) else None
+      if isinstance(items, list):
+        print(f"menus[0].items entries: {len(items)}")
+      else:
+        print("menus[0].items: [not-list]")
+  else:
+    print("menus: [missing or non-list]")
+except Exception as e:
+  print("store detail parse error:", e)
+PY
+  "$OUT_DIR/GET__api_v1_stores_${store_id}.json"
+else
+  log "No stores returned; skipping store detail menus assertion"
+fi
+
 log "Stateful API validation completed. Bodies under: $OUT_DIR"
 #!/usr/bin/env bash
 set -euo pipefail
