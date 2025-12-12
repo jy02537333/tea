@@ -219,6 +219,8 @@ if [[ -n "$store_id" ]]; then
   store_detail=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/stores/$store_id" || true)
   echo "$store_detail" > "$OUT_DIR/GET__api_v1_stores_${store_id}.json"
   log "Parsed store detail for id=$store_id"
+  # CSV status for store detail
+  status=$(curl -s -o /dev/null -w '%{http_code}' ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/stores/$store_id" || true)
   python3 - <<'PY'
 import sys, json
 try:
@@ -242,8 +244,30 @@ except Exception as e:
   print("store detail parse error:", e)
 PY
   "$OUT_DIR/GET__api_v1_stores_${store_id}.json"
+  # Record into CSV: ok if status==200 and menus is list
+  if [[ -f "$REPORT_FILE" ]]; then
+    ok=$(python3 - <<'PY'
+import sys, json
+path=sys.argv[1]
+try:
+  data=json.loads(open(path, 'r', encoding='utf-8').read())
+  menus = data.get('menus')
+  print('true' if isinstance(menus, list) else 'false')
+except Exception:
+  print('false')
+PY
+    "$OUT_DIR/GET__api_v1_stores_${store_id}.json")
+    # ok requires both status 200 and menus list
+    ok_combined=false
+    if [[ "$status" == "200" && "$ok" == "true" ]]; then ok_combined=true; fi
+    record "store_detail" "GET" "$BASE_URL/stores/$store_id" "$status" "$ok_combined" "menus_list=$ok"
+  fi
 else
   log "No stores returned; skipping store detail menus assertion"
+  # Record skipped in CSV with 404 to indicate no data
+  if [[ -f "$REPORT_FILE" ]]; then
+    record "store_detail" "GET" "$BASE_URL/stores/{id}" "404" "false" "no stores"
+  fi
 fi
 
 log "Stateful API validation completed. Bodies under: $OUT_DIR"
