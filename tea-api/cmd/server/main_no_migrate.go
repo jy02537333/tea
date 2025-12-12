@@ -58,6 +58,16 @@ func main() {
 	// 添加CORS中间件
 	r.Use(corsMiddleware())
 
+	// 添加顶层探针，便于快速确认请求是否到达当前 Gin 引擎
+	r.GET("/_probe", func(c *gin.Context) {
+		c.JSON(200, gin.H{"data": gin.H{"ok": true, "engine": "main_no_migrate"}})
+	})
+
+	// 在启动前打印所有已注册路由，帮助定位 404 原因（确认实际生效的路由）
+	for _, ri := range r.Routes() {
+		log.Printf("route: %-6s %s -> %s", ri.Method, ri.Path, ri.Handler)
+	}
+
 	// `router.SetupRouter()` 已包含健康检查端点 `/api/v1/health`，不重复注册以避免冲突。
 
 	// 启动服务器

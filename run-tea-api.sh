@@ -7,6 +7,53 @@ cd "$REPO_ROOT"
 LOG_DIR="$REPO_ROOT/build-ci-logs"
 mkdir -p "$LOG_DIR"
 
+# Ensure port 9292 is free; if occupied, kill the old process gracefully
+ensure_port_free() {
+  local port=9292
+  echo "[run-tea-api] Checking if port ${port} is occupied..."
+
+  # Prefer PID from pid file if available
+  local pidfile="$LOG_DIR/tea-api.pid"
+  if [ -f "$pidfile" ]; then
+    local oldpid
+    oldpid=$(cat "$pidfile" 2>/dev/null || true)
+    if [ -n "${oldpid:-}" ] && kill -0 "$oldpid" 2>/dev/null; then
+      echo "[run-tea-api] Found previous PID from pidfile: $oldpid -> terminating"
+      kill "$oldpid" 2>/dev/null || true
+      sleep 1
+    fi
+  fi
+
+  # Fallback: detect any process listening on the port
+  local pids
+  pids=$(ss -lntp 2>/dev/null | awk -v port=":${port}" '$4 ~ port {print $NF}' | sed -E 's/users:\(\("[^"]+",pid=([0-9]+).*/\1/' | sort -u)
+  if [ -n "$pids" ]; then
+    echo "[run-tea-api] Port ${port} occupied by PIDs: $pids -> terminating"
+    for p in $pids; do
+      kill "$p" 2>/dev/null || true
+    done
+    sleep 1
+  fi
+
+  # Double-check
+  if ss -lntp 2>/dev/null | grep -q ":${port} "; then
+    echo "[run-tea-api] Port ${port} still occupied after kill attempts. Using kill -9 as last resort."
+    pids=$(ss -lntp 2>/dev/null | awk -v port=":${port}" '$4 ~ port {print $NF}' | sed -E 's/users:\(\("[^"]+",pid=([0-9]+).*/\1/' | sort -u)
+    for p in $pids; do
+      kill -9 "$p" 2>/dev/null || true
+    done
+    sleep 1
+  fi
+
+  if ss -lntp 2>/dev/null | grep -q ":${port} "; then
+    echo "[run-tea-api] ERROR: Port ${port} is still occupied. Aborting."
+    exit 1
+  fi
+  echo "[run-tea-api] Port ${port} is free."
+}
+
+ensure_port_free
+
 # Build main (no-migrate) binary
 echo "[run-tea-api] Building tea-api main (no-migrate) binary..."
 cd tea-api
