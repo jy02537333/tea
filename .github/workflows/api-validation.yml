@@ -58,7 +58,8 @@ jobs:
           REDIS_ADDR: 127.0.0.1:6379
           GIN_MODE: release
         run: |
-          ./tea-api & echo $! > ../build-ci-logs/tea-api.pid
+          mkdir -p ../build-ci-logs
+          ./tea-api > ../build-ci-logs/tea-api.out 2>&1 & echo $! > ../build-ci-logs/tea-api.pid
           # wait for health endpoint
           for i in $(seq 1 30); do
             if curl -sS http://127.0.0.1:9292/api/v1/health | grep -q '"status"\s*:\s*"ok"'; then
@@ -83,9 +84,26 @@ jobs:
             build-ci-logs/api_validation/**
             build-ci-logs/api-validation-*.log
             build-ci-logs/api-validation-stateful-*.log
+            build-ci-logs/tea-api.out
+
+      - name: Collect diagnostics on failure
+        if: failure()
+        run: |
+          echo "==== tea-api last 200 lines ===="
+          tail -n 200 build-ci-logs/tea-api.out || true
+          echo "==== curl health ===="
+          curl -i http://127.0.0.1:9292/api/v1/health || true
+          echo "==== curl categories ===="
+          curl -i http://127.0.0.1:9292/api/v1/categories | head -c 2000 || true
+          echo "==== docker ps ===="
+          docker ps --format '{{.Names}}\t{{.Image}}\t{{.Status}}' || true
+          echo "==== mysql service logs (last 100) ===="
+          docker logs $(docker ps --format '{{.Names}}' | grep -E '^mysql' | head -n1) --tail 100 || true
+          echo "==== redis service logs (last 100) ===="
+          docker logs $(docker ps --format '{{.Names}}' | grep -E '^redis' | head -n1) --tail 100 || true
 
       - name: Stop tea-api
         if: always()
         run: |
           if [[ -f build-ci-logs/tea-api.pid ]]; then kill $(cat build-ci-logs/tea-api.pid) || true; fi
-name: API Validation
+        
