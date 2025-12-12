@@ -136,6 +136,24 @@ PY
     # Try product detail to get sku_id if present
     detail_json=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/products/$prod_id" || true)
     echo "$detail_json" > "$OUT_DIR/GET__api_v1_products_${prod_id}.json"
+    # Record product detail CSV: status and sku list presence
+    if [[ -f "$REPORT_FILE" ]]; then
+      pstatus=$(curl -s -o /dev/null -w '%{http_code}' ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/products/$prod_id" || true)
+      pok=$(python3 - <<'PY'
+import sys, json
+path=sys.argv[1]
+try:
+  d=json.loads(open(path, 'r', encoding='utf-8').read())
+  sku=d.get('sku')
+  print('true' if isinstance(sku, list) else 'false')
+except Exception:
+  print('false')
+PY
+      "$OUT_DIR/GET__api_v1_products_${prod_id}.json")
+      ok_combined=false
+      if [[ "$pstatus" == "200" && "$pok" == "true" ]]; then ok_combined=true; fi
+      record "product_detail" "GET" "$BASE_URL/products/$prod_id" "$pstatus" "$ok_combined" "sku_list=$pok"
+    fi
     sku_id=$(echo "$detail_json" | python3 - <<'PY'
 import sys, json
 try:
