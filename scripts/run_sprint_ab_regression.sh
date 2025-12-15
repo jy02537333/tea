@@ -58,7 +58,7 @@ run_test() {
   fi
 
   local response
-  if ! response=$(curl -sS -X "$method" "${headers[@]}" --max-time 20 -w "\nHTTP_STATUS:%{http_code}" "$url" 2>&1); then
+  if ! response=$(curl -sS -X "$method" "${headers[@]}" --max-time 10 -w "\nHTTP_STATUS:%{http_code}" "$url" 2>&1); then
     echo "  ❌ 请求失败: $response" | tee -a "$SUMMARY"
     echo "" | tee -a "$SUMMARY"
     return

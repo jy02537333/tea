@@ -12,6 +12,42 @@ import (
 	"tea-api/pkg/database"
 )
 
+// loginHelper 辅助函数：执行登录并返回 token
+func loginHelper(t *testing.T, ts *httptest.Server, openid string) string {
+	t.Helper()
+
+	loginReq := map[string]string{"openid": openid}
+	b, err := json.Marshal(loginReq)
+	if err != nil {
+		t.Fatalf("序列化登录请求失败: %v", err)
+	}
+
+	resp, err := http.Post(ts.URL+"/api/v1/user/dev-login", "application/json", bytes.NewReader(b))
+	if err != nil {
+		t.Fatalf("登录请求失败: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Fatalf("登录状态码错误: %d", resp.StatusCode)
+	}
+
+	var login struct {
+		Code int `json:"code"`
+		Data struct {
+			Token string `json:"token"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&login); err != nil {
+		t.Fatalf("解析登录响应失败: %v", err)
+	}
+	if login.Code != 0 || login.Data.Token == "" {
+		t.Fatalf("登录失败: code=%d, token=%s", login.Code, login.Data.Token)
+	}
+
+	return login.Data.Token
+}
+
 // Test_SprintAB_Regression_Cart_Order_Coupon 测试 Sprint A/B 关键接口的稳定性
 // 测试范围：购物车、下单、可用券列表
 func Test_SprintAB_Regression_Cart_Order_Coupon(t *testing.T) {
@@ -28,47 +64,12 @@ func Test_SprintAB_Regression_Cart_Order_Coupon(t *testing.T) {
 
 	// 1. 登录获取 token
 	t.Run("登录获取token", func(t *testing.T) {
-		loginReq := map[string]string{"openid": "sprint_ab_regression_user"}
-		b, _ := json.Marshal(loginReq)
-		resp, err := http.Post(ts.URL+"/api/v1/user/dev-login", "application/json", bytes.NewReader(b))
-		if err != nil {
-			t.Fatalf("登录请求失败: %v", err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != 200 {
-			t.Fatalf("登录状态码错误: %d", resp.StatusCode)
-		}
-
-		var login struct {
-			Code int `json:"code"`
-			Data struct {
-				Token string `json:"token"`
-			} `json:"data"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&login); err != nil {
-			t.Fatalf("解析登录响应失败: %v", err)
-		}
-		if login.Code != 0 || login.Data.Token == "" {
-			t.Fatalf("登录失败: code=%d, token=%s", login.Code, login.Data.Token)
-		}
-		t.Logf("✓ 登录成功，获得 token: %s...", login.Data.Token[:20])
+		token := loginHelper(t, ts, "sprint_ab_regression_user")
+		t.Logf("✓ 登录成功，获得 token: %s...", token[:20])
 	})
 
 	// 登录以便后续测试使用
-	loginReq := map[string]string{"openid": "sprint_ab_regression_user"}
-	b, _ := json.Marshal(loginReq)
-	loginResp, _ := http.Post(ts.URL+"/api/v1/user/dev-login", "application/json", bytes.NewReader(b))
-	var login struct {
-		Code int
-		Data struct {
-			Token string
-			User  struct{ ID uint }
-		}
-	}
-	json.NewDecoder(loginResp.Body).Decode(&login)
-	loginResp.Body.Close()
-	auth := "Bearer " + login.Data.Token
+	auth := "Bearer " + loginHelper(t, ts, "sprint_ab_regression_user")
 
 	// 2. 测试购物车接口
 	t.Run("购物车_获取购物车", func(t *testing.T) {
