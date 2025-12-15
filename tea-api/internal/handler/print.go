@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
 
 	"tea-api/internal/model"
 	"tea-api/pkg/database"
@@ -59,7 +60,7 @@ func (h *PrintHandler) CreatePrintJob(c *gin.Context) {
 	}
 
 	// 验证订单是否属于该门店
-	if order.StoreID == nil || *order.StoreID != req.StoreID {
+	if order.StoreID != req.StoreID {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 4003, "message": "order does not belong to this store"})
 		return
 	}
@@ -122,19 +123,19 @@ func (h *PrintHandler) AcceptOrder(c *gin.Context) {
 	}
 
 	// 验证订单是否属于该门店
-	if order.StoreID == nil || *order.StoreID != uint(storeID) {
+	if order.StoreID != uint(storeID) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 4003, "message": "order does not belong to this store"})
 		return
 	}
 
 	// 验证订单状态（只有已支付的订单才能接单）
-	if order.Status != "paid" {
+	if order.Status != 2 { // 2:已付款
 		c.JSON(http.StatusBadRequest, gin.H{"code": 4001, "message": "order status is not paid"})
 		return
 	}
 
-	// 更新订单状态为已接单
-	if err := db.Model(&order).Update("status", "store_accepted").Error; err != nil {
+	// 更新订单状态为已接单（简化：使用配送中状态代表接单）
+	if err := db.Model(&order).Update("status", 3).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 5000, "message": err.Error()})
 		return
 	}
@@ -195,18 +196,18 @@ func (h *PrintHandler) RejectOrder(c *gin.Context) {
 	}
 
 	// 验证订单是否属于该门店
-	if order.StoreID == nil || *order.StoreID != uint(storeID) {
+	if order.StoreID != uint(storeID) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 4003, "message": "order does not belong to this store"})
 		return
 	}
 
 	// 验证订单状态
-	if order.Status != "paid" && order.Status != "pending_payment" {
+	if order.Status != 2 && order.Status != 1 { // 2:已付款 1:待付款
 		c.JSON(http.StatusBadRequest, gin.H{"code": 4001, "message": "order cannot be rejected in current status"})
 		return
 	}
 
-	// 更新订单状态为已拒绝
+	// 更新订单状态为已拒绝（使用状态5:已取消）
 	tx := db.Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -215,8 +216,8 @@ func (h *PrintHandler) RejectOrder(c *gin.Context) {
 	}()
 
 	if err := tx.Model(&order).Updates(map[string]interface{}{
-		"status": "rejected",
-		"note":   req.Reason,
+		"status":        5, // 5:已取消
+		"cancel_reason": req.Reason,
 	}).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 5000, "message": err.Error()})
@@ -232,7 +233,7 @@ func (h *PrintHandler) RejectOrder(c *gin.Context) {
 	tx.Create(&orderLog)
 
 	// 如果订单已支付，需要退款
-	if order.Status == "paid" && order.PaidAmount.GreaterThan(model.DecimalZero) {
+	if order.Status == 2 && order.PayAmount.GreaterThan(decimal.Zero) {
 		// TODO: 触发退款流程
 		// 这里应该调用退款服务
 	}

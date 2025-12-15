@@ -88,10 +88,10 @@ func (h *PartnerHandler) PurchasePackage(c *gin.Context) {
 	order := model.Order{
 		UserID:      req.UserID,
 		OrderNo:     generateOrderNo(),
-		OrderType:   "membership",
-		Status:      "pending_payment",
+		OrderType:   1, // 1:商城
+		Status:      1, // 1:待付款
 		TotalAmount: pkg.Price,
-		PaidAmount:  decimal.Zero,
+		PayAmount:   pkg.Price,
 	}
 
 	if err := tx.Create(&order).Error; err != nil {

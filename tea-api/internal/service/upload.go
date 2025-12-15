@@ -118,7 +118,7 @@ type OSSPolicyResponse struct {
 
 // GenerateOSSPolicy 生成OSS直传策略
 func (s *UploadService) GenerateOSSPolicy(business string) (*OSSPolicyResponse, error) {
-	bucket, err := s.ensureBucket()
+	_, err := s.ensureBucket()
 	if err != nil {
 		return nil, err
 	}
