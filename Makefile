@@ -28,3 +28,14 @@ test-wx-fe:
 
 test: test-api test-admin-fe test-wx-fe
 	@echo "[make test] all tests finished"
+
+test-sprint-ab:
+	@echo "[make test-sprint-ab] running Sprint A/B regression tests"
+	bash scripts/run_sprint_ab_regression.sh
+	bash scripts/run_sprint_ab_integration.sh
+	@echo "[make test-sprint-ab] Sprint A/B regression tests completed"
+
+test-sprint-ab-go:
+	@echo "[make test-sprint-ab-go] running Sprint A/B Go regression tests"
+	cd tea-api && go test -v ./test -run Test_SprintAB_Regression
+

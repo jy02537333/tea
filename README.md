@@ -62,3 +62,29 @@ Notes & tips:
 - `docs/features/store-order-link.md`：门店面板 ↔ 订单列表 ↔ 订单操作区联动的设计说明，文末包含建议的开发步骤，是门店与订单联动方向的实现指南。
 - `docs/prd-open-points.md`：PRD 中尚未完全敲定的开放问题和后续建议动作清单，可视为产品侧 Backlog 与决策待办。
 - `docs/frontend-backend-checklist.md`：前后端联调与提测前的检查清单，用于在提测/发布前核对 API、字段、状态枚举等是否与 PRD 和 API 文档保持一致。
+
+## Sprint A/B 回归测试
+
+Sprint A/B 回归测试用于验证核心功能的稳定性，包括购物车、下单、优惠券等关键接口。
+
+### 快速开始
+
+```bash
+# 方式 1: Go 单元测试（推荐）
+cd tea-api
+go test -v ./test -run Test_SprintAB_Regression
+
+# 方式 2: Shell 脚本 - 基础回归测试
+bash scripts/run_sprint_ab_regression.sh
+
+# 方式 3: Shell 脚本 - 完整集成测试
+bash scripts/run_sprint_ab_integration.sh
+```
+
+### 测试范围
+
+- **购物车**: 获取购物车、加入购物车、更新数量、删除商品
+- **下单**: 创建订单、订单列表、订单详情、商品列表、门店列表
+- **优惠券**: 可用券列表、用户优惠券、券模板、领取优惠券
+
+详细文档：[Sprint A/B 回归测试指南](doc/sprint_ab_regression_guide.md)
