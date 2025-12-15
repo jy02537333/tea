@@ -38,6 +38,12 @@ func SetupRouter() *gin.Engine {
 	invHandler := handler.NewStoreInventoryHandler()
 	modelHandler := handler.NewModelHandler()
 	uploadHandler := handler.NewUploadHandler()
+	
+	// Sprint C handlers
+	commissionHandler := handler.NewCommissionHandler()
+	referralHandler := handler.NewReferralHandler()
+	partnerHandler := handler.NewPartnerHandler()
+	printHandler := handler.NewPrintHandler()
 
 	// API路由组
 	api := r.Group("/api/v1")
@@ -57,6 +63,62 @@ func SetupRouter() *gin.Engine {
 		userGroup.GET("/:id", userHandler.GetUserByID)
 	}
 
+	// 用户佣金相关路由
+	userCommissionGroup := api.Group("/users/:user_id")
+	userCommissionGroup.Use(middleware.AuthMiddleware())
+	{
+		userCommissionGroup.GET("/commissions", commissionHandler.ListUserCommissions)
+		userCommissionGroup.GET("/commissions/summary", commissionHandler.GetCommissionSummary)
+		userCommissionGroup.GET("/referral-info", referralHandler.GetReferralInfo)
+		userCommissionGroup.GET("/referred-users", referralHandler.ListReferredUsers)
+		userCommissionGroup.GET("/referral-stats", referralHandler.GetReferralStats)
+	}
+
+	// 佣金计算和创建（内部调用或需要权限）
+	commissionGroup := api.Group("/commissions")
+	commissionGroup.Use(middleware.AuthMiddleware())
+	{
+		commissionGroup.POST("/calculate", commissionHandler.Calculate)
+		commissionGroup.POST("", commissionHandler.CreateCommissions)
+	}
+
+	// 推荐关系
+	referralGroup := api.Group("/referral")
+	referralGroup.Use(middleware.AuthMiddleware())
+	{
+		referralGroup.POST("/record", referralHandler.RecordReferral)
+	}
+
+	// 会员/合伙人礼包
+	partnerGroup := api.Group("/partner")
+	{
+		partnerGroup.GET("/packages", partnerHandler.ListPackages)
+	}
+	
+	partnerAuthGroup := api.Group("/partner")
+	partnerAuthGroup.Use(middleware.AuthMiddleware())
+	{
+		partnerAuthGroup.POST("/upgrade", partnerHandler.UpgradePartner)
+	}
+
+	membershipGroup := api.Group("/membership")
+	membershipGroup.Use(middleware.AuthMiddleware())
+	{
+		membershipGroup.POST("/purchase", partnerHandler.PurchasePackage)
+	}
+
+	// 门店后台路由
+	storeBackendGroup := api.Group("/stores/:store_id")
+	storeBackendGroup.Use(middleware.AuthMiddleware())
+	{
+		// 打印任务
+		storeBackendGroup.POST("/print/jobs", printHandler.CreatePrintJob)
+		// 订单管理
+		storeBackendGroup.GET("/orders", printHandler.ListStoreOrders)
+		storeBackendGroup.POST("/orders/:order_id/accept", printHandler.AcceptOrder)
+		storeBackendGroup.POST("/orders/:order_id/reject", printHandler.RejectOrder)
+	}
+
 	// 管理员路由（仅管理员可访问）
 	adminGroup := api.Group("/admin")
 	adminGroup.Use(middleware.AuthMiddleware(), middleware.RequireRoles("admin"))
@@ -66,6 +128,7 @@ func SetupRouter() *gin.Engine {
 		adminGroup.PUT("/users/:id", userHandler.AdminUpdateUser)
 		adminGroup.POST("/users/:id/reset-password", userHandler.AdminResetPassword)
 		adminGroup.POST("/uploads", uploadHandler.UploadMedia)
+		adminGroup.POST("/storage/oss/policy", uploadHandler.GetOSSPolicy)
 		// 门店订单统计
 		adminGroup.GET("/stores/:id/orders/stats", storeHandler.OrderStats)
 		// 门店库存管理
@@ -77,6 +140,14 @@ func SetupRouter() *gin.Engine {
 		adminGroup.GET("/orders", orderHandler.AdminList)
 		adminGroup.GET("/orders/export", orderHandler.AdminExport)
 		adminGroup.GET("/orders/:id", orderHandler.AdminDetail)
+		
+		// 佣金管理（管理端）
+		adminGroup.POST("/commissions/unfreeze", commissionHandler.UnfreezeCommissions)
+		
+		// 合伙人等级管理（管理端）
+		adminGroup.GET("/partner-levels", partnerHandler.ListPartnerLevels)
+		adminGroup.POST("/partner-levels", partnerHandler.CreatePartnerLevel)
+		adminGroup.PUT("/partner-levels/:id", partnerHandler.UpdatePartnerLevel)
 	}
 
 	// 计息相关路由（基于权限控制，允许非 admin 但拥有授权的角色访问）

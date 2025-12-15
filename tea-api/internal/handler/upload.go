@@ -32,3 +32,25 @@ func (h *UploadHandler) UploadMedia(c *gin.Context) {
 
 	utils.Success(c, gin.H{"url": url})
 }
+
+// GetOSSPolicy 获取OSS直传策略
+// POST /api/v1/admin/storage/oss/policy
+func (h *UploadHandler) GetOSSPolicy(c *gin.Context) {
+	type PolicyRequest struct {
+		Business string `json:"business" binding:"required"` // product_image/brand_logo/store_image
+	}
+
+	var req PolicyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.InvalidParam(c, err.Error())
+		return
+	}
+
+	policy, err := h.uploadService.GenerateOSSPolicy(req.Business)
+	if err != nil {
+		utils.Error(c, utils.CodeError, "生成上传策略失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, policy)
+}

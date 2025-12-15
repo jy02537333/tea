@@ -63,12 +63,24 @@ type User struct {
 	InterestRate            decimal.Decimal `gorm:"type:decimal(8,6);default:0" json:"interest_rate"` // 用户定制日利率，>0 时覆盖默认
 	Points                  int             `gorm:"default:0" json:"points"`
 	Role                    string          `gorm:"type:varchar(30);default:'user';index" json:"role"` // 简化角色标识，详尽权限通过关联表
+	MembershipPackageID     *uint           `gorm:"index" json:"membership_package_id"` // 会员礼包ID
+	PartnerLevelID          *uint           `gorm:"index" json:"partner_level_id"` // 合伙人等级ID
 }
 
 // BeforeSave normalizes JSON columns to ensure they persist valid values.
 func (u *User) BeforeSave(tx *gorm.DB) error {
 	u.DefaultAddress = NormalizeJSONOrNull(u.DefaultAddress)
 	return nil
+}
+
+// UserProfile 用户扩展信息表
+type UserProfile struct {
+	UserID    uint       `gorm:"primaryKey" json:"user_id"`
+	Nickname  string     `gorm:"type:varchar(64)" json:"nickname"`
+	Avatar    string     `gorm:"type:varchar(512)" json:"avatar"`
+	Gender    int        `gorm:"type:tinyint" json:"gender"` // 0:未知 1:男 2:女
+	Birthday  *time.Time `json:"birthday"`
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 // Role 角色模型

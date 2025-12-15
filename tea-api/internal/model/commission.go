@@ -79,3 +79,40 @@ type ReferralClosure struct {
 	DescendantUserID uint `gorm:"primaryKey;autoIncrement:false" json:"descendant_user_id"`
 	Depth            int  `json:"depth"`
 }
+
+// Referral 推荐关系表
+type Referral struct {
+	BaseModel
+	ReferrerUserID  uint   `gorm:"index;not null" json:"referrer_user_id"`
+	ReferredUserID  uint   `gorm:"uniqueIndex;not null" json:"referred_user_id"`
+	Source          string `gorm:"type:varchar(64)" json:"source"` // 来源：share_link/qrcode/invite_code
+}
+
+// Wallet 钱包表
+type Wallet struct {
+	BaseModel
+	UserID   uint            `gorm:"uniqueIndex;not null" json:"user_id"`
+	Balance  decimal.Decimal `gorm:"type:decimal(12,2);default:0" json:"balance"`
+	TeaCoins decimal.Decimal `gorm:"type:decimal(12,2);default:0" json:"tea_coins"`
+	Frozen   decimal.Decimal `gorm:"type:decimal(12,2);default:0" json:"frozen"`
+}
+
+// WalletTransaction 钱包流水表
+type WalletTransaction struct {
+	BaseModel
+	UserID       uint            `gorm:"index;not null" json:"user_id"`
+	Type         string          `gorm:"type:varchar(64);not null" json:"type"` // recharge/consume/refund/commission/withdraw/tea_coin_award
+	Amount       decimal.Decimal `gorm:"type:decimal(12,2);not null" json:"amount"`
+	BalanceAfter decimal.Decimal `gorm:"type:decimal(12,2)" json:"balance_after"`
+	OrderID      *uint           `gorm:"index" json:"order_id"`
+	Description  string          `gorm:"type:varchar(255)" json:"description"`
+}
+
+// OrderLog 订单日志表
+type OrderLog struct {
+	BaseModel
+	OrderID     uint   `gorm:"index;not null" json:"order_id"`
+	Status      string `gorm:"type:varchar(64);not null" json:"status"`
+	Description string `gorm:"type:varchar(255)" json:"description"`
+}
+

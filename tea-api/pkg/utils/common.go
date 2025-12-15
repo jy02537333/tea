@@ -1,8 +1,11 @@
 package utils
 
 import (
+	"crypto/hmac"
 	"crypto/md5"
 	"crypto/rand"
+	"crypto/sha1"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"math/big"
@@ -106,6 +109,23 @@ func CopyFile(src, dst string) error {
 	_ = sourceFile
 	_ = dst
 	return nil
+}
+
+// Base64Encode Base64编码
+func Base64Encode(data []byte) string {
+	return base64.StdEncoding.EncodeToString(data)
+}
+
+// Base64Decode Base64解码
+func Base64Decode(str string) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(str)
+}
+
+// HmacSha1Sign HMAC-SHA1签名
+func HmacSha1Sign(key, data string) string {
+	h := hmac.New(sha1.New, []byte(key))
+	h.Write([]byte(data))
+	return base64.StdEncoding.EncodeToString(h.Sum(nil))
 }
 
 func init() {
