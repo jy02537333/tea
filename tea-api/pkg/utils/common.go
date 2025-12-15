@@ -122,6 +122,9 @@ func Base64Decode(str string) ([]byte, error) {
 }
 
 // HmacSha1Sign HMAC-SHA1签名
+// Note: HMAC-SHA1 is used specifically for Alibaba Cloud OSS compatibility.
+// While SHA-1 is considered cryptographically weak for some purposes,
+// it is still acceptable for OSS policy signatures as required by the OSS API.
 func HmacSha1Sign(key, data string) string {
 	h := hmac.New(sha1.New, []byte(key))
 	h.Write([]byte(data))

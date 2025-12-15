@@ -306,13 +306,19 @@ func (h *CommissionHandler) UnfreezeCommissions(c *gin.Context) {
 
 // getCommissionRates 获取用户的佣金率
 func (h *CommissionHandler) getCommissionRates(userID int64) (directRate float64, indirectRate float64) {
+	// 默认佣金率常量
+	const (
+		DefaultDirectRate   = 0.10 // 默认直推佣金率 10%
+		DefaultIndirectRate = 0.10 // 默认间接佣金率 10%
+	)
+	
 	db := database.GetDB()
 	
 	// 查询用户信息获取partner_level_id
 	var user model.User
 	if err := db.First(&user, userID).Error; err != nil {
-		// 默认返回普通用户的佣金率
-		return 0.10, 0.10
+		// 用户不存在，返回默认佣金率
+		return DefaultDirectRate, DefaultIndirectRate
 	}
 
 	// 如果有合伙人等级，查询等级对应的佣金率
@@ -336,7 +342,7 @@ func (h *CommissionHandler) getCommissionRates(userID int64) (directRate float64
 	}
 
 	// 默认佣金率
-	return 0.10, 0.10
+	return DefaultDirectRate, DefaultIndirectRate
 }
 
 // calculateTotalAmount 计算订单项总金额
