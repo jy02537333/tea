@@ -167,13 +167,17 @@ func (h *PartnerHandler) UpgradePartner(c *gin.Context) {
 		"membership_package_id": req.PackageID,
 	}
 
-	// 如果是合伙人礼包，还需要查找对应的 partner_level
+	// 如果是合伙人礼包，查找对应的 partner_level
+	// 优先通过package关联字段，退而求其次使用名称匹配
 	if pkg.Type == "partner_package" {
 		var partnerLevel model.PartnerLevel
-		if err := tx.Where("name = ?", pkg.Name).First(&partnerLevel).Error; err == nil {
+		// 尝试使用名称匹配查找等级
+		err := tx.Where("name = ? OR name LIKE ?", pkg.Name, pkg.Name+"%").First(&partnerLevel).Error
+		if err == nil {
 			levelID := partnerLevel.ID
 			updates["partner_level_id"] = &levelID
 		}
+		// 如果找不到匹配的等级，不设置partner_level_id（保持为NULL）
 	}
 
 	if err := tx.Model(&user).Updates(updates).Error; err != nil {

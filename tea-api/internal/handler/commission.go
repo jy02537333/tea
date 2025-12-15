@@ -113,10 +113,17 @@ func (h *CommissionHandler) CreateCommissions(c *gin.Context) {
 		return
 	}
 
-	// 检查该订单是否已经生成过佣金
+	// 检查该订单是否已经生成过佣金（使用字符串匹配订单号而非ID）
 	db := database.GetDB()
 	var existingCount int64
-	db.Model(&model.Commission{}).Where("order_id = ?", req.OrderID).Count(&existingCount)
+	// 查询订单获取订单ID
+	var order model.Order
+	if err := db.Where("order_no = ?", req.OrderID).First(&order).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"code": 4004, "message": "order not found"})
+		return
+	}
+	
+	db.Model(&model.Commission{}).Where("order_id = ?", order.ID).Count(&existingCount)
 	if existingCount > 0 {
 		c.JSON(http.StatusOK, gin.H{
 			"code": 0,
@@ -140,9 +147,9 @@ func (h *CommissionHandler) CreateCommissions(c *gin.Context) {
 		return
 	}
 
-	// 构建订单对象
-	order := commission.Order{
-		ID:             0,
+	// 构建订单对象（用于佣金计算）
+	commOrder := commission.Order{
+		ID:             int64(order.ID),
 		UserID:         req.PayerUserID,
 		TotalAmount:    calculateTotalAmount(req.Items),
 		ShippingAmount: req.ShippingCents,
@@ -154,17 +161,18 @@ func (h *CommissionHandler) CreateCommissions(c *gin.Context) {
 	directRate, indirectRate := h.getCommissionRates(*req.ReferrerUserID)
 
 	// 查找推荐人的上级（用于间接佣金）
-	var ancestor *model.ReferralClosure
-	db.Where("descendant_user_id = ? AND depth = 1", *req.ReferrerUserID).First(&ancestor)
+	// 查询推荐人的直接推荐人（depth=1的祖先）
+	var ancestorClosure model.ReferralClosure
+	db.Where("descendant_user_id = ? AND depth = 1", *req.ReferrerUserID).First(&ancestorClosure)
 	
 	// 计算佣金
-	records := commission.BuildCommissionRecords(order, *req.ReferrerUserID, directRate, indirectRate, 7)
+	records := commission.BuildCommissionRecords(commOrder, *req.ReferrerUserID, directRate, indirectRate, 7)
 	
-	// 如果有上级，设置间接佣金的接收者
-	if ancestor != nil {
+	// 如果推荐人有上级，设置间接佣金的接收者
+	if ancestorClosure.AncestorUserID > 0 && ancestorClosure.AncestorUserID != ancestorClosure.DescendantUserID {
 		for i := range records {
 			if records[i].CommissionType == "indirect" {
-				records[i].UserID = int64(ancestor.AncestorUserID)
+				records[i].UserID = int64(ancestorClosure.AncestorUserID)
 			}
 		}
 	} else {

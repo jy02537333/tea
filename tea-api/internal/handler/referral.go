@@ -201,7 +201,13 @@ func (h *ReferralHandler) ListReferredUsers(c *gin.Context) {
 	for _, ref := range referrals {
 		var user model.User
 		var profile model.UserProfile
-		db.First(&user, ref.ReferredUserID)
+		
+		if err := db.First(&user, ref.ReferredUserID).Error; err != nil {
+			// 用户不存在，跳过
+			continue
+		}
+		
+		// profile 可能不存在，使用默认值
 		db.Where("user_id = ?", ref.ReferredUserID).First(&profile)
 
 		userInfos = append(userInfos, ReferredUserInfo{

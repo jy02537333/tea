@@ -235,7 +235,17 @@ func (h *PrintHandler) RejectOrder(c *gin.Context) {
 	// 如果订单已支付，需要退款
 	if order.Status == 2 && order.PayAmount.GreaterThan(decimal.Zero) {
 		// TODO: 触发退款流程
-		// 这里应该调用退款服务
+		// 当前版本暂不自动退款，需要人工处理
+		// 在实际生产环境中，应该调用支付服务的退款API
+		// 建议：记录退款待处理记录，由后台管理员审核后执行退款
+		
+		// 记录需要退款的提示
+		orderLog := model.OrderLog{
+			OrderID:     uint(orderID),
+			Status:      "refund_required",
+			Description: "订单被拒绝，需要退款: " + order.PayAmount.String() + "元",
+		}
+		tx.Create(&orderLog)
 	}
 
 	if err := tx.Commit().Error; err != nil {
