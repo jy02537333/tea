@@ -150,10 +150,26 @@ jobs:
         run: |
           make verify-sprint-b-strict
 
+      - name: Show membership evidence snapshot
+        run: |
+          echo "==== membership_summary_after_purchase.json ===="
+          if [[ -f build-ci-logs/membership_summary_after_purchase.json ]]; then
+            cat build-ci-logs/membership_summary_after_purchase.json | sed -e 's/\t/  /g' || true
+          else
+            echo "(missing)";
+          fi
+          echo "==== membership_b_flow_checked.json ===="
+          if [[ -f build-ci-logs/membership_b_flow_checked.json ]]; then
+            cat build-ci-logs/membership_b_flow_checked.json | sed -e 's/\t/  /g' || true
+          else
+            echo "(missing)";
+          fi
+
       - name: Archive validation logs
         uses: actions/upload-artifact@v4
         with:
           name: api-validation-logs
+          retention-days: 7
           path: |
             build-ci-logs/api_validation/**
             build-ci-logs/api-validation-*.log
