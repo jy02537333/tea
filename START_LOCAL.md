@@ -11,6 +11,10 @@
 - wx-fe：9093
 - simple-server / auth-server（旧演示脚本）：建议也统一到 9292
 
+提示（本地联调）：
+- 后端 API 默认基础地址：`http://localhost:9292/api/v1`
+- 前端与工具脚本（如 `API_BASE`、`VITE_API_BASE_URL`、`WX_API_BASE_URL`）请统一指向 `http://localhost:9292`，避免误连到本机其他服务（如 `:8080`）。
+
 
 > Linux / macOS 说明：如果你在类 Unix 环境，建议参考 `doc/启动命令.md` 与根目录脚本 `run-tea-api.sh`（一键启动 API）以及 `tea-api/cmd/e2e_single_sku_order`（验证主链路）。本文其余内容维持 Windows + PowerShell 原始说明，后续会逐步清理。
 

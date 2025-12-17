@@ -311,6 +311,65 @@ PY
       record "order_create" "POST" "$BASE_URL/orders" "$ostatus" "$ok_combined" "order_id=${oid:-}"
     # Brief summary
     log "Cart+Order minimal flow attempted (product=$prod_id, sku=${sku_id:-})"
+
+      # If order created, fetch order detail and generate evidence files under build-ci-logs/
+      if [[ -n "$oid" ]]; then
+        DETAIL_PATH_ROOT="$ROOT_DIR/build-ci-logs"
+        mkdir -p "$DETAIL_PATH_ROOT"
+        order_detail=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/orders/$oid" || true)
+        echo "$order_detail" > "$OUT_DIR/GET__api_v1_orders_${oid}.json"
+        echo "$order_detail" > "$DETAIL_PATH_ROOT/order_detail_${oid}.json"
+
+        # Compute amounts summary and checked json via Python (no jq dependency)
+        python3 - <<'PY'
+    import sys, json, pathlib
+    root = pathlib.Path(sys.argv[1])
+    oid = sys.argv[2]
+    detail_text = (root / f"order_detail_{oid}.json").read_text(encoding='utf-8', errors='ignore')
+    try:
+      obj = json.loads(detail_text)
+      data = obj.get('data', obj) if isinstance(obj, dict) else {}
+    except Exception:
+      data = {}
+
+    def num(v):
+      try:
+        # Accept int/float/str
+        if isinstance(v, (int, float)):
+          return v
+        if isinstance(v, str):
+          return float(v) if ('.' in v) else int(v)
+      except Exception:
+        pass
+      return 0
+
+    summary = {
+      "order_id": data.get('id') or oid,
+      "store_id": data.get('store_id'),
+      "total_amount": num(data.get('total_amount')),
+      "discount_amount": num(data.get('discount_amount')),
+      "pay_amount": num(data.get('pay_amount')),
+    }
+    summary["check"] = (summary["pay_amount"] == (summary["total_amount"] - summary["discount_amount"]))
+
+    summary_path = root / 'order_amounts_summary.json'
+    checked_path = root / f'order_detail_{oid}_checked.json'
+
+    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
+    checked_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
+
+    # Also append a human readable line to local_api_summary.txt if present
+    summary_txt = root / 'local_api_summary.txt'
+    line = f"order_id={summary['order_id']}, store_id={summary.get('store_id')}, total={summary['total_amount']}, discount={summary['discount_amount']}, pay={summary['pay_amount']}, check={str(summary['check']).lower()}\n"
+    try:
+      with open(summary_txt, 'a', encoding='utf-8') as f:
+        f.write(line)
+    except Exception:
+      pass
+    PY
+        "$DETAIL_PATH_ROOT" "$oid"
+        log "Order evidence generated: order_detail_${oid}.json, order_amounts_summary.json, order_detail_${oid}_checked.json"
+      fi
   else
     log "No products returned; skipping cart/order minimal flow"
   fi

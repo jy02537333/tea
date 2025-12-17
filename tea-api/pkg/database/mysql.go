@@ -193,6 +193,20 @@ func InitDatabase() {
 		fmt.Println("Skipping DB init because TEA_SKIP_DB_INIT=1")
 		return
 	}
-	// 默认走 MySQL 初始化（仓库已禁用 SQLite 回退）
+	// 根据环境变量选择是否执行自动迁移
+	val := env.Get("TEA_AUTO_MIGRATE", "1")
+	fmt.Printf("[InitDatabase] TEA_AUTO_MIGRATE=%s\n", val)
+	if val == "0" {
+		fmt.Println("[InitDatabase] Using InitWithoutMigrate (skip auto migration)")
+		if _, err := InitWithoutMigrate(); err != nil {
+			log.Printf("InitWithoutMigrate failed: %v\n", err)
+			// 回退到带迁移的初始化以保证可用性
+			fmt.Println("[InitDatabase] Fallback to InitMySQL with auto migration")
+			InitMySQL()
+		}
+		return
+	}
+	fmt.Println("[InitDatabase] Using InitMySQL with auto migration (default)")
+	// 默认走 MySQL 初始化（执行自动迁移）
 	InitMySQL()
 }

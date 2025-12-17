@@ -42,9 +42,8 @@ rabbitmq:
     external_order: "tea_shop_external_order_queue"
 
 jwt:
-  secret: "tea-shop-jwt-secret-key-2023"
-  expires_time: 86400 # 24小时，单位秒
-  buffer_time: 86400
+  secret: "dev_secret_change_me"
+  expiryMinutes: 120
   issuer: "tea-shop"
 
 log:

@@ -48,6 +48,12 @@ func SetupRouter() *gin.Engine {
 	// API路由组
 	api := r.Group("/api/v1")
 
+	// 统一鉴权登录入口（Sprint B）
+	handler.RegisterAuthRoutes(api)
+
+	// Sprint B: 我的/个人中心聚合（最小连通性）
+	api.GET("/users/me/summary", middleware.AuthJWT(), handler.GetUserSummary)
+
 	// 会员相关（小程序/用户侧只读接口）
 	api.GET("/membership-packages", middleware.AuthMiddleware(), membershipHandler.ListPackages)
 	api.POST("/membership-orders", middleware.AuthMiddleware(), membershipHandler.CreateOrder)
@@ -57,6 +63,7 @@ func SetupRouter() *gin.Engine {
 	{
 		userGroup.POST("/login", userHandler.Login)
 		userGroup.POST("/dev-login", userHandler.DevLogin)
+		// 旧路由统一使用 AuthMiddleware（已改为新版密钥校验），避免校验分叉
 		userGroup.POST("/password", middleware.AuthMiddleware(), userHandler.ChangePassword)
 		userGroup.POST("/refresh", userHandler.Refresh)
 		userGroup.GET("/interest-records", middleware.AuthMiddleware(), accrualHandler.UserInterestRecords)
@@ -251,7 +258,7 @@ func SetupRouter() *gin.Engine {
 
 	// 购物车相关路由（需要登录）
 	cartGroup := api.Group("/cart")
-	cartGroup.Use(middleware.AuthMiddleware())
+	cartGroup.Use(middleware.AuthJWT())
 	{
 		cartGroup.GET("", cartHandler.List)
 		// 兼容两种写法：POST /cart 与 POST /cart/items 均视为“加入购物车”
@@ -264,7 +271,7 @@ func SetupRouter() *gin.Engine {
 
 	// 订单相关路由（需要登录）
 	orderGroup := api.Group("/orders")
-	orderGroup.Use(middleware.AuthMiddleware())
+	orderGroup.Use(middleware.AuthJWT())
 	{
 		orderGroup.POST("/from-cart", orderHandler.CreateFromCart)
 		orderGroup.POST("/available-coupons", orderHandler.AvailableCoupons)
@@ -287,22 +294,22 @@ func SetupRouter() *gin.Engine {
 	{
 		storeGroup.GET("", storeHandler.List)
 		storeGroup.GET(":id", storeHandler.Get)
-		storeGroup.POST("", middleware.AuthMiddleware(), storeHandler.Create)
-		storeGroup.PUT(":id", middleware.AuthMiddleware(), storeHandler.Update)
-		storeGroup.DELETE(":id", middleware.AuthMiddleware(), storeHandler.Delete)
+		storeGroup.POST("", middleware.AuthJWT(), storeHandler.Create)
+		storeGroup.PUT(":id", middleware.AuthJWT(), storeHandler.Update)
+		storeGroup.DELETE(":id", middleware.AuthJWT(), storeHandler.Delete)
 		// 门店收款账户管理（需要登录，可按角色控制）
-		storeGroup.GET(":id/accounts", middleware.AuthMiddleware(), storeHandler.ListAccounts)
-		storeGroup.POST(":id/accounts", middleware.AuthMiddleware(), storeHandler.CreateAccount)
-		storeGroup.PUT(":id/accounts/:accountId", middleware.AuthMiddleware(), storeHandler.UpdateAccount)
-		storeGroup.DELETE(":id/accounts/:accountId", middleware.AuthMiddleware(), storeHandler.DeleteAccount)
+		storeGroup.GET(":id/accounts", middleware.AuthJWT(), middleware.RequirePermission("store:accounts:view"), storeHandler.ListAccounts)
+		storeGroup.POST(":id/accounts", middleware.AuthJWT(), middleware.RequirePermission("store:accounts:manage"), storeHandler.CreateAccount)
+		storeGroup.PUT(":id/accounts/:accountId", middleware.AuthJWT(), middleware.RequirePermission("store:accounts:manage"), storeHandler.UpdateAccount)
+		storeGroup.DELETE(":id/accounts/:accountId", middleware.AuthJWT(), middleware.RequirePermission("store:accounts:manage"), storeHandler.DeleteAccount)
 		// 门店钱包与提现接口（需要登录，后续可按角色细化权限）
-		storeGroup.GET(":id/wallet", middleware.AuthMiddleware(), storeHandler.Wallet)
-		storeGroup.GET(":id/withdraws", middleware.AuthMiddleware(), storeHandler.ListWithdraws)
-		storeGroup.POST(":id/withdraws", middleware.AuthMiddleware(), storeHandler.ApplyWithdraw)
+		storeGroup.GET(":id/wallet", middleware.AuthJWT(), middleware.RequirePermission("store:wallet:view"), storeHandler.Wallet)
+		storeGroup.GET(":id/withdraws", middleware.AuthJWT(), middleware.RequirePermission("store:withdraw:view"), storeHandler.ListWithdraws)
+		storeGroup.POST(":id/withdraws", middleware.AuthJWT(), middleware.RequirePermission("store:withdraw:apply"), storeHandler.ApplyWithdraw)
 		// 门店优惠券接口（需要登录，后续可按角色细化权限）
-		storeGroup.GET(":id/coupons", middleware.AuthMiddleware(), couponHandler.ListStoreCoupons)
-		storeGroup.POST(":id/coupons", middleware.AuthMiddleware(), couponHandler.CreateStoreCoupon)
-		storeGroup.PUT(":id/coupons/:couponId", middleware.AuthMiddleware(), couponHandler.UpdateStoreCoupon)
+		storeGroup.GET(":id/coupons", middleware.AuthJWT(), middleware.RequirePermission("store:coupons:view"), couponHandler.ListStoreCoupons)
+		storeGroup.POST(":id/coupons", middleware.AuthJWT(), middleware.RequirePermission("store:coupons:manage"), couponHandler.CreateStoreCoupon)
+		storeGroup.PUT(":id/coupons/:couponId", middleware.AuthJWT(), middleware.RequirePermission("store:coupons:manage"), couponHandler.UpdateStoreCoupon)
 		// 门店活动接口（需要登录，后续可按角色细化权限）
 		storeGroup.GET(":id/activities", middleware.AuthMiddleware(), activityHandler.ListStoreActivities)
 		storeGroup.POST(":id/activities", middleware.AuthMiddleware(), activityHandler.CreateStoreActivity)
@@ -324,8 +331,8 @@ func SetupRouter() *gin.Engine {
 	activityGroup := api.Group("/activities")
 	{
 		activityGroup.GET("", activityHandler.ListActivities)
-		activityGroup.POST(":id/register", middleware.AuthMiddleware(), activityHandler.RegisterActivity)
-		activityGroup.POST(":id/register-with-order", middleware.AuthMiddleware(), activityHandler.RegisterActivityWithOrder)
+		activityGroup.POST(":id/register", middleware.AuthJWT(), middleware.RequirePermission("activity:register"), activityHandler.RegisterActivity)
+		activityGroup.POST(":id/register-with-order", middleware.AuthJWT(), middleware.RequirePermission("activity:register"), activityHandler.RegisterActivityWithOrder)
 	}
 
 	// 健康检查
@@ -339,13 +346,7 @@ func SetupRouter() *gin.Engine {
 		})
 	})
 
-	// 兼容旧前端路由：提供 /auth/* 别名（登录/开发登录/用户信息）
-	// 以及一个简单的 /auth/captcha 开发用接口（返回 id + code），便于 Admin-FE 的开发登录流程使用
-	// compatibility: accept legacy auth/login which may send form data
-	api.POST("/auth/login", handler.AuthLogin)
-	api.POST("/auth/dev-login", userHandler.DevLogin)
-	api.GET("/auth/me", middleware.AuthMiddleware(), userHandler.GetUserInfo)
-	api.GET("/auth/captcha", handler.AuthCaptcha)
+	// 已迁移至统一的 /api/v1/auth/* 新入口，避免重复与歧义。
 
 	// NOTE: legacy API-Server compatibility routes were intentionally removed to avoid
 	// registering duplicate handlers that are already implemented in the main codebase.
@@ -354,13 +355,13 @@ func SetupRouter() *gin.Engine {
 
 	// 支付（模拟）
 	payGroup := api.Group("/payment")
-	payGroup.Use(middleware.AuthMiddleware())
+	payGroup.Use(middleware.AuthJWT())
 	{
 		payGroup.POST("/intents", paymentHandler.CreateIntent)
 	}
 
 	userPaymentsGroup := api.Group("/payments")
-	userPaymentsGroup.Use(middleware.AuthMiddleware())
+	userPaymentsGroup.Use(middleware.AuthJWT())
 	{
 		userPaymentsGroup.POST("/unified-order", paymentHandler.UnifiedOrder)
 	}

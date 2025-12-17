@@ -5,6 +5,7 @@ on:
     branches: [ chore/hygiene-guards ]
   pull_request:
     branches: [ master ]
+  workflow_dispatch:
 
 jobs:
   stateful-api-check:
@@ -41,7 +42,7 @@ jobs:
       - name: Install system deps
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y netcat-openbsd
+          sudo apt-get install -y netcat-openbsd jq
 
       - name: Build tea-api
         working-directory: tea-api
@@ -92,6 +93,18 @@ jobs:
           EOF
           mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PASS" "$MYSQL_DB" < /tmp/seed.sql
 
+      - name: Seed demo user and membership data
+        if: env.CI_SEED == '1'
+        working-directory: tea-api
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_USER: root
+          DB_PASSWORD: root
+          DB_NAME: tea_shop
+        run: |
+          go run ./scripts/seed_demo_user.go
+
       - name: Run public API validation
         run: |
           bash scripts/run_api_validation.sh | tee build-ci-logs/api-validation-$(date +%Y%m%d%H%M%S).log
@@ -102,6 +115,41 @@ jobs:
         run: |
           bash scripts/local_api_check.sh | tee build-ci-logs/api-validation-stateful-$(date +%Y%m%d%H%M%S).log
 
+      - name: Admin dev-login (token for assertions)
+        run: |
+          mkdir -p build-ci-logs
+          LOGIN_URL="http://127.0.0.1:9292/api/v1/auth/login"
+          RESP_FILE="build-ci-logs/admin_login_response.json"
+          # Try username/password first
+          curl -sS -H 'Content-Type: application/json' -d '{"username":"admin","password":"pass"}' "$LOGIN_URL" -o "$RESP_FILE" || true
+          TOKEN=$(jq -r '.data.token // .token // empty' "$RESP_FILE" 2>/dev/null || echo "")
+          if [[ -z "$TOKEN" ]]; then
+            # Fallback to openid login
+            curl -sS -H 'Content-Type: application/json' -d '{"openid":"admin_openid"}' "$LOGIN_URL" -o "$RESP_FILE" || true
+            TOKEN=$(jq -r '.data.token // .token // empty' "$RESP_FILE" 2>/dev/null || echo "")
+          fi
+          if [[ -z "$TOKEN" ]]; then
+            echo "WARN: admin token not obtained; Sprint A assertions may skip or fail auth-dependent checks."
+          else
+            echo "Token acquired (truncated): ${TOKEN:0:12}..."
+          fi
+
+      - name: Sprint A verification assertions (strict)
+        env:
+          API_BASE_URL: http://127.0.0.1:9292
+        run: |
+          make verify-sprint-a-strict
+
+      - name: Run membership stateful flow (Sprint B)
+        env:
+          API_BASE: http://127.0.0.1:9292
+        run: |
+          bash scripts/run_membership_integration.sh | tee build-ci-logs/membership-flow-$(date +%Y%m%d%H%M%S).log
+
+      - name: Sprint B membership verification (strict)
+        run: |
+          make verify-sprint-b-strict
+
       - name: Archive validation logs
         uses: actions/upload-artifact@v4
         with:
@@ -111,6 +159,14 @@ jobs:
             build-ci-logs/api-validation-*.log
             build-ci-logs/api-validation-stateful-*.log
             build-ci-logs/tea-api.out
+            build-ci-logs/order_detail_*_checked.json
+            build-ci-logs/order_detail_*.json
+            build-ci-logs/order_amounts_summary.json
+            build-ci-logs/order_detail_156_checked.json
+            build-ci-logs/local_api_summary.txt
+            build-ci-logs/membership_summary_after_purchase.json
+            build-ci-logs/membership_b_flow_checked.json
+            build-ci-logs/membership-flow-*.log
 
       - name: Collect diagnostics on failure
         if: failure()

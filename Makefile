@@ -4,7 +4,7 @@ MAKEFLAGS += --warn-undefined-variables
 # Optional extra args, e.g. make package PACKAGE_ARGS="--os linux --arch amd64"
 PACKAGE_ARGS ?=
 
-.PHONY: up package test test-api test-admin-fe test-wx-fe
+.PHONY: up package test test-api test-admin-fe test-wx-fe verify-sprint-a verify-sprint-a-strict verify-sprint-b verify-sprint-b-strict
 
 up:
 	@echo "[make up] starting tea-api via run-tea-api.sh"
@@ -28,3 +28,19 @@ test-wx-fe:
 
 test: test-api test-admin-fe test-wx-fe
 	@echo "[make test] all tests finished"
+
+verify-sprint-a:
+	@echo "[make verify-sprint-a] asserting admin endpoints and order amount deduction"
+	bash scripts/assert_api_validation.sh
+
+verify-sprint-a-strict:
+	@echo "[make verify-sprint-a-strict] asserting with REQUIRE_ORDER_CHECK=1"
+	REQUIRE_ORDER_CHECK=1 bash scripts/assert_api_validation.sh
+
+verify-sprint-b:
+	@echo "[make verify-sprint-b] asserting Sprint B membership flow"
+	bash scripts/assert_membership_flow.sh
+
+verify-sprint-b-strict:
+	@echo "[make verify-sprint-b-strict] asserting Sprint B membership flow with REQUIRE_MEMBERSHIP_CHECK=1"
+	REQUIRE_MEMBERSHIP_CHECK=1 bash scripts/assert_membership_flow.sh

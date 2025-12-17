@@ -44,7 +44,7 @@ func main() {
 
 	baseURL := firstNonEmpty(*baseURLFlag, os.Getenv("BASE_URL"))
 	if baseURL == "" {
-		baseURL = "http://localhost:8080/api/v1"
+		baseURL = "http://localhost:9292/api/v1"
 	}
 
 	client := &http.Client{}

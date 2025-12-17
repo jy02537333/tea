@@ -10,7 +10,7 @@ import (
 )
 
 func Example_manual_run() {
-	baseURL := "http://localhost:8080/api/v1"
+	baseURL := "http://localhost:9292/api/v1"
 
 	// 测试健康检查
 	fmt.Println("=== 测试健康检查 ===")

@@ -24,18 +24,50 @@ Notes & tips:
 
 ## 移除 Git 历史中的大文件（推送被 100MB 限制阻断时）
 
-- 说明：GitHub 单文件限制 100MB。若历史中存在超限大文件，会导致推送失败（GH001）。可使用脚本重写历史移除超大 blob。
-- 先决条件：已安装 `git-filter-repo`（推荐 `pipx install git-filter-repo` 或 `pip3 install --user git-filter-repo`）。参考：<https://github.com/newren/git-filter-repo>
-- 风险提示：历史重写是破坏性操作，请先与团队确认；推送后协作者需要重新克隆或硬重置到新历史。
 - 使用步骤：
+## 本地开发端口约定
+
+- 后端 API 默认在 `:9292` 端口监听，基础地址为：`http://localhost:9292/api/v1`
+- 请将前端与工具脚本（如 `API_BASE`、`VITE_API_BASE_URL`、`WX_API_BASE_URL` 等）统一指向 `http://localhost:9292`，避免误连到其他本机服务（如 `:8080`）。
+- 如需变更端口，可在 `tea-api/configs/config.yaml` 或对应本地配置中调整，并同步更新前端环境变量。
+
+### 保持 9292 服务可用的运维提示
+
+- 遇到 `listen tcp :9292: bind: address already in use`，说明 9292 已被占用。
+- 请优先确保 `tea-api` 独占 9292，按照下列步骤处理：
+
+```
+# 查看哪个进程占用了 9292
+sudo lsof -iTCP:9292 -sTCP:LISTEN
+
+# 杀死占用 9292 的进程
+sudo fuser -k 9292/tcp
+
+# 重新启动 tea-api（选择你的方式之一）
+TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
+# 或
+./run-tea-api.sh
+```
+
+注意：不要切到 8080（常被其他服务占用）。统一坚持 9292，减少环境不一致带来的问题。
+ 
+## 统一登录与用户聚合接口（JWT v5）
+
+- 统一采用 JWT v5 登录与鉴权，后端基础地址：`http://localhost:9292/api/v1`。
+- 登录入口：`POST /api/v1/auth/login`（返回 `token` 与用户基础信息）。
+- 用户聚合信息：`GET /api/v1/users/me/summary`（需 `Authorization: Bearer <token>`）。
+- 所有脚本与联调请以以上两条路径为准，避免与历史实现（如 `/api/v1/user/login`、`/api/v1/user/info`）混用导致 Token 校验不一致。
+
+## 统一编译与启动名称（避免多二进制混用）
+
+- 为避免因不同可执行文件路由集不一致导致验证失败，统一仅使用单一二进制名：`tea-api`。
+- 编译与启动示例：
+  - 编译：在仓库根目录执行 `go build -o tea-api/tea-api ./tea-api`
+  - 启动：`TEA_JWT_SECRET=dev_secret_change_me ./tea-api/tea-api`
+- 清理旧二进制：如存在 `tea-api/server`、`tea-api/main`、`tea-api/main_no_migrate`，请删除，避免误启动历史路由实现。
   - 赋予脚本执行权限：`chmod +x scripts/remove-large-files.sh`
   - 在仓库根目录运行：`scripts/remove-large-files.sh`（默认阈值 100M，可传参自定义：`scripts/remove-large-files.sh 120M`）
   - 完成后按提示安全推送当前分支：`git push --force-with-lease origin $(git rev-parse --abbrev-ref HEAD)`
-  - 建议将产生大文件的路径加入 `.gitignore`，避免再次提交。
-
-## 维护工具用途摘要（Repository Hygiene Toolkit）
-
-- `scripts/remove-large-files.sh`: 当前分支历史大文件清理（剥离 `>100M` blob），用于解除 GitHub 100MB push 阻断；缺少 `git-filter-repo` 时会自动下载到 `~/.local/bin`；执行后需 `--force-with-lease` 推送并通知协作者对齐历史。
 - `scripts/remove-secrets.sh`: 按 push protection 告警从工作区与历史移除敏感路径（`--paths-from-file` + `--path-glob`），自动恢复 `origin` 并安全推送；适用于被阻断的功能分支自助修复。
 - `scripts/rewrite-master-history.sh`: 维护窗口内重写主分支历史的一键脚本，含备份分支创建、过滤规则、垃圾回收、远端恢复与安全强推；输出协作者对齐与回滚提示。
 - `docs/ci/history-rewrite-maintenance-plan.md`: 主分支历史重写的作业计划与操作手册（步骤、脚本引用、风险、迁移、回滚、沟通模版）。
@@ -62,3 +94,8 @@ Notes & tips:
 - `docs/features/store-order-link.md`：门店面板 ↔ 订单列表 ↔ 订单操作区联动的设计说明，文末包含建议的开发步骤，是门店与订单联动方向的实现指南。
 - `docs/prd-open-points.md`：PRD 中尚未完全敲定的开放问题和后续建议动作清单，可视为产品侧 Backlog 与决策待办。
 - `docs/frontend-backend-checklist.md`：前后端联调与提测前的检查清单，用于在提测/发布前核对 API、字段、状态枚举等是否与 PRD 和 API 文档保持一致。
+
+### 数据库设计文档（新增索引）
+
+- `doc/db_schema.md`：数据库表结构设计概览与说明（ER 概览、主要实体与关系、设计原则），用于后端与 DBA 对齐字段与关系。
+- `db/schema.sql`：完整的 MySQL DDL 建表脚本。请以此为准在本地或 CI 环境执行建表/迁移；如需转换到 Flyway/Go migrate，可参考 `docs/migration_instructions_for_dba.md`。

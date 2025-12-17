@@ -3,7 +3,7 @@ import Taro from '@tarojs/taro';
 
 declare const WX_API_BASE_URL: string | undefined;
 
-const DEFAULT_BASE_URL = 'http://127.0.0.1:8082';
+const DEFAULT_BASE_URL = 'http://127.0.0.1:9292';
 const BASE_URL =
   (typeof WX_API_BASE_URL !== 'undefined' && WX_API_BASE_URL) ||
   process.env.WX_API_BASE_URL ||

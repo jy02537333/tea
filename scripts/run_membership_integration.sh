@@ -1,34 +1,40 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+###############################
 # E2E integration for wx-fe pages and tea-api membership flow
+#
 # Steps:
 # 1) List membership packages
 # 2) Create membership order (user token)
 # 3) Create unified pay order
 # 4) Simulate payment callback
 # 5) List membership orders for user
+# 6) Fetch /api/v1/users/me/summary and check membership level
+#    -> 输出证据文件，供 CI 严格校验 Sprint B 关键路径
 #
 # Requirements:
-# - tea-api running locally (e.g., http://127.0.0.1:8080)
-# - ADMIN_TOKEN and USER_TOKEN exported (JWT strings)
-# - At least one membership package exists in DB
+# - tea-api running locally (e.g., http://127.0.0.1:9292)
 # - curl & jq installed
+# - USER_TOKEN（JWT）可以通过环境变量传入，或由本脚本自动从
+#   build-ci-logs/api_validation_stateful 及 admin_login_response.json 中提取
 #
-# Usage:
-#   export API_BASE="http://127.0.0.1:8080"
-#   export USER_TOKEN="<JWT>"
-#   export ADMIN_TOKEN="<JWT>" # if callback requires admin
+# Usage (local):
+#   export API_BASE="http://127.0.0.1:9292"
+#   export USER_TOKEN="<JWT>"   # 可选，若不提供则尝试自动发现
+#   export ADMIN_TOKEN="<JWT>"  # 可选，仅在部分环境下模拟回调需要
 #   ./scripts/run_membership_integration.sh
+###############################
 
-API_BASE=${API_BASE:-"http://127.0.0.1:8080"}
+API_BASE=${API_BASE:-"http://127.0.0.1:9292"}
 USER_TOKEN=${USER_TOKEN:-""}
 ADMIN_TOKEN=${ADMIN_TOKEN:-""}
 
-if [[ -z "$USER_TOKEN" ]]; then
-  echo "ERROR: USER_TOKEN is required. Export USER_TOKEN before running." >&2
-  exit 1
-fi
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+LOG_DIR="$ROOT_DIR/build-ci-logs"
+mkdir -p "$LOG_DIR"
+SUMMARY_FILE="$LOG_DIR/local_api_summary.txt"
+touch "$SUMMARY_FILE"
 
 have_jq=1
 command -v jq >/dev/null 2>&1 || have_jq=0
@@ -40,6 +46,31 @@ function pp_json() {
     cat
   fi
 }
+
+# 自动从已有日志中发现 USER_TOKEN（优先使用 stateful/dev-login 日志）
+if [[ -z "$USER_TOKEN" ]]; then
+  if [[ $have_jq -eq 1 ]]; then
+    CANDIDATES=(
+      "$ROOT_DIR/build-ci-logs/api_validation_stateful/POST__api_v1_auth_login.json"
+      "$ROOT_DIR/build-ci-logs/api_validation_stateful/POST__api_v1_auth_login_openid.json"
+      "$ROOT_DIR/build-ci-logs/admin_login_response.json"
+    )
+    for f in "${CANDIDATES[@]}"; do
+      if [[ -f "$f" ]]; then
+        USER_TOKEN=$(jq -r '.data.token // .token // empty' "$f" 2>/dev/null || echo "")
+        if [[ -n "$USER_TOKEN" ]]; then
+          echo "[membership] USER_TOKEN discovered from $f" >&2
+          break
+        fi
+      fi
+    done
+  fi
+fi
+
+if [[ -z "$USER_TOKEN" ]]; then
+  echo "ERROR: USER_TOKEN is required and could not be discovered from logs. Export USER_TOKEN or run stateful login first." >&2
+  exit 1
+fi
 
 function api_get() {
   local path="$1"
@@ -122,4 +153,23 @@ echo "[5] List membership orders (user)"
 orders_json=$(api_get "/api/v1/orders?order_type=4")
 echo "$orders_json" | pp_json
 
-echo "Done. Verify that the created order is paid/completed as expected."
+echo "[6] Fetch user summary after membership purchase"
+summary_json=$(api_get "/api/v1/users/me/summary")
+echo "$summary_json" | pp_json
+
+if [[ $have_jq -eq 1 ]]; then
+  echo "$summary_json" > "$LOG_DIR/membership_summary_after_purchase.json" || true
+  level=$(echo "$summary_json" | jq -r '.data.membership // .membership // empty')
+  # 约定：非空且不为 visitor/gues t 视为已升级
+  ok=false
+  if [[ -n "$level" && "$level" != "visitor" && "$level" != "guest" ]]; then
+    ok=true
+  fi
+  check_obj=$(jq -n --arg level "$level" --argjson ok "$([[ "$ok" == "true" ]] && echo true || echo false)" '{membership_level: $level, ok: $ok, source: "membership_summary_after_purchase.json"}')
+  echo "$check_obj" > "$LOG_DIR/membership_b_flow_checked.json" || true
+  echo "membership_flow: level=${level:-""}, ok=$ok" >> "$SUMMARY_FILE" || true
+else
+  echo "WARNING: jq not available; cannot persist membership evidence JSON" >&2
+fi
+
+echo "Done. Membership flow executed; evidence (if jq available) stored under $LOG_DIR."

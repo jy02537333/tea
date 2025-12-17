@@ -31,6 +31,38 @@
   - `admin-fe`：管理后台前端开发服务 `9094`
   - `wx-fe`：小程序 H5/模拟环境开发服务 `9093`
 
+#### 端口占用处理（保持 9292 独占）
+
+- 后端统一约定使用 `9292`。如遇到启动报错 `listen tcp :9292: bind: address already in use`，请按以下步骤处理，确保 `tea-api` 独占 9292：
+
+```
+# 查看哪个进程占用了 9292
+sudo lsof -iTCP:9292 -sTCP:LISTEN
+
+# 杀死占用 9292 的进程
+sudo fuser -k 9292/tcp
+
+# 重新启动 tea-api（选择你的方式之一）
+TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
+# 或
+./run-tea-api.sh
+```
+
+> 注：避免切换到 `8080` 等端口（常被其他服务占用），统一坚持 `9292`，以降低环境不一致导致的联调/测试问题。
+
+#### 鉴权与用户聚合（统一入口）
+
+- 鉴权采用 JWT v5 标准，统一登录接口：`POST /api/v1/auth/login`（返回 `token`）。
+- 用户个人中心聚合接口：`GET /api/v1/users/me/summary`（需 `Authorization: Bearer <token>`）。
+- 前后端联调、脚本与 E2E 测试一律以以上两条路径为准；历史实现（如 `/api/v1/user/login`、`/api/v1/user/info`）不再使用，避免 Token 实现不一致导致 401/403。
+
+#### 服务编译与启动（统一二进制名称）
+
+- 为保证路由集与鉴权中间件一致，后端统一使用单一二进制名：`tea-api`。
+- 编译命令：在仓库根目录执行 `go build -o tea-api/tea-api ./tea-api`
+- 启动命令：`TEA_JWT_SECRET=dev_secret_change_me ./tea-api/tea-api`
+- 清理说明：如本地存在历史可执行（`tea-api/server`、`tea-api/main`、`tea-api/main_no_migrate`），请删除后再统一以 `tea-api/tea-api` 启动，避免路由版本混用。
+
 ## 二、目标与成功指标
 
 - **上线可用指标**: 小程序首版实现商品浏览、门店点单、在线支付、订单管理、会员开通与基本分销记账。
@@ -99,6 +131,7 @@
 
 - **数据与接口设计文档**：
   - `doc/db_schema.md`：核心数据库表结构设计与字段说明（面向后端/DBA），与 API 文档及业务流程对齐。
+  - `db/schema.sql`：完整 MySQL DDL 建表脚本；作为实际迁移/建表的权威来源，需与 `doc/db_schema.md` 同步维护。
   - `tea-api/docs/api-orders.md`：订单相关 API（用户端 + 后台端）。
   - `tea-api/docs/api-cart-store-coupon.md`：购物车 / 门店 / 优惠券 API。
   - `tea-api/docs/order-flow-and-states.md`：订单端到端流程与状态机说明。
@@ -111,7 +144,41 @@
   - `docs/features/store-order-link.md`：门店面板 ↔ 订单列表 ↔ 订单操作区的联动设计文档，文末有开发步骤清单，是 M4 方向下门店与订单联动的执行指南。
   - `docs/prd-open-points.md`：PRD 中尚未完全敲定或标记为 `[]` 的开放问题与后续建议动作，可视为产品侧 Backlog 视图。
   - `docs/frontend-backend-checklist.md`：前后端联调与提测前的检查清单，帮助在认为「一个功能已完成」前，从接口、字段、状态枚举等角度做最后一轮自检。
+  - `doc/db_schema.md` / `db/schema.sql`：数据库设计与建表脚本的索引位置，便于在评审进度时快速定位数据层的完成度与变更。
   - Git 分支快照规则：当需要为「某一天的项目整体进度」打快照时，从主开发分支当前提交创建只读分支，命名为 `YYYYMMDD`（例如 `20251209`），该分支仅用于归档当天进度，不在其上继续开发。
+
+- **关键成功路径自动化与证据文件**：
+  - Sprint A（下单与抵扣验证）：
+    - 核心脚本与入口：
+      - `scripts/local_api_check.sh`：在本地/CI 中执行状态化下单路径（购物车→下单→订单详情），生成订单金额证据与人类可读摘要。
+      - `scripts/assert_api_validation.sh`：读取 `build-ci-logs/order_detail_*_checked.json` / `order_amounts_summary.json` 等证据，严格校验 `pay_amount = total_amount - discount_amount`，在严格模式下缺失证据即视为失败。
+      - Make 目标：`make verify-sprint-a` / `make verify-sprint-a-strict`（CI 中默认使用严格模式）。
+    - 典型证据文件（由脚本自动生成，并由 CI 归档）：
+      - `build-ci-logs/order_detail_*.json`：订单详情原始响应。
+      - `build-ci-logs/order_amounts_summary.json`：从详情提取的金额汇总与等式检查结果。
+      - `build-ci-logs/order_detail_*_checked.json`：带 `check=true/false` 字段的已校验结果。
+      - `build-ci-logs/local_api_summary.txt`：本地/CI 跑关键路径时的人类可读摘要（包含订单金额关系）。
+
+  - Sprint B（会员购买与权益生效验证）：
+    - 核心脚本与入口：
+      - `scripts/run_membership_integration.sh`：
+        - 自动发现 `USER_TOKEN`（优先使用 `build-ci-logs/api_validation_stateful/*.json` 和 `build-ci-logs/admin_login_response.json`）。
+        - 执行会员购买路径：`GET /api/v1/membership-packages` → `POST /api/v1/membership-orders` → `POST /api/v1/payments/unified-order` → 模拟支付回调 → `GET /api/v1/orders?order_type=4`。
+        - 在成功路径后调用 `GET /api/v1/users/me/summary`，并将会员等级相关字段落盘为证据文件。
+      - `scripts/assert_membership_flow.sh`：
+        - 读取 `build-ci-logs/membership_b_flow_checked.json`，要求 `.ok == true`（例如会员等级从 `visitor` 升级为非空的具体等级）。
+        - 在严格模式下（`REQUIRE_MEMBERSHIP_CHECK=1`）证据缺失或 `.ok != true` 会导致 CI 失败。
+      - Make 目标：`make verify-sprint-b` / `make verify-sprint-b-strict`，与 Sprint A 一致地提供非严格与严格两种断言入口。
+      - CI 工作流入口：`.github/workflows/api-validation.yml` 中的 `stateful-api-check` job，会按以下顺序执行：
+        1）拉起 MySQL / Redis 与 `tea-api`；
+        2）执行最小数据 seed 与 demo 用户 + 会员套餐 seed（`tea-api/scripts/seed_demo_user.go`）；
+        3）跑公共/状态化 API 校验与 Sprint A 严格断言；
+        4）调用 `scripts/run_membership_integration.sh` 生成会员购买/聚合视图证据；
+        5）执行 `make verify-sprint-b-strict`，作为 Sprint B 成功路径的 CI gate。
+    - 典型证据文件（由脚本自动生成，并由 CI 归档）：
+      - `build-ci-logs/membership_summary_after_purchase.json`：`GET /api/v1/users/me/summary` 的完整响应快照，用于回溯会员等级、钱包/积分/券数量等聚合字段。
+      - `build-ci-logs/membership_b_flow_checked.json`：从聚合视图提取的会员等级与布尔字段 `ok`，用于机器断言「会员购买是否在聚合视图中生效」。
+      - `build-ci-logs/membership-flow-*.log`：会员成功路径在 CI 中执行的详细日志，便于排查 token、路由或数据种子问题。
 
 > 说明：
 > 1）本 PRD 主要聚焦业务与交互层面的「做什么」和「大致怎么做」，具体字段、接口入参与状态流转细节，请以上述技术文档为准，并保持两侧同步维护。

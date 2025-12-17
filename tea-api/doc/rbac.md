@@ -54,7 +54,7 @@
 示例（已启动服务）：
 
 ```powershell
-./scripts/init_rbac_auditor.ps1 -BaseUrl http://localhost:8080 -OpenId my_auditor_openid
+./scripts/init_rbac_auditor.ps1 -BaseUrl http://localhost:9292 -OpenId my_auditor_openid
 ```
 
 示例（脚本内启动服务并初始化）：

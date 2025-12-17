@@ -14,8 +14,8 @@ const path = require('path');
   const targets = [
     { url: 'http://localhost:8000/index.html', name: 'admin_index' },
     { url: 'http://localhost:8000/login.html', name: 'admin_login' },
-    { url: 'http://localhost:8080/health', name: 'api_health' },
-    { url: 'http://localhost:8080/api/v1/admin/menus', name: 'api_admin_menus' }
+    { url: 'http://localhost:9292/api/v1/health', name: 'api_health' },
+    { url: 'http://localhost:9292/api/v1/admin/menus', name: 'api_admin_menus' }
   ];
 
   for (const t of targets) {

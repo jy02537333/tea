@@ -1,5 +1,5 @@
 server:
-  port: ":8080"
+  port: ":9292"
   mode: "debug" # debug, release, test
   read_timeout: 60
   write_timeout: 60
@@ -81,7 +81,7 @@ upload:
 
 system:
   env: "local" # local, dev, test, prod
-  addr: "localhost:8080"
+  addr: "localhost:9292"
   db_type: "mysql"
   use_multipoint: false
   use_redis: true

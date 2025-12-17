@@ -20,7 +20,7 @@ npx playwright install
 2. Run CI script (headless) — writes report into `tools/browser-login/reports/`:
 
 ```powershell
-#$env:ADMIN_FE_URL='http://localhost:8000'; $env:API_BASE='http://localhost:8080/api/v1'; $env:HEADLESS='1';
+#$env:ADMIN_FE_URL='http://localhost:8000'; $env:API_BASE='http://localhost:9292/api/v1'; $env:HEADLESS='1';
 #npx ts-node login-test-ci.ts
 npx ts-node login-test-ci.ts
 ```
@@ -28,7 +28,7 @@ npx ts-node login-test-ci.ts
 3. Run pure UI locally (for debugging; may be flaky in headless):
 
 ```powershell
-$env:ADMIN_FE_URL='http://localhost:8000'; $env:API_BASE='http://localhost:8080/api/v1'; $env:HEADLESS='1'; \
+$env:ADMIN_FE_URL='http://localhost:8000'; $env:API_BASE='http://localhost:9292/api/v1'; $env:HEADLESS='1'; \
 $env:REPORT_DIR='D:\\developTool\\work\\go\\tea\\tools\\browser-login\\reports'; node login-test-pure-ui.js
 ```
 
@@ -72,7 +72,7 @@ jobs:
         working-directory: tools/browser-login
         env:
           ADMIN_FE_URL: http://localhost:8000
-          API_BASE: http://localhost:8080/api/v1
+          API_BASE: http://localhost:9292/api/v1
           HEADLESS: '1'
         run: |
           npx ts-node login-test-ci.ts || exit 1

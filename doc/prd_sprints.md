@@ -29,6 +29,11 @@
 ### Sprint A — 关键 API（草案）
 
 - 用户鉴权说明：绝大多数用户相关或订单创建接口需要 `Authorization: Bearer <token>`（JWT 或 session token）。
+  
+ 统一登录与聚合（JWT v5）：
+ - 登录：`POST /api/v1/auth/login`（返回 `token` 与用户基础信息）。
+ - 个人中心聚合：`GET /api/v1/users/me/summary`（需携带 `Authorization: Bearer <token>`）。
+ - 联调与测试统一采用以上路径，避免与历史接口（如 `/api/v1/user/login`、`/api/v1/user/info`）混用。
 
 - GET /api/v1/products
   - 功能：获取商品列表（分页/筛选）
@@ -78,11 +83,52 @@
   - Body: 渠道回调格式
   - Response: 返回渠道要求的格式（XML/JSON）并在本地完成订单状态更新
 
+#### 下单与抵扣验证（本地记录）
+
+- 订单：`id=156`，`order_no=O20251216183530c37821`
+- 门店：`store_id=1`
+- 金额：`total_amount=396`，`discount_amount=60`（`coupon_id=24`），`pay_amount=336`
+- 严格校验：`pay_amount = total_amount - discount_amount`，代入 `396 - 60 = 336`，机器校验结果 `check=true`
+- 证据文件：
+  - `build-ci-logs/order_from_cart_store1_coupon24.json`
+  - `build-ci-logs/order_amounts_summary.json`
+  - `build-ci-logs/order_detail_156.json`
+  - `build-ci-logs/order_detail_156_checked.json`
+
+> 自动化与 CI 保护：
+> - 本地/CI 状态化脚本：`scripts/local_api_check.sh` 会在登录后完成最小下单路径（购物车→下单→订单详情），并生成以上订单金额证据文件与 `build-ci-logs/local_api_summary.txt`。
+> - 严格断言脚本：`scripts/assert_api_validation.sh` 读取 `order_detail_*_checked.json` / `order_amounts_summary.json` 等证据，严格校验 `pay_amount = total_amount - discount_amount`，`make verify-sprint-a[-strict]` 为统一入口。
+> - CI 集成：`.github/workflows/api-validation.yml` 中的 `stateful-api-check` job 会在公共 API、自状态化检查后执行 `make verify-sprint-a-strict`，并将上述证据文件作为工件归档，用于回归与审计。
+
+
 ---
 
 ## Sprint B（第4-5周） — 用户与会员体系
 
 目标：实现用户注册、登录、个人中心、钱包/茶币/积分/优惠券功能。支持会员开通购买流程。
+
+- ### Sprint B — 任务板（含接口/前端/测试）
+
+| 序号 | 模块 | 子任务 / 交付物 | 关键接口 / 代码位置 | 负责人 | 预计完成 | 完成情况 | 依赖 / 备注 |
+| ---- | ---- | ---------------- | -------------------- | ------ | -------- | -------- | ------------ |
+| B-01 | 后端 | 会员体系相关数据库迁移：新增/更新 `users` 扩展字段、`memberships`、`wallet_accounts`、`wallet_ledger`、`points_ledger`、`coupon_templates`、`user_coupons`、`user_bank_accounts`、`withdrawal_requests` | `db/migrations/*.sql`、`tea-api/pkg/database/migrate.go` | 陈伟（后端） | W4-D2 | [ ] | 需与 DBA 对齐字段命名及幂等策略 |
+| B-02 | 后端 | 聚合个人中心数据服务：实现 `GET /api/v1/users/me/summary`，补充 service/cache 层 | `tea-api/internal/handler/user_summary.go`、`tea-api/internal/service/profile` | 陈伟（后端） | W4-D3 | [ ] | 依赖 B-01 的表结构 |
+| B-03 | 后端 | 鉴权登录升级：支持手机号+验证码/微信登录合并，返回 token+用户信息 | `POST /api/v1/auth/login`、`tea-api/internal/handler/auth.go` | 刘敏（后端） | W4-D3 | [ ] | 需与短信/微信网关联调，关注幂等 |
+| B-04 | 后端 | 钱包接口：`GET /api/v1/wallet`、`GET /api/v1/wallet/transactions`、`POST /api/v1/wallet/withdrawals` 及风控校验 | `tea-api/internal/handler/wallet.go`、`tea-api/internal/service/wallet` | 刘敏（后端） | W4-D5 | [ ] | 依赖提现审批流程设计（B-07） |
+| B-05 | 后端 | 积分接口：查询、流水、可兑换商品列表；实现积分增减通用服务 | `GET /api/v1/points*`、`tea-api/internal/service/points` | 王磊（后端） | W4-D5 | [ ] | 与订单服务约定积分获取/消费事件 |
+| B-06 | 后端 | 优惠券接口：模板列表、领取、用户券列表；下单可用券查询 RPC | `GET /api/v1/coupons*`、`POST /api/v1/coupons/claim`、`tea-api/internal/service/coupon` | 王磊（后端） | W5-D1 | [ ] | 依赖营销规则配置，提供错误码 |
+| B-07 | 后端 | 提现账户管理与审批流：`/wallet/bank-accounts` CRUD、`/users/{id}/withdrawals`、`/admin/withdrawals` 审批 | `tea-api/internal/handler/withdrawal.go`、`tea-api/internal/service/withdrawal` | 陈伟（后端） | W5-D1 | [ ] | 需与财务确认限额；复用幂等键 |
+| B-08 | 后端 | 会员购买流程：`POST /api/v1/membership/purchase` -> 支付回调 -> 权益发放（茶币/优惠券/等级升级） | `tea-api/internal/handler/membership.go`、`tea-api/internal/service/membership` | 刘敏（后端） | W5-D2 | [ ] | 依赖支付回调完成度；需要幂等处理 |
+| B-09 | 后端 | 分享/门店管理员接口：`GET /api/v1/users/me/share-stats`、`GET /api/v1/users/me/store-role` | `tea-api/internal/handler/profile_extra.go` | 王磊（后端） | W5-D2 | [ ] | 需从分销/门店模块获取数据 |
+| B-10 | 前端 | 登录/注册页面逻辑（手机号验证码、微信授权）、Token 管理、中台登录态拦截 | `wx-fe/src/pages/auth/*`、`wx-fe/src/store/auth.ts` | 林晓（前端） | W4-D3 | [ ] | 依赖 B-03 登录接口 |
+| B-11 | 前端 | 「我的」首页聚合：头像、会员等级、余额/积分/券数量、订单入口 | `wx-fe/src/pages/mine/index.tsx` | 林晓（前端） | W4-D4 | [ ] | 依赖 B-02 API；与 UI 对齐 |
+| B-12 | 前端 | 钱包模块：余额详情、账单列表、提现申请、提现账户管理 | `wx-fe/src/pages/wallet/*`、`wx-fe/src/components/withdrawal/*` | 赵婷（前端） | W5-D1 | [ ] | 依赖 B-04、B-07 接口；需考虑多币种展示 |
+| B-13 | 前端 | 积分与优惠券模块：积分记录、积分商品跳转、券列表及状态切换 | `wx-fe/src/pages/points/*`、`wx-fe/src/pages/coupons/*` | 赵婷（前端） | W5-D1 | [ ] | 依赖 B-05、B-06 接口 |
+| B-14 | 前端 | 会员开通页：等级权益展示、购买流程、支付前后状态 | `wx-fe/src/pages/membership/*` | 林晓（前端） | W5-D2 | [ ] | 依赖 B-08 接口及支付 SDK |
+| B-15 | 前端 | 客服/分享/设置子模块：意见反馈、推广分享页、门店管理入口、设置页 | `wx-fe/src/pages/support/*`、`wx-fe/src/pages/share/*`、`wx-fe/src/pages/settings/*` | 周岚（前端） | W5-D2 | [ ] | 依赖 B-09 接口 |
+| B-16 | 测试 | 编写会员购买与权益验证 E2E：登录→购买→权益发放→会员中心展示 | `test/tea-api/sprint-b/membership_e2e.md`、`scripts/run_membership_integration.sh` | 朱洋（QA） | W5-D2 | [ ] | 依赖 B-08、B-11、B-14 |
+| B-17 | 测试 | 钱包提现全链路测试：申请、风控、审批、回款 | `test/tea-api/sprint-b/wallet_withdrawal.md`、`scripts/run_membership_integration.sh` | 朱洋（QA） | W5-D2 | [ ] | 依赖 B-04、B-07、B-12 |
+| B-18 | 测试 | 积分/优惠券功能测试：获取→下单抵扣→状态校验 | `test/tea-api/sprint-b/loyalty_coupon.md` | 朱洋（QA） | W5-D2 | [ ] | 依赖 B-05、B-06、B-13 |
 
 - 前端任务
   - 登录/注册流程，手机号 + 验证码登录、微信一键登录
@@ -97,6 +143,11 @@
 - 测试任务
   - 会员购买与权益生效验证
   - 优惠券在订单结算时生效并正确计算金额
+
+> 自动化与 CI 保护（会员购买成功路径）：
+> - 状态化脚本：`scripts/run_membership_integration.sh` 负责跑通会员套餐列表 → 创建会员订单 → 统一下单 → 模拟支付回调 → 查询会员订单 → 最后调用 `GET /api/v1/users/me/summary`，并将聚合视图快照与会员等级检查结果落盘为 `build-ci-logs/membership_summary_after_purchase.json`、`build-ci-logs/membership_b_flow_checked.json`。
+> - 严格断言脚本：`scripts/assert_membership_flow.sh` 读取 `membership_b_flow_checked.json`，要求 `.ok == true`（例如会员等级从 visitor 升级为具体等级）；`make verify-sprint-b[-strict]` 提供本地与 CI 统一入口。
+> - CI 集成：在 `.github/workflows/api-validation.yml` 的 `stateful-api-check` job 中，Sprint A 严格断言之后会执行上述会员脚本与 `make verify-sprint-b-strict`，并将相关 JSON 及日志文件作为工件归档，作为 Sprint B 会员成功路径的自动化保护。
 
 ### Sprint B — 我的/个人中心 & 钱包/积分/优惠券（任务拆分）
 
