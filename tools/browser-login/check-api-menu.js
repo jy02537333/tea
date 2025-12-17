@@ -6,7 +6,7 @@ const path = require('path');
   const ADMIN_FE_URL = process.env.ADMIN_FE_URL || 'http://localhost:8000/index.html';
   const REPORT_DIR = process.env.REPORT_DIR || path.join(__dirname, 'reports');
   const HEADLESS = (process.env.HEADLESS || '1') !== '0';
-  const API_BASE = process.env.API_BASE || 'http://localhost:8080/api/v1';
+  const API_BASE = process.env.API_BASE || 'http://localhost:9292/api/v1';
 
   if (!fs.existsSync(REPORT_DIR)) fs.mkdirSync(REPORT_DIR, { recursive: true });
 

@@ -169,7 +169,8 @@ type System struct {
 
 // Finance 财务相关配置
 type Finance struct {
-	Accrual Accrual `mapstructure:"accrual" json:"accrual" yaml:"accrual"`
+	Accrual           Accrual           `mapstructure:"accrual" json:"accrual" yaml:"accrual"`
+	CommissionRelease CommissionRelease `mapstructure:"commission_release" json:"commission_release" yaml:"commission_release"`
 }
 
 type Accrual struct {
@@ -182,6 +183,16 @@ type Accrual struct {
 	Timezone      string   `mapstructure:"timezone" json:"timezone" yaml:"timezone"`
 	SkipWeekends  bool     `mapstructure:"skip_weekends" json:"skip_weekends" yaml:"skip_weekends"`
 	Holidays      []string `mapstructure:"holidays" json:"holidays" yaml:"holidays"`
+}
+
+// CommissionRelease 佣金解冻调度配置
+type CommissionRelease struct {
+	Enabled       bool   `mapstructure:"enabled" json:"enabled" yaml:"enabled"`
+	Time          string `mapstructure:"time" json:"time" yaml:"time"` // HH:MM (24h)
+	UseRedisLock  bool   `mapstructure:"use_redis_lock" json:"use_redis_lock" yaml:"use_redis_lock"`
+	LockTTLSecond int    `mapstructure:"lock_ttl_second" json:"lock_ttl_second" yaml:"lock_ttl_second"`
+	Timezone      string `mapstructure:"timezone" json:"timezone" yaml:"timezone"`
+	BatchSize     int    `mapstructure:"batch_size" json:"batch_size" yaml:"batch_size"`
 }
 
 // Observability 可观测性配置

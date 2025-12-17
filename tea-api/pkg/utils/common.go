@@ -1,8 +1,10 @@
 package utils
 
 import (
+	"crypto/hmac"
 	"crypto/md5"
 	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"math/big"
@@ -43,6 +45,13 @@ func GenerateRandomString(length int) string {
 func MD5Hash(text string) string {
 	hash := md5.Sum([]byte(text))
 	return fmt.Sprintf("%x", hash)
+}
+
+// HMACSHA256Hex 计算 HMAC-SHA256 并返回十六进制字符串（小写）
+func HMACSHA256Hex(key, message string) string {
+	mac := hmac.New(sha256.New, []byte(key))
+	mac.Write([]byte(message))
+	return fmt.Sprintf("%x", mac.Sum(nil))
 }
 
 // StringInSlice 检查字符串是否在切片中

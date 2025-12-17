@@ -29,7 +29,7 @@ type Commission struct {
 type CommissionTransaction struct {
 	BaseModel
 	CommissionID  uint            `gorm:"index;not null" json:"commission_id"`
-	Type          string          `gorm:"type:varchar(32);not null" json:"type"` // release|withdraw|adjust|upgrade_reward|fee
+	Type          string          `gorm:"type:varchar(32);not null" json:"type"` // freeze|release|withdraw|adjust|upgrade_reward|fee
 	Amount        decimal.Decimal `gorm:"type:decimal(12,2);not null" json:"amount"`
 	BalanceAfter  decimal.Decimal `gorm:"type:decimal(12,2)" json:"balance_after"`
 	OperatorID    *uint           `gorm:"index" json:"operator_id"`

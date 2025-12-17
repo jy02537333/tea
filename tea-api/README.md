@@ -102,7 +102,7 @@ scripts\start.bat
 go run ./cmd -config=configs/config.yaml
 ```
 
-服务将在 `:8080` 端口启动。
+服务将在 `:9292` 端口启动。
 
 ## 文档索引
 

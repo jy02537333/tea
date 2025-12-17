@@ -17,9 +17,12 @@ func NewStoreInventoryService() *StoreInventoryService {
 	return &StoreInventoryService{db: database.GetDB()}
 }
 
-func (s *StoreInventoryService) Upsert(storeID, productID uint, stock int, priceOverride string) (*model.StoreProduct, error) {
+func (s *StoreInventoryService) Upsert(storeID, productID uint, stock int, priceOverride string, bizType int) (*model.StoreProduct, error) {
 	if storeID == 0 || productID == 0 {
 		return nil, errors.New("参数错误")
+	}
+	if bizType <= 0 {
+		bizType = 1
 	}
 	var d decimal.Decimal
 	if priceOverride != "" {
@@ -31,11 +34,11 @@ func (s *StoreInventoryService) Upsert(storeID, productID uint, stock int, price
 	} else {
 		d = decimal.Zero
 	}
-	sp := model.StoreProduct{StoreID: storeID, ProductID: productID, Stock: stock, PriceOverride: d}
+	sp := model.StoreProduct{StoreID: storeID, ProductID: productID, Stock: stock, PriceOverride: d, BizType: bizType}
 	// 使用原子 Upsert，避免多步事务在 SQLite 上造成锁竞争
 	if err := s.db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "store_id"}, {Name: "product_id"}},
-		DoUpdates: clause.Assignments(map[string]any{"stock": stock, "price_override": d}),
+		DoUpdates: clause.Assignments(map[string]any{"stock": stock, "price_override": d, "biz_type": bizType}),
 	}).Create(&sp).Error; err != nil {
 		return nil, err
 	}
@@ -47,7 +50,7 @@ func (s *StoreInventoryService) Upsert(storeID, productID uint, stock int, price
 	return &out, nil
 }
 
-func (s *StoreInventoryService) List(storeID uint, page, limit int) ([]model.StoreProduct, int64, error) {
+func (s *StoreInventoryService) List(storeID uint, page, limit int, bizType *int) ([]model.StoreProduct, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -55,6 +58,9 @@ func (s *StoreInventoryService) List(storeID uint, page, limit int) ([]model.Sto
 		limit = 20
 	}
 	q := s.db.Model(&model.StoreProduct{}).Where("store_id = ?", storeID)
+	if bizType != nil && *bizType > 0 {
+		q = q.Where("biz_type = ?", *bizType)
+	}
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err

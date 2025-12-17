@@ -43,16 +43,10 @@ func (h *UserHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// If request contains username/password: in dev env reuse the compatibility
-	// handler; in non-dev env perform production password verification.
+	// If request contains username/password: always verify against DB to ensure
+	// role in JWT reflects the user's actual role (incl. admin). Avoid
+	// delegating to dev AuthLogin here to prevent fallback tokens with wrong roles.
 	if req.Username != "" && req.Password != "" {
-		env := config.Config.System.Env
-		if env == "local" || env == "dev" {
-			AuthLogin(c)
-			return
-		}
-
-		// production flow: verify password against stored hash
 		resp, err := h.userService.LoginByUsername(req.Username, req.Password)
 		if err != nil {
 			utils.Error(c, utils.CodeError, "登录失败: "+err.Error())

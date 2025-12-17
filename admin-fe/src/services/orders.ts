@@ -1,4 +1,4 @@
-import { api, PaginatedResult, unwrap } from './api';
+import { api, PaginatedResult, unwrap, unwrapPagination } from './api';
 
 export interface AdminOrder {
   id: number;
@@ -32,6 +32,8 @@ export interface AdminOrderListParams {
   limit?: number;
   store_id?: number;
   status?: number;
+  start_time?: string; // RFC3339
+  end_time?: string;   // RFC3339
 }
 
 export async function getAdminOrders(params: AdminOrderListParams): Promise<PaginatedResult<AdminOrder>> {
@@ -63,4 +65,26 @@ export async function exportAdminOrders(params: AdminOrderListParams = {}) {
 export async function postOrderAction(id: number, action: string, body?: Record<string, any>) {
   const res = await api.post(`/api/v1/orders/${id}/${action}`, body ?? {});
   return unwrap(res);
+}
+
+// 兼容旧版示例页面 `OrderDetail` 所使用的 getOrder，
+// 这里复用管理端订单详情接口并返回其中的 order 对象。
+export async function getOrder(id: number) {
+  const detail = await getAdminOrderDetail(id);
+  return detail.order;
+}
+
+export interface StoreOrderListParams {
+  page?: number;
+  page_size?: number;
+  status?: number;
+  order_id?: number;
+}
+
+export async function getAdminStoreOrders(
+  storeId: number,
+  params: StoreOrderListParams
+): Promise<PaginatedResult<AdminOrder>> {
+  const res = await api.get(`/api/v1/admin/stores/${storeId}/orders`, { params });
+  return unwrapPagination<AdminOrder>(res);
 }

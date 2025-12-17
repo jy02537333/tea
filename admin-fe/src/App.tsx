@@ -8,10 +8,21 @@ import Login from './pages/Login';
 import Products from './pages/Products';
 import Categories from './pages/Categories';
 import Stores from './pages/Stores';
+import StoreOrders from './pages/StoreOrders';
+import StoreFinance from './pages/StoreFinance';
+import StoreCoupons from './pages/StoreCoupons';
+import StoreActivities from './pages/StoreActivities';
+import StoreAccounts from './pages/StoreAccounts';
+import StoreProducts from './pages/StoreProducts';
+import Tickets from './pages/Tickets';
 import Accrual from './pages/Accrual';
+import CommissionRollback from './pages/CommissionRollback';
+import FinanceSummary from './pages/FinanceSummary';
+import FinanceRecords from './pages/FinanceRecords';
 import Users from './pages/Users';
 import Rbac from './pages/Rbac';
 import Orders from './pages/Orders';
+import MembershipConfigPage from './pages/MembershipConfig';
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
   const { token, loading, logout } = useAuthContext();
@@ -50,6 +61,17 @@ export default function App() {
                   <Route path="products" element={<Products />} />
                   <Route path="categories" element={<Categories />} />
                   <Route path="stores" element={<Stores />} />
+                  <Route path="stores/:id/products" element={<StoreProducts />} />
+                  <Route path="stores/:id/orders" element={<StoreOrders />} />
+                  <Route path="store-finance" element={<StoreFinance />} />
+                  <Route path="store-accounts" element={<StoreAccounts />} />
+                  <Route path="store-coupons" element={<StoreCoupons />} />
+                  <Route path="store-activities" element={<StoreActivities />} />
+                  <Route path="tickets" element={<Tickets />} />
+                  <Route path="commission-rollback" element={<CommissionRollback />} />
+                  <Route path="finance-summary" element={<FinanceSummary />} />
+                  <Route path="finance-records" element={<FinanceRecords />} />
+                  <Route path="membership-config" element={<MembershipConfigPage />} />
                   <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
               </AppShell>

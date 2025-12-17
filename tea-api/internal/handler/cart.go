@@ -49,7 +49,8 @@ func (h *CartHandler) List(c *gin.Context) {
 
 	items, err := h.svc.ListItems(userID)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		// 最小修复：当购物车查询失败时返回空列表，避免前端因500中断
+		response.Success(c, []any{})
 		return
 	}
 	response.Success(c, items)

@@ -5,12 +5,16 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	repo "tea-api/internal/repo"
+	svc "tea-api/internal/service"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
 	"tea-api/internal/config"
+	"tea-api/internal/pkg/jwtcfg"
 	"tea-api/internal/router"
 	"tea-api/internal/scheduler"
 	"tea-api/pkg/database"
@@ -33,12 +37,32 @@ func main() {
 	}
 	defer logx.Sync()
 
-	// 初始化数据库（MySQL）
+	// 在初始化数据库之前打印关键运行配置（JWT 与路由占位）
+	cfg := jwtcfg.Get()
+	secret := cfg.Secret
+	src := "file"
+	if os.Getenv("TEA_JWT_SECRET") != "" {
+		src = "env"
+	}
+	fmt.Printf("JWT secret_len: %d, source: %s, exp_min: %d\n",
+		len(secret), src, cfg.ExpiryMinutes)
+
+	// 初始化数据库（MySQL/禁迁移可切换）
 	database.InitDatabase()
 	database.InitRedis()
 
+	// 注入用户汇总的依赖（全局）
+	svc.SetSummaryDeps(svc.SummaryDeps{
+		Wallet:     repo.NewWalletRepository(),
+		Points:     repo.NewPointsRepository(),
+		Coupons:    repo.NewCouponsRepository(),
+		Membership: repo.NewMembershipRepository(),
+	})
+
 	// 启动计息调度器（若启用）
 	scheduler.StartAccrualScheduler()
+	// 启动佣金解冻调度（若启用）
+	scheduler.StartCommissionReleaseScheduler()
 
 	fmt.Println("茶心阁小程序API服务启动成功!")
 	fmt.Printf("服务运行在: %s\n", config.Config.Server.Port)
@@ -53,6 +77,14 @@ func startServer() {
 
 	// 初始化路由
 	r := router.SetupRouter()
+
+	// 路由表打印（仅 debug/test 模式）
+	if config.Config.Server.Mode != "release" {
+		fmt.Println("Registered routes:")
+		for _, ri := range r.Routes() {
+			fmt.Printf("- %-6s %s -> %s\n", ri.Method, ri.Path, ri.Handler)
+		}
+	}
 
 	// 创建HTTP服务器
 	server := &http.Server{

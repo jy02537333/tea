@@ -1,5 +1,20 @@
 import { Layout, Menu, Typography } from 'antd';
-import { DashboardOutlined, EnvironmentOutlined, LogoutOutlined, ShopOutlined, TagsOutlined, BarChartOutlined, TeamOutlined, SafetyCertificateOutlined, ProfileOutlined } from '@ant-design/icons';
+import {
+  DashboardOutlined,
+  EnvironmentOutlined,
+  LogoutOutlined,
+  ShopOutlined,
+  TagsOutlined,
+  BarChartOutlined,
+  TeamOutlined,
+  SafetyCertificateOutlined,
+  ProfileOutlined,
+  AccountBookOutlined,
+  GiftOutlined,
+  FireOutlined,
+  CustomerServiceOutlined,
+  CreditCardOutlined,
+} from '@ant-design/icons';
 import { PropsWithChildren } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../hooks/useAuth';
@@ -24,6 +39,15 @@ export function AppShell({ children }: PropsWithChildren) {
   else if (location.pathname.startsWith('/orders')) selectedKey = '/orders';
   else if (location.pathname.startsWith('/categories')) selectedKey = '/categories';
   else if (location.pathname.startsWith('/stores')) selectedKey = '/stores';
+  else if (location.pathname.startsWith('/store-finance')) selectedKey = '/store-finance';
+  else if (location.pathname.startsWith('/store-accounts')) selectedKey = '/store-accounts';
+  else if (location.pathname.startsWith('/store-coupons')) selectedKey = '/store-coupons';
+  else if (location.pathname.startsWith('/store-activities')) selectedKey = '/store-activities';
+  else if (location.pathname.startsWith('/tickets')) selectedKey = '/tickets';
+  else if (location.pathname.startsWith('/commission-rollback')) selectedKey = '/commission-rollback';
+  else if (location.pathname.startsWith('/finance-summary')) selectedKey = '/finance-summary';
+  else if (location.pathname.startsWith('/finance-records')) selectedKey = '/finance-records';
+  else if (location.pathname.startsWith('/membership-config')) selectedKey = '/membership-config';
   else if (location.pathname === '/' || location.pathname === '') selectedKey = '/dashboard';
 
   return (
@@ -41,6 +65,15 @@ export function AppShell({ children }: PropsWithChildren) {
           <Menu.Item key="/accrual" icon={<BarChartOutlined />}>
             <Link to="/accrual">计提/报表</Link>
           </Menu.Item>
+          <Menu.Item key="/finance-summary" icon={<AccountBookOutlined />}>
+            <Link to="/finance-summary">财务概览</Link>
+          </Menu.Item>
+          <Menu.Item key="/finance-records" icon={<AccountBookOutlined />}>
+            <Link to="/finance-records">财务记录</Link>
+          </Menu.Item>
+          <Menu.Item key="/commission-rollback" icon={<AccountBookOutlined />}>
+            <Link to="/commission-rollback">佣金回滚</Link>
+          </Menu.Item>
           <Menu.Item key="/users" icon={<TeamOutlined />}>
             <Link to="/users">用户管理</Link>
           </Menu.Item>
@@ -55,6 +88,24 @@ export function AppShell({ children }: PropsWithChildren) {
           </Menu.Item>
           <Menu.Item key="/stores" icon={<EnvironmentOutlined />}>
             <Link to="/stores">门店管理</Link>
+          </Menu.Item>
+          <Menu.Item key="/store-finance" icon={<AccountBookOutlined />}>
+            <Link to="/store-finance">门店财务</Link>
+          </Menu.Item>
+          <Menu.Item key="/store-accounts" icon={<CreditCardOutlined />}>
+            <Link to="/store-accounts">门店收款账户</Link>
+          </Menu.Item>
+          <Menu.Item key="/store-coupons" icon={<GiftOutlined />}>
+            <Link to="/store-coupons">门店优惠券</Link>
+          </Menu.Item>
+          <Menu.Item key="/store-activities" icon={<FireOutlined />}>
+            <Link to="/store-activities">门店活动</Link>
+          </Menu.Item>
+          <Menu.Item key="/membership-config" icon={<CustomerServiceOutlined />}>
+            <Link to="/membership-config">会员配置</Link>
+          </Menu.Item>
+          <Menu.Item key="/tickets" icon={<CustomerServiceOutlined />}>
+            <Link to="/tickets">客服工单</Link>
           </Menu.Item>
           <Menu.Item key="/orders" icon={<ProfileOutlined />}>
             <Link to="/orders">订单管理</Link>

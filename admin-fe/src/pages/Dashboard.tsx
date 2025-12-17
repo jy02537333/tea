@@ -1,15 +1,19 @@
 import { useMemo, useState } from 'react';
-import { Button, Card, Col, DatePicker, Row, Space, Statistic, message } from 'antd';
+import { Button, Card, Col, DatePicker, Row, Space, Statistic, message, Select } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAccrualSummary, runAccrual } from '../services/accrual';
+import { getDashboardTodos, getOrderTrends, getDashboardSummary, type OrderTrendPoint } from '../services/dashboard';
+import { useNavigate } from 'react-router-dom';
 import type { RunAccrualResponse } from '../services/accrual';
+import TrendChart from '../components/TrendChart';
 
 const { RangePicker } = DatePicker;
 const DEFAULT_RANGE_DAYS = 7;
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [range, setRange] = useState<[Dayjs, Dayjs]>(() => {
     const end = dayjs();
@@ -25,6 +29,19 @@ export default function DashboardPage() {
   const summaryQuery = useQuery({
     queryKey: ['accrualSummary', params.start, params.end],
     queryFn: () => getAccrualSummary(params),
+    staleTime: 30_000,
+  });
+
+  const todosQuery = useQuery({
+    queryKey: ['dashboardTodos'],
+    queryFn: () => getDashboardTodos(),
+    staleTime: 30_000,
+  });
+
+  const [trendsDays, setTrendsDays] = useState<number>(DEFAULT_RANGE_DAYS);
+  const trendsQuery = useQuery<OrderTrendPoint[]>({
+    queryKey: ['orderTrends', trendsDays],
+    queryFn: () => getOrderTrends(trendsDays),
     staleTime: 30_000,
   });
 
@@ -45,6 +62,13 @@ export default function DashboardPage() {
     { key: 'total_interest', title: '累计利息', value: summaryQuery.data?.total_interest ?? '-' },
     { key: 'today_orders', title: '今日订单数', value: summaryQuery.data?.today_orders ?? '-' },
   ];
+
+  // 今日概览（后台 summary）
+  const dashSummaryQuery = useQuery({
+    queryKey: ['dashboardSummary'],
+    queryFn: () => getDashboardSummary(),
+    staleTime: 30_000,
+  });
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size={24}>
@@ -82,14 +106,92 @@ export default function DashboardPage() {
         ))}
       </Row>
 
-      <Card title="趋势图（占位）">
-        <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', border: '1px dashed #e0e0e0' }}>
-          图表区域（后续接入 ECharts / AntV）
-        </div>
+      <Row gutter={[16, 16]}>
+        <Col xs={24} sm={12} md={12}>
+          <Card loading={dashSummaryQuery.isLoading} title="今日概览">
+            <Space size={24} wrap>
+              <Statistic title="今日订单数" value={dashSummaryQuery.data?.today_order_count ?? 0} />
+              <Statistic title="今日已支付" value={dashSummaryQuery.data?.today_paid_order_count ?? 0} />
+              <Statistic title="今日销售额 (￥)" value={(dashSummaryQuery.data?.today_sales_amount ?? 0).toFixed(2)} />
+              <Statistic title="今日退款额 (￥)" value={(dashSummaryQuery.data?.today_refund_amount ?? 0).toFixed(2)} />
+            </Space>
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={12}>
+          <Card loading={dashSummaryQuery.isLoading} title="昨日 / 近7日 / 近30日">
+            <Space size={24} wrap>
+              <Statistic title="昨日已支付" value={dashSummaryQuery.data?.yesterday_paid_order_count ?? 0} />
+              <Statistic title="昨日销售额 (￥)" value={(dashSummaryQuery.data?.yesterday_sales_amount ?? 0).toFixed(2)} />
+              <Statistic title="昨日退款额 (￥)" value={(dashSummaryQuery.data?.yesterday_refund_amount ?? 0).toFixed(2)} />
+              <Statistic title="近7日已支付" value={dashSummaryQuery.data?.last7d_paid_order_count ?? 0} />
+              <Statistic title="近7日销售额 (￥)" value={(dashSummaryQuery.data?.last7d_sales_amount ?? 0).toFixed(2)} />
+              <Statistic title="近7日退款额 (￥)" value={(dashSummaryQuery.data?.last7d_refund_amount ?? 0).toFixed(2)} />
+              <Statistic title="近30日已支付" value={dashSummaryQuery.data?.last30d_paid_order_count ?? 0} />
+              <Statistic title="近30日销售额 (￥)" value={(dashSummaryQuery.data?.last30d_sales_amount ?? 0).toFixed(2)} />
+              <Statistic title="近30日退款额 (￥)" value={(dashSummaryQuery.data?.last30d_refund_amount ?? 0).toFixed(2)} />
+            </Space>
+          </Card>
+        </Col>
+      </Row>
+
+      <Card
+        title={`订单趋势（近${trendsDays}天）`}
+        extra={
+          <Space size={8}>
+            <Select
+              size="small"
+              style={{ width: 96 }}
+              value={trendsDays}
+              options={[
+                { label: '近7天', value: 7 },
+                { label: '近14天', value: 14 },
+                { label: '近30天', value: 30 },
+              ]}
+              onChange={(v) => setTrendsDays(v)}
+            />
+            <Button size="small" onClick={() => trendsQuery.refetch()} loading={trendsQuery.isFetching}>刷新</Button>
+          </Space>
+        }
+      >
+        {trendsQuery.isLoading ? (
+          <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb' }}>加载中...</div>
+        ) : trendsQuery.isError ? (
+          <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ff4d4f' }}>趋势数据加载失败</div>
+        ) : (
+          <TrendChart data={trendsQuery.data ?? []} />
+        )}
       </Card>
 
-      <Card title="最近任务 / 操作（占位）">
-        <p>这里可以展示最近计提任务、导出记录或操作日志。</p>
+      <Card title="待办事项">
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Space style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>待处理客服工单</span>
+            <Space>
+              <strong>{todosQuery.data?.ticket_pending_count ?? 0}</strong>
+              <Button type="link" size="small" onClick={() => navigate('/tickets')}>
+                前往处理
+              </Button>
+            </Space>
+          </Space>
+          <Space style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>待发货订单</span>
+            <Space>
+              <strong>{todosQuery.data?.order_to_ship_count ?? 0}</strong>
+              <Button type="link" size="small" onClick={() => navigate('/orders?status=paid')}>
+                查看订单
+              </Button>
+            </Space>
+          </Space>
+          <Space style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>待处理提现</span>
+            <Space>
+              <strong>{todosQuery.data?.withdraw_pending_count ?? 0}</strong>
+              <Button type="link" size="small" onClick={() => navigate('/finance/withdraws?status=pending')}>
+                查看提现
+              </Button>
+            </Space>
+          </Space>
+        </Space>
       </Card>
     </Space>
   );

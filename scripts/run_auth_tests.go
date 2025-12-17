@@ -23,7 +23,7 @@ func main() {
 	// allow overriding base URL and output dir for flexibility
 	var base string
 	var outDir string
-	flag.StringVar(&base, "base", "http://localhost:8080/api/v1", "API base URL")
+	flag.StringVar(&base, "base", "http://localhost:9292/api/v1", "API base URL")
 	flag.StringVar(&outDir, "out", ".", "Output directory (will contain devlogin_resp.json and results)")
 	flag.Parse()
 

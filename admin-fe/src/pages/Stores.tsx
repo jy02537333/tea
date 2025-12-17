@@ -8,6 +8,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Modal,
   Popconfirm,
   Select,
   Space,
@@ -18,17 +19,25 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { DownloadOutlined } from '@ant-design/icons';
+import { WITHDRAW_STATUS_LABELS } from '../constants/withdraw';
 import {
   Store,
   StoreListParams,
   StoreOrderStats,
+  StoreWalletSummary,
   StorePayload,
+  StoreWithdrawRecord,
+  applyStoreWithdraw,
   createStore,
   deleteStore,
   getStoreOrderStats,
+  getStoreWallet,
+  getStoreWithdraws,
   getStores,
   updateStore,
 } from '../services/stores';
+import { useNavigate } from 'react-router-dom';
 
 const STATUS_OPTIONS: { label: string; value?: number }[] = [
   { label: '全部', value: undefined },
@@ -62,14 +71,19 @@ interface FilterState {
 }
 
 export default function StoresPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<FilterState>({});
   const [pagination, setPagination] = useState({ page: 1, limit: 20 });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<Store | null>(null);
   const [statsStore, setStatsStore] = useState<Store | null>(null);
+  const [walletStore, setWalletStore] = useState<Store | null>(null);
+  const [walletPage, setWalletPage] = useState({ page: 1, limit: 20 });
+  const [walletStatus, setWalletStatus] = useState<number | undefined>(undefined);
   const [filterForm] = Form.useForm<FilterState>();
   const [form] = Form.useForm<StorePayload>();
+  const [withdrawForm] = Form.useForm<{ amount: number; remark?: string }>();
 
   const listParams: StoreListParams = useMemo(
     () => ({ page: pagination.page, limit: pagination.limit, status: filters.status }),
@@ -105,6 +119,16 @@ export default function StoresPage() {
 
   const closeStatsDrawer = () => {
     setStatsStore(null);
+  };
+
+  const openWalletModal = (store: Store) => {
+    setWalletStore(store);
+    withdrawForm.resetFields();
+  };
+
+  const closeWalletModal = () => {
+    setWalletStore(null);
+    withdrawForm.resetFields();
   };
 
   const openDrawer = (store?: Store) => {
@@ -156,6 +180,39 @@ export default function StoresPage() {
     },
   });
 
+  const walletQuery = useQuery<StoreWalletSummary | null>({
+    queryKey: ['store-wallet', walletStore?.id],
+    queryFn: () => getStoreWallet(walletStore!.id),
+    enabled: !!walletStore,
+  });
+
+  const withdrawListQuery = useQuery({
+    queryKey: ['store-withdraws', walletStore?.id, walletPage.page, walletPage.limit, walletStatus ?? 'all'],
+    queryFn: () =>
+      getStoreWithdraws(walletStore!.id, {
+        page: walletPage.page,
+        limit: walletPage.limit,
+        status: walletStatus,
+      }),
+    enabled: !!walletStore,
+  });
+
+  const withdrawMutation = useMutation({
+    mutationFn: async (payload: { amount: number; remark?: string }) => {
+      if (!walletStore) throw new Error('未选择门店');
+      return applyStoreWithdraw(walletStore.id, { amount: payload.amount, remark: payload.remark });
+    },
+    onSuccess: () => {
+      message.success('提现申请已提交');
+      queryClient.invalidateQueries({ queryKey: ['store-wallet', walletStore?.id] });
+      queryClient.invalidateQueries({ queryKey: ['store-withdraws', walletStore?.id] });
+      withdrawForm.resetFields();
+    },
+    onError: (error: any) => {
+      message.error(error?.message || '提现申请失败');
+    },
+  });
+
   const columns: ColumnsType<Store> = [
     { title: 'ID', dataIndex: 'id', width: 60 },
     { title: '门店名称', dataIndex: 'name', width: 200 },
@@ -182,9 +239,18 @@ export default function StoresPage() {
     {
       title: '操作',
       key: 'actions',
-      width: 200,
+      width: 260,
       render: (_, record) => (
         <Space>
+          <Button type="link" onClick={() => navigate(`/stores/${record.id}/orders`)}>
+            订单
+          </Button>
+          <Button type="link" onClick={() => openWalletModal(record)}>
+            钱包/提现
+          </Button>
+          <Button type="link" onClick={() => navigate(`/stores/${record.id}/products`)}>
+            商品
+          </Button>
           <Button type="link" onClick={() => openStatsDrawer(record)}>
             统计
           </Button>
@@ -364,6 +430,174 @@ export default function StoresPage() {
           </Space>
         )}
       </Drawer>
+
+      <Modal
+        title={walletStore ? `门店钱包 · ${walletStore.name}` : '门店钱包'}
+        open={!!walletStore}
+        onCancel={closeWalletModal}
+        footer={null}
+        width={720}
+        destroyOnClose
+      >
+        {walletQuery.isLoading && <Spin />}
+        {walletQuery.isError && <Alert type="error" message="无法获取钱包信息" showIcon />}
+        {walletQuery.data && (
+          <>
+            <Descriptions column={2} size="small" bordered>
+              <Descriptions.Item label="门店ID">{walletQuery.data.store_id}</Descriptions.Item>
+              <Descriptions.Item label="门店名称">{walletStore?.name}</Descriptions.Item>
+              <Descriptions.Item label="总收入">￥{Number(walletQuery.data.total_paid).toFixed(2)}</Descriptions.Item>
+              <Descriptions.Item label="总退款">￥{Number(walletQuery.data.total_refunded).toFixed(2)}</Descriptions.Item>
+              <Descriptions.Item label="总提现">￥{Number(walletQuery.data.total_withdrawn).toFixed(2)}</Descriptions.Item>
+              <Descriptions.Item label="可用余额">￥{Number(walletQuery.data.available).toFixed(2)}</Descriptions.Item>
+            </Descriptions>
+            <Divider />
+          </>
+        )}
+
+        <Space align="start" style={{ width: '100%' }} size={24}>
+          <Form
+            layout="vertical"
+            form={withdrawForm}
+            style={{ width: 260 }}
+            onFinish={(values) => withdrawMutation.mutate(values)}
+          >
+            <Form.Item label="提现状态筛选">
+              <Select
+                allowClear
+                placeholder="全部状态"
+                value={walletStatus}
+                onChange={(val) => {
+                  setWalletStatus(val);
+                  setWalletPage((prev) => ({ ...prev, page: 1 }));
+                }}
+                options={[
+                  { label: '申请中', value: 1 },
+                  { label: '处理中', value: 2 },
+                  { label: '已完成', value: 3 },
+                  { label: '已拒绝', value: 4 },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item
+              label="提现金额"
+              name="amount"
+              rules={[{ required: true, message: '请输入提现金额' }]}
+            >
+              <InputNumber
+                min={0.01}
+                max={walletQuery.data ? Number(walletQuery.data.available) : undefined}
+                step={0.01}
+                style={{ width: '100%' }}
+                placeholder="单位：元"
+              />
+            </Form.Item>
+            <Form.Item label="备注" name="remark">
+              <Input.TextArea rows={3} maxLength={200} showCount />
+            </Form.Item>
+            <Form.Item>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={withdrawMutation.isPending}
+                disabled={
+                  walletQuery.isLoading ||
+                  !!walletQuery.error ||
+                  !walletQuery.data ||
+                  Number(walletQuery.data.available) <= 0
+                }
+              >
+                提交提现申请
+              </Button>
+            </Form.Item>
+          </Form>
+
+          <div style={{ flex: 1 }}>
+            <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+              <Divider orientation="left" style={{ margin: '0' }}>
+                提现记录
+              </Divider>
+              <Button
+                size="small"
+                type="default"
+                icon={<DownloadOutlined />}
+                disabled={!withdrawListQuery.data || withdrawListQuery.data.list.length === 0}
+                onClick={() => {
+                  const data = withdrawListQuery.data?.list ?? [];
+                  if (!data.length) return;
+                  const header = [
+                    'ID',
+                    '时间',
+                    '单号',
+                    '金额',
+                    '手续费',
+                    '实付金额',
+                    '状态',
+                    '备注',
+                  ];
+                  const rows = data.map((it) => [
+                    it.id,
+                    it.created_at ?? '',
+                    it.withdraw_no,
+                    it.amount,
+                    it.fee,
+                    it.actual_amount,
+                    WITHDRAW_STATUS_LABELS[it.status] ?? `状态${it.status}`,
+                    (it.remark ?? '').replace(/\n/g, ' '),
+                  ]);
+                  const csv = [header, ...rows]
+                    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+                    .join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `store_withdraws_${walletStore?.id}_${walletPage.page}.csv`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  window.URL.revokeObjectURL(url);
+                }}
+              >
+                导出当前页
+              </Button>
+            </Space>
+            {withdrawListQuery.isLoading && <Spin />}
+            {withdrawListQuery.isError && (
+              <Alert type="error" message="无法获取提现记录" showIcon />
+            )}
+            {withdrawListQuery.data && (
+              <Table<StoreWithdrawRecord>
+                size="small"
+                rowKey="id"
+                dataSource={withdrawListQuery.data.list}
+                pagination={{
+                  current: walletPage.page,
+                  pageSize: walletPage.limit,
+                  total: withdrawListQuery.data.total,
+                  showSizeChanger: true,
+                  onChange: (page, pageSize) =>
+                    setWalletPage({ page, limit: pageSize || walletPage.limit }),
+                }}
+                columns={[
+                  { title: '时间', dataIndex: 'created_at', width: 160 },
+                  { title: '单号', dataIndex: 'withdraw_no', width: 160 },
+                  { title: '金额', dataIndex: 'amount', width: 100 },
+                  { title: '手续费', dataIndex: 'fee', width: 100 },
+                  { title: '实付金额', dataIndex: 'actual_amount', width: 100 },
+                  {
+                    title: '状态',
+                    dataIndex: 'status',
+                    width: 100,
+                    render: (val: number) => WITHDRAW_STATUS_LABELS[val] ?? `状态${val}`,
+                  },
+                  { title: '备注', dataIndex: 'remark' },
+                ]}
+              />
+            )}
+          </div>
+        </Space>
+      </Modal>
     </Space>
   );
 }

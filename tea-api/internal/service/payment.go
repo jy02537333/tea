@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -134,9 +135,37 @@ func (s *PaymentService) HandleCallback(payload PaymentCallbackPayload) error {
 	}
 	if !payload.SkipVerify {
 		secret := config.Config.WeChat.APIKey
-		expected := strings.ToUpper(utils.MD5Hash(fmt.Sprintf("%s|%s|%s", payload.PaymentNo, payload.TradeState, secret)))
-		if payload.Sign == "" || payload.Sign != expected {
-			return errors.New("签名校验失败")
+		// 严格 HMAC 路径：规范化 JSON（移除 sign，按 key 排序，紧凑编码）后计算 HMAC
+		var obj map[string]any
+		if err := json.Unmarshal([]byte(payload.RawBody), &obj); err != nil {
+			return fmt.Errorf("invalid json body: %v", err)
+		}
+		delete(obj, "sign")
+		keys := make([]string, 0, len(obj))
+		for k := range obj {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		var bldr strings.Builder
+		bldr.WriteString("{")
+		for i, k := range keys {
+			v := obj[k]
+			val, _ := json.Marshal(v)
+			bldr.WriteString("\"")
+			bldr.WriteString(k)
+			bldr.WriteString("\":")
+			bldr.Write(val)
+			if i < len(keys)-1 {
+				bldr.WriteString(",")
+			}
+		}
+		bldr.WriteString("}")
+		canonical := bldr.String()
+		hmacExpected := utils.HMACSHA256Hex(secret, canonical)
+		// 兼容旧版：MD5(payment_no|trade_state|secret) 大写
+		legacyExpected := strings.ToUpper(utils.MD5Hash(fmt.Sprintf("%s|%s|%s", payload.PaymentNo, payload.TradeState, secret)))
+		if payload.Sign == "" || (payload.Sign != hmacExpected && payload.Sign != legacyExpected) {
+			return fmt.Errorf("签名校验失败: expected=%s got=%s", hmacExpected, payload.Sign)
 		}
 	}
 	return s.db.Transaction(func(tx *gorm.DB) error {
@@ -182,7 +211,20 @@ func (s *PaymentService) HandleCallback(payload PaymentCallbackPayload) error {
 		order.Status = 2
 		order.PayStatus = 2
 		order.PaidAt = paidAt
-		return tx.Save(&order).Error
+		if err := tx.Save(&order).Error; err != nil {
+			return err
+		}
+
+		// 若该订单关联活动报名记录，则将报名状态从「已报名」更新为「已支付报名」
+		// 测试环境可能不存在该表，先探测再更新
+		if tx.Migrator().HasTable(&model.ActivityRegistration{}) {
+			if err := tx.Model(&model.ActivityRegistration{}).
+				Where("order_id = ? AND status = ?", order.ID, 1).
+				Update("status", 2).Error; err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 

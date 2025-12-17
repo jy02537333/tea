@@ -39,16 +39,25 @@ type Refund struct {
 	Payment Payment `gorm:"foreignKey:PaymentID"`
 }
 
+// 提现状态常量
+const (
+	WithdrawStatusPending    = 1 // 申请中
+	WithdrawStatusProcessing = 2 // 处理中
+	WithdrawStatusCompleted  = 3 // 已完成
+	WithdrawStatusRejected   = 4 // 已拒绝
+)
+
 // WithdrawRecord 提现记录模型
 type WithdrawRecord struct {
 	BaseModel
 	UserID       uint            `gorm:"index;not null" json:"user_id"`
+	StoreID      uint            `gorm:"index;default:0" json:"store_id"`
 	WithdrawNo   string          `gorm:"type:varchar(64);uniqueIndex;not null" json:"withdraw_no"`
 	Amount       decimal.Decimal `gorm:"type:decimal(10,2);not null" json:"amount"`
 	Fee          decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"fee"`
 	ActualAmount decimal.Decimal `gorm:"type:decimal(10,2);not null" json:"actual_amount"`
 	WithdrawType int             `gorm:"type:tinyint;not null" json:"withdraw_type"` // 1:微信转账
-	Status       int             `gorm:"type:tinyint;default:1" json:"status"`       // 1:申请中 2:处理中 3:已完成 4:已拒绝
+	Status       int             `gorm:"type:tinyint;default:1" json:"status"`       // 参见 WithdrawStatus* 常量
 	Remark       string          `gorm:"type:varchar(200)" json:"remark"`
 	ProcessedAt  *time.Time      `json:"processed_at"`
 	ProcessedBy  uint            `json:"processed_by"`

@@ -1,9 +1,12 @@
-import { useCallback, useMemo, useState } from 'react';
-import { Button, Descriptions, Divider, Drawer, Form, Input, InputNumber, Popconfirm, Select, Space, Table, Tag, Typography, message } from 'antd';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Button, Descriptions, Divider, Drawer, Form, Input, Popconfirm, Select, Space, Table, Tag, Typography, message, DatePicker } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AdminOrder, AdminOrderItem, AdminOrderListParams, exportAdminOrders, getAdminOrderDetail, getAdminOrders, postOrderAction } from '../services/orders';
+import type { Store } from '../services/stores';
+import { useStores } from '../hooks/useStores';
 import { useAuthContext } from '../hooks/useAuth';
 
 const { Title } = Typography;
@@ -120,16 +123,59 @@ interface FilterValues {
   status?: number;
   store_id?: number;
   order_no?: string;
+  date_range?: [any, any];
 }
 
 export default function OrdersPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const initialStoreId = searchParams.get('storeId');
+  const initialOrderId = searchParams.get('orderId');
+
   const queryClient = useQueryClient();
   const { hasPermission } = useAuthContext();
-  const [filters, setFilters] = useState<FilterValues>({});
+  const [filters, setFilters] = useState<FilterValues>({
+    store_id: initialStoreId ? Number(initialStoreId) || undefined : undefined,
+  });
   const [pagination, setPagination] = useState({ page: 1, limit: 20 });
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [detailId, setDetailId] = useState<number | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState<boolean>(!!initialOrderId);
+  const [detailId, setDetailId] = useState<number | null>(initialOrderId ? Number(initialOrderId) || null : null);
   const [filterForm] = Form.useForm<FilterValues>();
+  const [storeDropdownOpen, setStoreDropdownOpen] = useState(false);
+  const storesQuery = useStores({ enabled: storeDropdownOpen });
+  const storeOptions = useMemo(
+    () => (storesQuery.data?.list ?? []).map((s: Store) => ({ label: `${s.name}（#${s.id}）`, value: s.id })),
+    [storesQuery.data?.list]
+  );
+
+  // 根据 URL 中的 storeId 初始化筛选表单里的门店 ID
+  useEffect(() => {
+    if (initialStoreId) {
+      const parsed = Number(initialStoreId);
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        filterForm.setFieldsValue({ store_id: parsed });
+      }
+    }
+  }, [filterForm, initialStoreId]);
+
+  // 保持 URL 与当前选中订单同步，便于刷新后还原状态
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (detailId) {
+      params.set('orderId', String(detailId));
+    } else {
+      params.delete('orderId');
+    }
+    if (filters.store_id) {
+      params.set('storeId', String(filters.store_id));
+    } else {
+      params.delete('storeId');
+    }
+    navigate({ search: params.toString() ? `?${params.toString()}` : '' }, { replace: true });
+    // 仅在 detailId 或 filters.store_id 变化时更新 URL
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailId, filters.store_id]);
 
   const listParams: AdminOrderListParams = useMemo(
     () => ({
@@ -137,12 +183,22 @@ export default function OrdersPage() {
       limit: pagination.limit,
       store_id: filters.store_id,
       status: filters.status,
+      start_time: filters.date_range?.[0] ? new Date(filters.date_range[0].toDate ? filters.date_range[0].toDate() : filters.date_range[0]).toISOString() : undefined,
+      end_time: filters.date_range?.[1] ? new Date(filters.date_range[1].toDate ? filters.date_range[1].toDate() : filters.date_range[1]).toISOString() : undefined,
     }),
-    [filters.status, filters.store_id, pagination.limit, pagination.page]
+    [filters.status, filters.store_id, filters.date_range, pagination.limit, pagination.page]
   );
 
   const ordersQuery = useQuery({
-    queryKey: ['adminOrders', listParams.page, listParams.limit, listParams.store_id ?? 'all', listParams.status ?? 'all'],
+    queryKey: [
+      'adminOrders',
+      listParams.page,
+      listParams.limit,
+      listParams.store_id ?? 'all',
+      listParams.status ?? 'all',
+      listParams.start_time ?? 'none',
+      listParams.end_time ?? 'none',
+    ],
     queryFn: () => getAdminOrders(listParams),
     placeholderData: keepPreviousData,
   });
@@ -160,11 +216,40 @@ export default function OrdersPage() {
 
   const exportMutation = useMutation({
     mutationFn: async () => {
-      const blob = await exportAdminOrders({ store_id: filters.store_id, status: filters.status });
+      const blob = await exportAdminOrders({
+        store_id: filters.store_id,
+        status: filters.status,
+        start_time: filters.date_range?.[0]
+          ? new Date(filters.date_range[0].toDate ? filters.date_range[0].toDate() : filters.date_range[0]).toISOString()
+          : undefined,
+        end_time: filters.date_range?.[1]
+          ? new Date(filters.date_range[1].toDate ? filters.date_range[1].toDate() : filters.date_range[1]).toISOString()
+          : undefined,
+      });
+      const formatDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const sanitize = (name: string) =>
+        name
+          .replace(/\s+/g, '-') // 空格转为连字符
+          .replace(/[^a-zA-Z0-9\-_.\u4e00-\u9fa5]/g, '') // 移除不安全字符（保留中英文、数字、-_.）
+          .slice(0, 60); // 限制长度，避免极端情况
+      const storeName = (() => {
+        if (!filters.store_id) return 'all-stores';
+        const s = (storesQuery.data?.list ?? []).find((x: any) => x.id === filters.store_id);
+        return s ? `store-${sanitize(s.name)}-#${s.id}` : `store-#${filters.store_id}`;
+      })();
+      const rangeLabel = (() => {
+        const [startRaw, endRaw] = filters.date_range ?? [];
+        if (!startRaw && !endRaw) return 'all-time';
+        const start = startRaw ? new Date(startRaw.toDate ? startRaw.toDate() : startRaw) : null;
+        const end = endRaw ? new Date(endRaw.toDate ? endRaw.toDate() : endRaw) : null;
+        if (start && end) return `${formatDate(start)}_to_${formatDate(end)}`;
+        if (start) return `${formatDate(start)}_to_unknown`;
+        return `unknown_to_${formatDate(end!)}`;
+      })();
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = 'orders_export.csv';
+      anchor.download = `orders_${storeName}_${rangeLabel}.csv`;
       document.body.appendChild(anchor);
       anchor.click();
       document.body.removeChild(anchor);
@@ -272,6 +357,7 @@ export default function OrdersPage() {
       status: values.status,
       store_id: values.store_id,
       order_no: values.order_no?.trim(),
+      date_range: values.date_range,
     });
     setPagination((prev) => ({ ...prev, page: 1 }));
   };
@@ -289,11 +375,23 @@ export default function OrdersPage() {
           <Form.Item name="order_no" label="订单号">
             <Input allowClear placeholder="模糊搜索订单号" />
           </Form.Item>
-          <Form.Item name="store_id" label="门店ID">
-            <InputNumber min={1} style={{ width: 160 }} placeholder="门店 ID" />
+          <Form.Item name="store_id" label="门店">
+            <Select
+              allowClear
+              showSearch
+              style={{ width: 240 }}
+              loading={storesQuery.isLoading}
+              placeholder={storesQuery.isLoading ? '加载门店...' : '选择门店'}
+              optionFilterProp="label"
+              options={storeOptions}
+              onDropdownVisibleChange={(open) => setStoreDropdownOpen(open)}
+            />
           </Form.Item>
           <Form.Item name="status" label="状态">
             <Select allowClear style={{ width: 160 }} options={ORDER_STATUS_OPTIONS} />
+          </Form.Item>
+          <Form.Item name="date_range" label="日期范围">
+            <DatePicker.RangePicker showTime allowClear style={{ width: 260 }} />
           </Form.Item>
           <Form.Item>
             <Space>

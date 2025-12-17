@@ -7,6 +7,14 @@ mkdir -p "$OUT_DIR"
 SUMMARY="$OUT_DIR/summary.txt"
 : > "$SUMMARY"
 
+# Pre-check: verify DB schema before API validation
+if [[ -x "$ROOT/scripts/db_schema_check.sh" ]]; then
+  echo "Running DB schema check..." >> "$SUMMARY"
+  DB_HOST="${DB_HOST:-127.0.0.1}" DB_PORT="${DB_PORT:-3308}" DB_USER="${DB_USER:-root}" DB_PASSWORD="${DB_PASSWORD:-gs963852}" DB_NAME="${DB_NAME:-tea_shop}" \
+    "$ROOT/scripts/db_schema_check.sh" >> "$SUMMARY" 2>&1 || echo "DB schema check failed (continuing)." >> "$SUMMARY"
+  echo >> "$SUMMARY"
+fi
+
 BASE="${BASE:-http://127.0.0.1:9292}"
 TOKEN_FILE="${TOKEN_FILE:-$ROOT/build-ci-logs/admin_login_response.json}"
 TOKEN=""

@@ -42,6 +42,11 @@ export function unwrap<T>(response: any): T {
   return response?.data as T;
 }
 
+// 兼容旧代码中的 unwrapResponse 命名
+export function unwrapResponse<T>(response: any): T {
+  return unwrap<T>(response);
+}
+
 export interface PaginatedResult<T> {
   list: T[];
   total: number;
@@ -58,3 +63,6 @@ export function unwrapPagination<T>(response: any): PaginatedResult<T> {
     limit: payload.limit ?? 20,
   };
 }
+
+// 兼容旧代码默认导出 api
+export default api;

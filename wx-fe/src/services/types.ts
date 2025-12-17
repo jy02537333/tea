@@ -112,10 +112,56 @@ export interface Coupon {
   expire_at?: string;
 }
 
+// 小程序侧用户持有优惠券（与后端 UserCoupon/Coupon 模型对齐的精简版）
+export interface UserCoupon {
+  id: number; // user_coupon id
+  status: number; // 1未使用 2已使用 3已过期
+  used_at?: string | null;
+  order_id?: number | null;
+  coupon: {
+    id: number;
+    store_id?: number | null; // 为空表示平台券，非空表示门店券
+    name: string;
+    type: number; // 1满减 2折扣 3免单
+    amount: string; // JSON 序列化后的金额，前端按需展示
+    discount: string;
+    min_amount: string;
+    total_count: number;
+    used_count: number;
+    status: number;
+    start_time: string;
+    end_time: string;
+    description?: string;
+  };
+}
+
+export interface AvailableCouponInfo {
+  user_coupon_id: number;
+  reason: string;
+}
+
+export interface AvailableCouponsResponse {
+  available: UserCoupon[];
+  unavailable: AvailableCouponInfo[];
+}
+
 export interface Store {
   id: number;
   name: string;
   address?: string;
   latitude?: number;
   longitude?: number;
+}
+
+export interface Activity {
+  id: number;
+  store_id?: number;
+  name: string;
+  type: number;
+  start_time: string;
+  end_time: string;
+  rules?: string;
+  status?: number;
+  priority?: number;
+  description?: string;
 }

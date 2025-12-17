@@ -2,7 +2,7 @@
 # Non-interactive script to get dev-login token and run authenticated endpoint checks
 $ErrorActionPreference = 'Stop'
 
-$base = 'http://localhost:8080/api/v1'
+$base = 'http://localhost:9292/api/v1'
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $devRespPath = 'E:\project\tea\devlogin_resp.json'
 $outFile = 'E:\project\tea\admin_api_test_results_auth.txt'

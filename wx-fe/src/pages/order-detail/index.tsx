@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, Button, Image } from '@tarojs/components';
+import { View, Text, Button, Image, Textarea } from '@tarojs/components';
 import Taro, { useRouter } from '@tarojs/taro';
 import { cancelOrder, confirmReceive, getOrder, payOrder } from '../../services/orders';
 import { Order, OrderItem } from '../../services/types';
+import { createTicket } from '../../services/tickets';
 
 type ActionKey = 'cancel' | 'pay' | 'confirm' | null;
 
@@ -54,6 +55,8 @@ export default function OrderDetail({ id }: { id?: number }) {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<ActionKey>(null);
   const [address, setAddress] = useState<Record<string, any> | null>(null);
+  const [complaintContent, setComplaintContent] = useState('');
+  const [complaintLoading, setComplaintLoading] = useState(false);
 
   const loadOrder = useCallback(async () => {
     if (!orderId) return;
@@ -125,6 +128,31 @@ export default function OrderDetail({ id }: { id?: number }) {
     const result = await Taro.showModal({ title: '确认收货', content: '请确认已经收到商品并无售后问题。' });
     if (!result.confirm || !orderId) return;
     await runAction('confirm', () => confirmReceive(orderId), '已确认');
+  };
+
+  const handleSubmitComplaint = async () => {
+    if (!orderId) return;
+    if (!complaintContent.trim()) {
+      Taro.showToast({ title: '请先填写投诉内容', icon: 'none' });
+      return;
+    }
+    setComplaintLoading(true);
+    try {
+      await createTicket({
+        type: 'order',
+        source: 'miniapp_order',
+        order_id: orderId,
+        title: `订单投诉 ${order?.order_no || ''}`.trim(),
+        content: complaintContent.trim(),
+      });
+      Taro.showToast({ title: '投诉已提交，我们会尽快处理', icon: 'none' });
+      setComplaintContent('');
+    } catch (err: any) {
+      console.error('create complaint ticket failed', err);
+      Taro.showToast({ title: err?.message || '提交失败，请稍后再试', icon: 'none' });
+    } finally {
+      setComplaintLoading(false);
+    }
   };
 
   if (!orderId) {
@@ -216,6 +244,31 @@ export default function OrderDetail({ id }: { id?: number }) {
             确认收货
           </Button>
         )}
+      </View>
+
+      <View style={{ marginTop: 20 }}>
+        <Text style={{ fontWeight: 'bold', display: 'block', marginBottom: 8 }}>订单有问题？提交投诉</Text>
+        <Textarea
+          style={{
+            minHeight: 100,
+            padding: 8,
+            borderRadius: 8,
+            border: '1px solid #ddd',
+          }}
+          placeholder="请简单描述您遇到的问题，我们会安排客服跟进"
+          value={complaintContent}
+          onInput={(e) => setComplaintContent((e.detail as any).value)}
+        />
+        <Button
+          style={{ marginTop: 12 }}
+          size="mini"
+          type="warn"
+          loading={complaintLoading}
+          disabled={complaintLoading}
+          onClick={handleSubmitComplaint}
+        >
+          提交投诉
+        </Button>
       </View>
     </View>
   );

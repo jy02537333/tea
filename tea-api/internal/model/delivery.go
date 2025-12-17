@@ -37,6 +37,8 @@ type DeliveryPlatformOrder struct {
 // Coupon 优惠券模型
 type Coupon struct {
 	BaseModel
+	// StoreID 为空表示平台券，非空表示门店券
+	StoreID     *uint           `gorm:"index" json:"store_id"`
 	Name        string          `gorm:"type:varchar(100);not null" json:"name"`
 	Type        int             `gorm:"type:tinyint;not null" json:"type"` // 1:满减券 2:折扣券 3:免单券
 	Amount      decimal.Decimal `gorm:"type:decimal(10,2)" json:"amount"`
@@ -67,6 +69,8 @@ type UserCoupon struct {
 // Activity 营销活动模型
 type Activity struct {
 	BaseModel
+	// StoreID 为空表示平台活动，非空表示门店活动
+	StoreID     *uint     `gorm:"index" json:"store_id"`
 	Name        string    `gorm:"type:varchar(100);not null" json:"name"`
 	Type        int       `gorm:"type:tinyint;not null" json:"type"` // 1:限时折扣 2:满减活动 3:买赠活动
 	StartTime   time.Time `gorm:"not null" json:"start_time"`
@@ -85,4 +89,23 @@ type ActivityProduct struct {
 
 	Activity Activity `gorm:"foreignKey:ActivityID"`
 	Product  Product  `gorm:"foreignKey:ProductID"`
+}
+
+// ActivityRegistration 活动报名记录
+// 简化版：金额与退款仅做记录，不直接驱动支付/退款流水（后续可与订单/退款模块打通）
+type ActivityRegistration struct {
+	BaseModel
+	StoreID      uint            `gorm:"index;not null" json:"store_id"`
+	ActivityID   uint            `gorm:"index;not null" json:"activity_id"`
+	UserID       uint            `gorm:"index;not null" json:"user_id"`
+	UserName     string          `gorm:"type:varchar(100)" json:"user_name"`
+	UserPhone    string          `gorm:"type:varchar(20)" json:"user_phone"`
+	OrderID      *uint           `gorm:"index" json:"order_id"`
+	Status       int             `gorm:"type:tinyint;default:1" json:"status"` // 1:已报名（待支付/免费） 2:已支付报名 3:已退款
+	OrderStatus  int             `gorm:"-" json:"order_status,omitempty"`
+	PayStatus    int             `gorm:"-" json:"order_pay_status,omitempty"`
+	Fee          decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"fee"`           // 报名费用
+	RefundAmount decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"refund_amount"` // 实际退款金额
+	RefundReason string          `gorm:"type:varchar(255)" json:"refund_reason"`
+	RefundedAt   *time.Time      `json:"refunded_at"`
 }

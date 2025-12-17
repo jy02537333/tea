@@ -5,18 +5,27 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"tea-api/internal/config"
 	"tea-api/internal/model"
 	"tea-api/pkg/database"
 	"tea-api/pkg/utils"
+	"time"
 )
 
 func main() {
 	var cfgPath string
-	flag.StringVar(&cfgPath, "config", "tea-api/configs/config.yaml", "path to tea-api config.yaml")
+	flag.StringVar(&cfgPath, "config", "configs/config.yaml", "path to tea-api config.yaml")
 	flag.Parse()
 
-	// Allow override via TEA_DSN and other TEA_ env vars
+	// If default path not found and looks relative, try repo-root fallback
+	if _, err := os.Stat(cfgPath); err != nil {
+		alt := filepath.Join("..", "tea-api", "configs", "config.yaml")
+		if _, err2 := os.Stat(alt); err2 == nil {
+			cfgPath = alt
+		}
+	}
+
 	if err := config.LoadConfig(cfgPath); err != nil {
 		log.Fatalf("load config: %v", err)
 	}
@@ -37,8 +46,13 @@ func main() {
 		password = "Admin@123" // change after first login
 	}
 
-	// Avoid duplicate phone; generate a unique phone-like value
-	phone := "seed-" + utils.GenerateUID()
+	// Prefer an explicit phone if provided; otherwise generate a numeric, login-friendly phone
+	phone := os.Getenv("SEED_ADMIN_PHONE")
+	if phone == "" {
+		// Generate a pseudo phone: 139 + 8 digits from timestamp
+		n := time.Now().UnixNano() % 100000000
+		phone = fmt.Sprintf("139%08d", n)
+	}
 
 	// Check if user exists
 	var existing model.User
@@ -65,5 +79,5 @@ func main() {
 		log.Fatalf("create admin user: %v", err)
 	}
 
-	fmt.Printf("created admin user id=%d username=%s phone=%s\n", user.ID, user.Username, user.Phone)
+	fmt.Printf("created admin user id=%d username=%s phone=%s role=%s\n", user.ID, user.Username, user.Phone, user.Role)
 }

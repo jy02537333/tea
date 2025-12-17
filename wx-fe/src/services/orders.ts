@@ -1,5 +1,5 @@
 import api, { unwrapResponse } from './api';
-import { Order, OrderDetailPayload, PaginationResponse } from './types';
+import { AvailableCouponsResponse, Order, OrderDetailPayload, PaginationResponse } from './types';
 
 export async function createOrderFromCart(payload: { delivery_type: number; address_info?: string; remark?: string; user_coupon_id?: number; store_id?: number; order_type?: number }): Promise<Order> {
   const res = await api.post('/api/v1/orders/from-cart', payload);
@@ -33,4 +33,9 @@ export async function payOrder(orderId: number): Promise<void> {
 export async function confirmReceive(orderId: number): Promise<void> {
   const res = await api.post(`/api/v1/orders/${orderId}/receive`);
   unwrapResponse(res);
+}
+
+export async function getAvailableCouponsForOrder(payload: { order_amount: string; store_id?: number }): Promise<AvailableCouponsResponse> {
+  const res = await api.post('/api/v1/orders/available-coupons', payload);
+  return unwrapResponse<AvailableCouponsResponse>(res);
 }
