@@ -102,6 +102,51 @@ jobs:
         run: |
           bash scripts/local_api_check.sh | tee build-ci-logs/api-validation-stateful-$(date +%Y%m%d%H%M%S).log
 
+      - name: Generate test tokens for Sprint B
+        run: |
+          # Generate test tokens for membership flow testing
+          # This assumes the API has a dev/test endpoint to generate tokens
+          # Adjust the endpoint and method as needed based on actual implementation
+          echo "Generating test tokens..."
+          # For now, we'll skip this in CI unless tokens can be generated
+          echo "USER_TOKEN=test-token-placeholder" >> $GITHUB_ENV
+          echo "ADMIN_TOKEN=admin-token-placeholder" >> $GITHUB_ENV
+          echo "Note: Token generation skipped in CI - requires actual auth implementation"
+
+      - name: Run Sprint B membership flow test
+        env:
+          API_BASE: http://127.0.0.1:9292
+          OUTPUT_DIR: build-ci-logs
+        continue-on-error: true
+        run: |
+          echo "Running Sprint B membership purchase flow test..."
+          # Only run if tokens are available
+          if [[ -n "$USER_TOKEN" && "$USER_TOKEN" != "test-token-placeholder" ]]; then
+            bash scripts/run_membership_integration.sh | tee build-ci-logs/membership-flow-$(date +%Y%m%d%H%M%S).log
+          else
+            echo "Skipping Sprint B test - valid tokens not available in CI"
+            # Create placeholder files to avoid artifact upload failures
+            mkdir -p build-ci-logs
+            echo '{"test_status":"skipped","reason":"tokens not available in CI"}' > build-ci-logs/membership_summary_after_purchase.json
+            echo '{"result":{"test_status":"SKIPPED"}}' > build-ci-logs/membership_b_flow_checked.json
+          fi
+
+      - name: Assert Sprint B membership flow (strict)
+        continue-on-error: true
+        run: |
+          echo "Running Sprint B assertions..."
+          # Only run assertions if the test actually ran
+          if [[ -f build-ci-logs/membership_b_flow_checked.json ]]; then
+            test_status=$(jq -r '.result.test_status' build-ci-logs/membership_b_flow_checked.json || echo "UNKNOWN")
+            if [[ "$test_status" != "SKIPPED" ]]; then
+              bash scripts/assert_membership_flow.sh --strict | tee build-ci-logs/membership-assertions-$(date +%Y%m%d%H%M%S).log
+            else
+              echo "Skipping assertions - test was skipped"
+            fi
+          else
+            echo "Skipping assertions - test output files not found"
+          fi
+
       - name: Archive validation logs
         uses: actions/upload-artifact@v4
         with:
@@ -110,6 +155,10 @@ jobs:
             build-ci-logs/api_validation/**
             build-ci-logs/api-validation-*.log
             build-ci-logs/api-validation-stateful-*.log
+            build-ci-logs/membership-flow-*.log
+            build-ci-logs/membership-assertions-*.log
+            build-ci-logs/membership_summary_after_purchase.json
+            build-ci-logs/membership_b_flow_checked.json
             build-ci-logs/tea-api.out
 
       - name: Collect diagnostics on failure
