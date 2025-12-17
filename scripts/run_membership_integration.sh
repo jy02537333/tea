@@ -152,8 +152,12 @@ EOF
   # Generate membership_b_flow_checked.json with validation results
   # Extract key data for validation
   order_count=$(echo "$orders_json" | jq -r '.data | length // 0')
-  order_status=$(echo "$orders_json" | jq -r ".data[] | select(.id == $order_id) | .status // \"unknown\"")
-  payment_status=$(echo "$orders_json" | jq -r ".data[] | select(.id == $order_id) | .pay_status // \"unknown\"")
+  
+  # Extract order-specific data in a single jq call for efficiency
+  read -r order_status payment_status < <(echo "$orders_json" | jq -r "
+    .data[] | select(.id == $order_id) | 
+    \"\(.status // \"unknown\") \(.pay_status // \"unknown\")\"
+  ")
   
   # Determine validation results
   package_list_ok="true"
@@ -163,7 +167,14 @@ EOF
   [[ -n "$order_id" && "$order_id" != "null" ]] || order_create_ok="false"
   
   payment_created_ok="true"
-  [[ -n "$callback_url" ]] || payment_created_ok="false"
+  # Check both that callback_url exists and that unified order response indicates success
+  if [[ -z "$callback_url" ]]; then
+    payment_created_ok="false"
+  elif [[ $have_jq -eq 1 ]]; then
+    # Also verify the unified order response has expected success indicators
+    unified_success=$(echo "$unified_order_resp" | jq -r '.code // .status // "0"')
+    [[ "$unified_success" == "0" || "$unified_success" == "200" || "$unified_success" == "success" ]] || payment_created_ok="false"
+  fi
   
   order_found_ok="true"
   [[ "$order_count" -gt 0 ]] || order_found_ok="false"

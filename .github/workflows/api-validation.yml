@@ -109,8 +109,9 @@ jobs:
           # Adjust the endpoint and method as needed based on actual implementation
           echo "Generating test tokens..."
           # For now, we'll skip this in CI unless tokens can be generated
-          echo "USER_TOKEN=test-token-placeholder" >> $GITHUB_ENV
-          echo "ADMIN_TOKEN=admin-token-placeholder" >> $GITHUB_ENV
+          # Use empty strings instead of placeholder values to avoid security risks
+          echo "USER_TOKEN=" >> $GITHUB_ENV
+          echo "ADMIN_TOKEN=" >> $GITHUB_ENV
           echo "Note: Token generation skipped in CI - requires actual auth implementation"
 
       - name: Run Sprint B membership flow test
@@ -121,7 +122,7 @@ jobs:
         run: |
           echo "Running Sprint B membership purchase flow test..."
           # Only run if tokens are available
-          if [[ -n "$USER_TOKEN" && "$USER_TOKEN" != "test-token-placeholder" ]]; then
+          if [[ -n "$USER_TOKEN" ]]; then
             bash scripts/run_membership_integration.sh | tee build-ci-logs/membership-flow-$(date +%Y%m%d%H%M%S).log
           else
             echo "Skipping Sprint B test - valid tokens not available in CI"

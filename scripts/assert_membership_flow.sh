@@ -135,18 +135,21 @@ if [[ $STRICT_MODE -eq 1 ]]; then
   fi
   
   # Validate package_id and order_id are numeric
+  # Note: This assumes integer IDs. For UUID or other formats, adjust the regex accordingly.
   package_id=$(jq -r '.data.package_id' "$FLOW_FILE")
   order_id=$(jq -r '.data.order_id' "$FLOW_FILE")
   
   if ! [[ "$package_id" =~ ^[0-9]+$ ]]; then
-    echo "✗ STRICT FAILED: Package ID is not a valid number: $package_id"
+    echo "✗ STRICT FAILED: Package ID is not a valid positive integer: $package_id"
+    echo "  (Note: If your system uses UUIDs or other formats, this validation should be adjusted)"
     FAILED=1
   else
     echo "✓ Package ID is valid: $package_id"
   fi
   
   if ! [[ "$order_id" =~ ^[0-9]+$ ]]; then
-    echo "✗ STRICT FAILED: Order ID is not a valid number: $order_id"
+    echo "✗ STRICT FAILED: Order ID is not a valid positive integer: $order_id"
+    echo "  (Note: If your system uses UUIDs or other formats, this validation should be adjusted)"
     FAILED=1
   else
     echo "✓ Order ID is valid: $order_id"
