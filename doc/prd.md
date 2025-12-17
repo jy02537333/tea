@@ -1177,6 +1177,12 @@
   - 接口：用户/登录/钱包/优惠券
   - 前端：我的页面、登录/注册、支付流水
   - 后台：订单管理、会员管理
+  - **自动化保护**：已建立会员购买路径完整的端到端自动化测试与验证体系
+    - 集成测试脚本：`scripts/run_membership_integration.sh`（完整购买流程 + JSON 输出）
+    - 断言验证脚本：`scripts/assert_membership_flow.sh`（支持普通/严格模式）
+    - Makefile 目标：`make verify-sprint-b` 和 `make verify-sprint-b-strict`
+    - CI 集成：自动运行会员流程测试并归档 JSON/日志到 artifacts
+    - 详细文档见 `doc/prd_sprints.md` 中的"Sprint B — 会员购买路径自动化测试"章节
 - **Sprint C（第6-8周）**
   - 分销相关接口与钱包结算逻辑
   - 合伙人礼包购买与升级流程

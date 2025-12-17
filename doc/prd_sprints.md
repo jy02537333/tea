@@ -171,6 +171,104 @@
   - 功能：增加/扣减积分（内部调用或管理员）
   - Body: `{user_id, amount, reason}`
 
+### Sprint B — 会员购买路径自动化测试（已实现）
+
+为保护会员购买核心路径，已建立完整的自动化测试与验证体系：
+
+#### 1. 集成测试脚本（`scripts/run_membership_integration.sh`）
+
+完整端到端会员购买流程测试：
+- 列出会员套餐
+- 创建会员订单
+- 创建统一支付订单
+- 模拟支付回调
+- 验证订单列表
+- 生成测试结果 JSON 文件
+
+输出文件：
+- `membership_summary_after_purchase.json`: 购买流程完整摘要
+- `membership_b_flow_checked.json`: 流程验证结果与检查点状态
+
+使用方式：
+```bash
+export API_BASE="http://127.0.0.1:9292"
+export USER_TOKEN="<JWT_TOKEN>"
+export ADMIN_TOKEN="<ADMIN_JWT_TOKEN>"
+./scripts/run_membership_integration.sh
+```
+
+#### 2. 断言验证脚本（`scripts/assert_membership_flow.sh`）
+
+自动验证会员购买流程结果，支持两种模式：
+
+**普通模式**（基础检查）：
+- 验证套餐列表获取成功
+- 验证订单创建成功
+- 验证支付订单创建成功
+- 验证订单出现在订单列表中
+
+**严格模式**（--strict）：
+- 包含普通模式所有检查
+- 验证订单状态有效性
+- 验证支付状态有效性
+- 验证 ID 字段格式正确
+- 验证摘要文件完整性
+
+使用方式：
+```bash
+# 普通模式
+./scripts/assert_membership_flow.sh
+
+# 严格模式
+./scripts/assert_membership_flow.sh --strict
+```
+
+#### 3. Makefile 集成
+
+新增 make 目标便于本地验证：
+
+```bash
+# 运行会员购买流程测试（普通模式）
+make verify-sprint-b
+
+# 运行会员购买流程测试（严格模式）
+make verify-sprint-b-strict
+```
+
+要求：
+- tea-api 服务运行在本地（默认端口 9292）
+- 已导出 `USER_TOKEN` 和 `ADMIN_TOKEN` 环境变量
+- 数据库中至少有一个会员套餐
+
+#### 4. CI/CD 集成
+
+已在 `.github/workflows/api-validation.yml` 中集成：
+
+**新增步骤**：
+- 生成测试令牌（如可用）
+- 运行 Sprint B 会员流程测试
+- 执行严格模式断言
+- 归档测试日志与 JSON 输出
+
+**归档文件**：
+- `membership-flow-*.log`: 流程执行日志
+- `membership-assertions-*.log`: 断言验证日志
+- `membership_summary_after_purchase.json`: 购买摘要
+- `membership_b_flow_checked.json`: 验证结果
+
+**注意**：
+- CI 中如果令牌不可用，测试会被跳过并生成占位符文件
+- 使用 `continue-on-error: true` 避免阻塞其他测试
+- 所有输出文件都会被归档供事后分析
+
+#### 5. 验收标准
+
+- ✅ 集成测试脚本能成功运行完整会员购买流程
+- ✅ 断言脚本能正确验证流程结果（普通和严格模式）
+- ✅ make 目标能在本地环境正确执行
+- ✅ CI 流程能自动运行测试并归档结果
+- ✅ 生成的 JSON 文件包含所有必要的验证信息
+
 ---
 
 ## Sprint C（第6-8周） — 后台管理 + 分销体系 + 门店后台
