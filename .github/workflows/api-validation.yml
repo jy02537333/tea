@@ -186,19 +186,20 @@ jobs:
           fi
 
       - name: Archive validation logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: api-validation-logs
           retention-days: 7
           path: |
             build-ci-logs/api_validation/**
+            build-ci-logs/api_validation_stateful/**
             build-ci-logs/api-validation-*.log
             build-ci-logs/api-validation-stateful-*.log
             build-ci-logs/tea-api.out
             build-ci-logs/order_detail_*_checked.json
             build-ci-logs/order_detail_*.json
             build-ci-logs/order_amounts_summary.json
-            build-ci-logs/order_detail_156_checked.json
             build-ci-logs/local_api_summary.txt
             build-ci-logs/membership_summary_after_purchase.json
             build-ci-logs/membership_b_flow_checked.json
