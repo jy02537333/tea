@@ -193,9 +193,9 @@ PY
       {product_id: ($pid|tonumber), quantity: ($qty|tonumber)}
       + ( ($sku|tostring|length)>0 and {sku_id: ($sku|tonumber)} or {} )
     ')
-    # POST /cart
-    add_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$add_body" "$BASE_URL/api/v1/cart" || true)
-    echo "$add_resp" > "$OUT_DIR/POST__api_v1_cart.json"
+    # POST /cart/items（更稳妥，避免部分框架对 /cart 与 /cart/ 的差异）
+    add_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$add_body" "$BASE_URL/api/v1/cart/items" || true)
+    echo "$add_resp" > "$OUT_DIR/POST__api_v1_cart_items.json"
     # GET /cart
     cart_resp=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/cart" || true)
     echo "$cart_resp" > "$OUT_DIR/GET__api_v1_cart.json"
@@ -215,21 +215,16 @@ PY
       ok_combined=false
       if [[ "$cstatus" == "200" && "$cok" == "true" ]]; then ok_combined=true; fi
       record "cart_items" "GET" "$BASE_URL/cart" "$cstatus" "$ok_combined" "items_list=$cok"
-    # Try to create order from cart items (minimal fields)
-    order_body=$(echo "$cart_resp" | jq -c '{
-      user_id: 1,
-      items: ((.items // []) | map({product_id: .product_id, sku_id: .sku_id, qty: (.qty // .quantity // 1)}) ),
-      delivery_type: "store",
-      pay_method: "wechat"
-    }' 2>/dev/null || echo '{"user_id":1,"items":[],"delivery_type":"store","pay_method":"wechat"}')
-    create_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$order_body" "$BASE_URL/api/v1/orders" || true)
-    echo "$create_resp" > "$OUT_DIR/POST__api_v1_orders.json"
-    # CSV: order create returns order_id and status 200/201
-      ostatus=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$order_body" "$BASE_URL/api/v1/orders" || true)
-      oid=$(jq -r '.order_id // .data.order_id // empty' "$OUT_DIR/POST__api_v1_orders.json" 2>/dev/null || echo '')
+    # Create order from cart（最小必需字段）: delivery_type=1(自取), order_type=1(商城)
+    order_body=$(jq -n '{delivery_type: 1, order_type: 1}')
+    create_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$order_body" "$BASE_URL/api/v1/orders/from-cart" || true)
+    echo "$create_resp" > "$OUT_DIR/POST__api_v1_orders_from-cart.json"
+    # CSV: order create returns id and status 200
+      ostatus=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$order_body" "$BASE_URL/api/v1/orders/from-cart" || true)
+      oid=$(jq -r '.data.id // empty' "$OUT_DIR/POST__api_v1_orders_from-cart.json" 2>/dev/null || echo '')
       ok_combined=false
       if [[ ("$ostatus" == "200" || "$ostatus" == "201") && -n "$oid" ]]; then ok_combined=true; fi
-      record "order_create" "POST" "$BASE_URL/orders" "$ostatus" "$ok_combined" "order_id=${oid:-}"
+      record "order_create" "POST" "$BASE_URL/api/v1/orders/from-cart" "$ostatus" "$ok_combined" "order_id=${oid:-}"
     # Brief summary
     log "Cart+Order minimal flow attempted (product=$prod_id, sku=${sku_id:-})"
 
