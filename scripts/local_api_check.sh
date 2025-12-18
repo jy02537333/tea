@@ -165,66 +165,14 @@ if [[ -n "$AUTH_HEADER" ]]; then
   # Fetch products to pick one
   products_json=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/products?page=1&size=10" || true)
   echo "$products_json" > "$OUT_DIR/GET__api_v1_products_page_1_size_10.json"
-  prod_id=$(echo "$products_json" | python3 - <<'PY'
-import sys, json
-try:
-  data=json.loads(sys.stdin.read())
-  if isinstance(data, dict):
-    items = data.get('data') or []
-    if isinstance(items, list) and items:
-      p = items[0]
-      pid = p.get('id')
-      print(pid if pid is not None else "")
-    else:
-      print("")
-  else:
-    print("")
-except Exception:
-  print("")
-PY
-  )
+  prod_id=$(echo "$products_json" | jq -r '.data[0].id // empty' 2>/dev/null || echo "")
 
   if [[ -n "$prod_id" ]]; then
-    # Try product detail to get sku_id if present
-    detail_json=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/products/$prod_id" || true)
-    echo "$detail_json" > "$OUT_DIR/GET__api_v1_products_${prod_id}.json"
-    # Record product detail CSV: status and sku list presence
-      pstatus=$(curl -s -o /dev/null -w '%{http_code}' ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/products/$prod_id" || true)
-      pok=$(python3 - <<'PY'
-import sys, json
-path=sys.argv[1]
-try:
-  d=json.loads(open(path, 'r', encoding='utf-8').read())
-  sku=d.get('sku')
-  print('true' if isinstance(sku, list) else 'false')
-except Exception:
-  print('false')
-PY
-      "$OUT_DIR/GET__api_v1_products_${prod_id}.json")
-      ok_combined=false
-      if [[ "$pstatus" == "200" && "$pok" == "true" ]]; then ok_combined=true; fi
-      record "product_detail" "GET" "$BASE_URL/products/$prod_id" "$pstatus" "$ok_combined" "sku_list=$pok"
-    sku_id=$(echo "$detail_json" | python3 - <<'PY'
-import sys, json
-try:
-  d=json.loads(sys.stdin.read())
-  if isinstance(d, dict):
-    sku=d.get('sku') or []
-    if isinstance(sku, list) and sku:
-      sid=sku[0].get('id') or sku[0].get('sku_id')
-      print(sid if sid is not None else "")
-    else:
-      print("")
-  else:
-    print("")
-except Exception:
-  print("")
-PY
-    )
+    # Add to cart with product_id only (SKU optional)
     qty=1
     add_body=$(python3 - <<PY
 import json
-print(json.dumps({"product_id": int("$prod_id"), "sku_id": (int("$sku_id") if "$sku_id" else None), "quantity": $qty}))
+print(json.dumps({"product_id": int("$prod_id"), "quantity": $qty}))
 PY
     )
     # POST /cart
