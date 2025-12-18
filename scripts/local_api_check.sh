@@ -280,9 +280,14 @@ PY
     )
     qty=1
     add_body=$(python3 - <<PY
-import json
-print(json.dumps({"product_id": int("$prod_id"), "sku_id": (int("$sku_id") if "$sku_id" else None), "quantity": $qty}))
-PY
+  import json
+  pid = int("$prod_id")
+  sid = int("$sku_id") if "$sku_id" else None
+  body = {"product_id": pid, "quantity": $qty}
+  if sid is not None:
+    body["sku_id"] = sid
+  print(json.dumps(body))
+  PY
     )
     # POST /cart/items
     add_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$add_body" "$BASE_URL/api/v1/cart/items" || true)
@@ -306,28 +311,12 @@ PY
       ok_combined=false
       if [[ "$cstatus" == "200" && "$cok" == "true" ]]; then ok_combined=true; fi
       record "cart_items" "GET" "$BASE_URL/cart" "$cstatus" "$ok_combined" "items_list=$cok"
-    # Try to create order from cart items (minimal fields)
-    order_body=$(echo "$cart_resp" | python3 - <<'PY'
-import sys, json
-try:
-  c=json.loads(sys.stdin.read())
-  items=[]
-  if isinstance(c, dict):
-    for it in (c.get('items') or []):
-      pid=it.get('product_id'); sid=it.get('sku_id'); qty=it.get('qty') or it.get('quantity') or 1
-      one={"product_id": pid, "sku_id": sid, "qty": qty}
-      if pid:
-        items.append(one)
-  body={"user_id": 1, "items": items, "delivery_type": "store", "pay_method": "wechat"}
-  print(json.dumps(body))
-except Exception:
-  print(json.dumps({"user_id":1,"items":[],"delivery_type":"store","pay_method":"wechat"}))
-PY
-    )
-    create_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$order_body" "$BASE_URL/api/v1/orders" || true)
-    echo "$create_resp" > "$OUT_DIR/POST__api_v1_orders.json"
-    # CSV: order create returns order_id and status 200/201
-      ostatus=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$order_body" "$BASE_URL/api/v1/orders" || true)
+    # Create order from cart (API contract: POST /api/v1/orders/from-cart {delivery_type: 1})
+    order_body='{"delivery_type": 1}'
+    create_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$order_body" "$BASE_URL/api/v1/orders/from-cart" || true)
+    echo "$create_resp" > "$OUT_DIR/POST__api_v1_orders_from-cart.json"
+    # CSV: order create returns order ID and status 200
+      ostatus=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$order_body" "$BASE_URL/api/v1/orders/from-cart" || true)
       oid=$(python3 - <<'PY'
 import sys, json
 path=sys.argv[1]
@@ -336,15 +325,15 @@ try:
   # support {order_id,...} or {data:{order_id}}
   oid=d.get('order_id')
   if not oid and isinstance(d.get('data'), dict):
-    oid=d['data'].get('order_id')
+    oid=d['data'].get('order_id') or d['data'].get('id')
   print(str(oid) if oid else '')
 except Exception:
   print('')
 PY
-      "$OUT_DIR/POST__api_v1_orders.json")
+      "$OUT_DIR/POST__api_v1_orders_from-cart.json")
       ok_combined=false
-      if [[ ("$ostatus" == "200" || "$ostatus" == "201") && -n "$oid" ]]; then ok_combined=true; fi
-      record "order_create" "POST" "$BASE_URL/orders" "$ostatus" "$ok_combined" "order_id=${oid:-}"
+      if [[ "$ostatus" == "200" && -n "$oid" ]]; then ok_combined=true; fi
+      record "order_create" "POST" "$BASE_URL/orders/from-cart" "$ostatus" "$ok_combined" "order_id=${oid:-}"
     # Brief summary
     log "Cart+Order minimal flow attempted (product=$prod_id, sku=${sku_id:-})"
 
