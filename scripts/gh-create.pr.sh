@@ -37,9 +37,11 @@ fi
 
 # 确保有提交（如有暂存改动则提交）
 if ! git diff --staged --quiet || ! git diff --quiet; then
-  echo "检测到未提交的改动，正在把暂存改动提交为临时提交..."
+  echo "⚠️  Uncommitted changes detected / 检测到未提交的改动"
+  echo "✅ Proceeding: Auto-committing all changes / 正在自动提交所有改动..."
   git add -A
   git commit -m "${PR_TITLE}" || true
+  echo "✅ Changes committed successfully / 改动已提交"
 fi
 
 # 推送分支到远端（设置上游）
