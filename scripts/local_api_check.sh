@@ -95,20 +95,20 @@ status=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/v1/health" || tru
 curl_json GET /api/v1/health no || true
 record "health" "GET" "$BASE_URL/api/v1/health" "$status" "$([[ "$status" == "200" ]] && echo true || echo false)" ""
 
-# 2) Dev login to obtain token (prefer auth/login, fallback to user/dev-login)
-AUTH_LOGIN_URL="$BASE_URL/api/v1/user/login"
-# Try username/password first, then openid
-AUTH_LOGIN_BODY1='{"username":"admin","password":"pass"}'
-resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY1" "$AUTH_LOGIN_URL" || true)
-echo "$resp" > "$OUT_DIR/POST__api_v1_auth_login.json"
+# 2) Prefer dev-login to obtain a user token; fallback to user/login
+DEV_LOGIN_URL="$BASE_URL/api/v1/user/dev-login"
+DEV_LOGIN_BODY='{"openid":"ci_stateful_user"}'
+resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$DEV_LOGIN_BODY" "$DEV_LOGIN_URL" || true)
+echo "$resp" > "$OUT_DIR/POST__api_v1_user_dev-login.json"
 if [[ -z "$resp" || "$resp" == "null" ]]; then
-  AUTH_LOGIN_BODY2='{"openid":"admin_openid"}'
-  resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY2" "$BASE_URL/api/v1/user/dev-login" || true)
-  echo "$resp" > "$OUT_DIR/POST__api_v1_user_dev-login_openid.json"
+  AUTH_LOGIN_URL="$BASE_URL/api/v1/user/login"
+  AUTH_LOGIN_BODY1='{"username":"admin","password":"pass"}'
+  resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY1" "$AUTH_LOGIN_URL" || true)
+  echo "$resp" > "$OUT_DIR/POST__api_v1_auth_login.json"
   if [[ -z "$resp" || "$resp" == "null" ]]; then
-    DEV_LOGIN_BODY='{"openid":"user_openid_local_stateful"}'
-    resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$DEV_LOGIN_BODY" "$BASE_URL/api/v1/user/dev-login" || true)
-    echo "$resp" > "$OUT_DIR/POST__api_v1_user_dev-login.json"
+    AUTH_LOGIN_BODY2='{"openid":"admin_openid"}'
+    resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY2" "$BASE_URL/api/v1/user/dev-login" || true)
+    echo "$resp" > "$OUT_DIR/POST__api_v1_user_dev-login_openid.json"
   fi
 fi
 
@@ -146,13 +146,13 @@ fi
 
 if [[ -n "$TOKEN" ]]; then
   AUTH_HEADER="Authorization: Bearer $TOKEN"
-  log "Obtained token via dev-login."
-  record "dev_login" "POST" "$AUTH_LOGIN_URL" "200" "true" "token acquired"
+  log "Obtained token via stateful dev-login/user-login."
+  record "dev_login" "POST" "${DEV_LOGIN_URL:-$AUTH_LOGIN_URL}" "200" "true" "token acquired"
 else
   AUTH_HEADER=""
   log "Dev-login did not return a token; proceeding without Authorization header."
   # record as false if no token
-  record "dev_login" "POST" "$AUTH_LOGIN_URL" "200" "false" "no token"
+  record "dev_login" "POST" "${DEV_LOGIN_URL:-$AUTH_LOGIN_URL}" "200" "false" "no token"
 fi
 
 # 3) User-facing endpoints with auth to avoid FK issues
