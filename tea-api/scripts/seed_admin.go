@@ -49,7 +49,7 @@ func main() {
 	}
 
 	user := model.User{
-		Username:     username,
+		Username:     &username,
 		PasswordHash: hash,
 		Phone:        phone,
 		Nickname:     "管理员",
