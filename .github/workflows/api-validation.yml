@@ -78,6 +78,8 @@ jobs:
           MYSQL_USER=root
           MYSQL_PASS=root
           MYSQL_DB=tea_shop
+          echo "Applying DB schema to $MYSQL_DB ..."
+          mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PASS" "$MYSQL_DB" < db/schema.sql
           cat > /tmp/seed.sql <<'EOF'
           INSERT INTO stores (id, name, lat, lng, address, open_hours, phone)
           SELECT 1, '测试门店', 31.2304, 121.4737, '上海某路1号', '09:00-21:00', '12345678'
