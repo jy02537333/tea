@@ -96,17 +96,17 @@ curl_json GET /api/v1/health no || true
 record "health" "GET" "$BASE_URL/api/v1/health" "$status" "$([[ "$status" == "200" ]] && echo true || echo false)" ""
 
 # 2) Dev login to obtain token (prefer auth/login, fallback to user/dev-login)
-AUTH_LOGIN_URL="$BASE_URL/api/v1/auth/login"
+AUTH_LOGIN_URL="$BASE_URL/api/v1/user/login"
 # Try username/password first, then openid
 AUTH_LOGIN_BODY1='{"username":"admin","password":"pass"}'
 resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY1" "$AUTH_LOGIN_URL" || true)
 echo "$resp" > "$OUT_DIR/POST__api_v1_auth_login.json"
 if [[ -z "$resp" || "$resp" == "null" ]]; then
   AUTH_LOGIN_BODY2='{"openid":"admin_openid"}'
-  resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY2" "$AUTH_LOGIN_URL" || true)
-  echo "$resp" > "$OUT_DIR/POST__api_v1_auth_login_openid.json"
+  resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY2" "$BASE_URL/api/v1/user/dev-login" || true)
+  echo "$resp" > "$OUT_DIR/POST__api_v1_user_dev-login_openid.json"
   if [[ -z "$resp" || "$resp" == "null" ]]; then
-    DEV_LOGIN_BODY='{"open_id":"user_openid_local_stateful","phone":"18880000001","nickname":"StatefulUser"}'
+    DEV_LOGIN_BODY='{"openid":"user_openid_local_stateful"}'
     resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$DEV_LOGIN_BODY" "$BASE_URL/api/v1/user/dev-login" || true)
     echo "$resp" > "$OUT_DIR/POST__api_v1_user_dev-login.json"
   fi
