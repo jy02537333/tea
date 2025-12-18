@@ -77,7 +77,7 @@ jobs:
           MYSQL_PORT=3306
           MYSQL_USER=root
           MYSQL_PASS=root
-          MYSQL_DB=tea
+          MYSQL_DB=tea_shop
           cat > /tmp/seed.sql <<'EOF'
           INSERT INTO stores (id, name, lat, lng, address, open_hours, phone)
           SELECT 1, '测试门店', 31.2304, 121.4737, '上海某路1号', '09:00-21:00', '12345678'
