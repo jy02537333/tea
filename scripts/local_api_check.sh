@@ -366,7 +366,7 @@ PY
         f.write(line)
     except Exception:
       pass
-    PY
+PY
         "$DETAIL_PATH_ROOT" "$oid"
         log "Order evidence generated: order_detail_${oid}.json, order_amounts_summary.json, order_detail_${oid}_checked.json"
       fi
