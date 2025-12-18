@@ -97,12 +97,22 @@ record "health" "GET" "$BASE_URL/api/v1/health" "$status" "$([[ "$status" == "20
 
 # 2) Dev login to obtain token (prefer auth/login, fallback to user/dev-login)
 AUTH_LOGIN_URL="$BASE_URL/api/v1/user/login"
-# Try username/password first
+# Try username/password first, then openid
 AUTH_LOGIN_BODY1='{"username":"admin","password":"pass"}'
 resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY1" "$AUTH_LOGIN_URL" || true)
 echo "$resp" > "$OUT_DIR/POST__api_v1_auth_login.json"
+if [[ -z "$resp" || "$resp" == "null" ]]; then
+  AUTH_LOGIN_BODY2='{"openid":"admin_openid"}'
+  resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY2" "$BASE_URL/api/v1/user/dev-login" || true)
+  echo "$resp" > "$OUT_DIR/POST__api_v1_user_dev-login_openid.json"
+  if [[ -z "$resp" || "$resp" == "null" ]]; then
+    DEV_LOGIN_BODY='{"openid":"user_openid_local_stateful"}'
+    resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$DEV_LOGIN_BODY" "$BASE_URL/api/v1/user/dev-login" || true)
+    echo "$resp" > "$OUT_DIR/POST__api_v1_user_dev-login.json"
+  fi
+fi
 
-# Extract token (if available) from first attempt
+# Extract token (if available) and set AUTH_HEADER
 TOKEN=$(echo "$resp" | python3 - <<'PY'
 import sys, json
 try:
@@ -126,57 +136,11 @@ except Exception:
 PY
 )
 
-# If no token yet, fallback to dev-login flows
 if [[ -z "$TOKEN" ]]; then
-  AUTH_LOGIN_BODY2='{"openid":"admin_openid"}'
-  resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY2" "$BASE_URL/api/v1/user/dev-login" || true)
-  echo "$resp" > "$OUT_DIR/POST__api_v1_user_dev-login_openid.json"
-  TOKEN=$(echo "$resp" | python3 - <<'PY'
-import sys, json
-try:
-  data=json.loads(sys.stdin.read())
-  token = None
-  if isinstance(data, dict):
-    if 'data' in data and isinstance(data['data'], dict):
-      token = data['data'].get('token')
-    if not token:
-      token = data.get('token')
-  print(token or "")
-except Exception:
-  print("")
-PY
-  )
-  if [[ -z "$TOKEN" ]]; then
-  DEV_LOGIN_BODY='{"openid":"user_openid_local_stateful"}'
-  resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$DEV_LOGIN_BODY" "$BASE_URL/api/v1/user/dev-login" || true)
-  echo "$resp" > "$OUT_DIR/POST__api_v1_user_dev-login.json"
-  TOKEN=$(echo "$resp" | python3 - <<'PY'
-import sys, json
-try:
-  data=json.loads(sys.stdin.read())
-  token = None
-  if isinstance(data, dict):
-    if 'data' in data and isinstance(data['data'], dict):
-      token = data['data'].get('token')
-    if not token:
-      token = data.get('token')
-  print(token or "")
-except Exception:
-  print("")
-PY
-  )
-  fi
-fi
-
-if [[ -z "$TOKEN" ]]; then
-  # Fallback: reuse token from prior run logs if available or from env TOKEN_FILE/ADMIN_TOKEN
-  if [[ -n "${ADMIN_TOKEN:-}" ]]; then
-    TOKEN="$ADMIN_TOKEN"
-  else
-    ALT_TOKEN_FILE="${TOKEN_FILE:-$ROOT_DIR/build-ci-logs/admin_login_response.json}"
-    if [[ -f "$ALT_TOKEN_FILE" ]]; then
-      TOKEN=$(grep -Po '"token"\s*:\s*"\K[^"]+' "$ALT_TOKEN_FILE" || true)
-    fi
+  # Fallback: reuse token from prior run logs if available
+  ALT_TOKEN_FILE="$ROOT_DIR/build-ci-logs/admin_login_response.json"
+  if [[ -f "$ALT_TOKEN_FILE" ]]; then
+    TOKEN=$(grep -Po '"token"\s*:\s*"\K[^"]+' "$ALT_TOKEN_FILE" || true)
   fi
 fi
 
@@ -280,18 +244,13 @@ PY
     )
     qty=1
     add_body=$(python3 - <<PY
-  import json
-  pid = int("$prod_id")
-  sid = int("$sku_id") if "$sku_id" else None
-  body = {"product_id": pid, "quantity": $qty}
-  if sid is not None:
-    body["sku_id"] = sid
-  print(json.dumps(body))
-  PY
+import json
+print(json.dumps({"product_id": int("$prod_id"), "sku_id": (int("$sku_id") if "$sku_id" else None), "quantity": $qty}))
+PY
     )
-    # POST /cart/items
-    add_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$add_body" "$BASE_URL/api/v1/cart/items" || true)
-    echo "$add_resp" > "$OUT_DIR/POST__api_v1_cart_items.json"
+    # POST /cart
+    add_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$add_body" "$BASE_URL/api/v1/cart" || true)
+    echo "$add_resp" > "$OUT_DIR/POST__api_v1_cart.json"
     # GET /cart
     cart_resp=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/cart" || true)
     echo "$cart_resp" > "$OUT_DIR/GET__api_v1_cart.json"
@@ -311,12 +270,28 @@ PY
       ok_combined=false
       if [[ "$cstatus" == "200" && "$cok" == "true" ]]; then ok_combined=true; fi
       record "cart_items" "GET" "$BASE_URL/cart" "$cstatus" "$ok_combined" "items_list=$cok"
-    # Create order from cart (API contract: POST /api/v1/orders/from-cart {delivery_type: 1})
-    order_body='{"delivery_type": 1}'
-    create_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$order_body" "$BASE_URL/api/v1/orders/from-cart" || true)
-    echo "$create_resp" > "$OUT_DIR/POST__api_v1_orders_from-cart.json"
-    # CSV: order create returns order ID and status 200
-      ostatus=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$order_body" "$BASE_URL/api/v1/orders/from-cart" || true)
+    # Try to create order from cart items (minimal fields)
+    order_body=$(echo "$cart_resp" | python3 - <<'PY'
+import sys, json
+try:
+  c=json.loads(sys.stdin.read())
+  items=[]
+  if isinstance(c, dict):
+    for it in (c.get('items') or []):
+      pid=it.get('product_id'); sid=it.get('sku_id'); qty=it.get('qty') or it.get('quantity') or 1
+      one={"product_id": pid, "sku_id": sid, "qty": qty}
+      if pid:
+        items.append(one)
+  body={"user_id": 1, "items": items, "delivery_type": "store", "pay_method": "wechat"}
+  print(json.dumps(body))
+except Exception:
+  print(json.dumps({"user_id":1,"items":[],"delivery_type":"store","pay_method":"wechat"}))
+PY
+    )
+    create_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$order_body" "$BASE_URL/api/v1/orders" || true)
+    echo "$create_resp" > "$OUT_DIR/POST__api_v1_orders.json"
+    # CSV: order create returns order_id and status 200/201
+      ostatus=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$order_body" "$BASE_URL/api/v1/orders" || true)
       oid=$(python3 - <<'PY'
 import sys, json
 path=sys.argv[1]
@@ -325,15 +300,15 @@ try:
   # support {order_id,...} or {data:{order_id}}
   oid=d.get('order_id')
   if not oid and isinstance(d.get('data'), dict):
-    oid=d['data'].get('order_id') or d['data'].get('id')
+    oid=d['data'].get('order_id')
   print(str(oid) if oid else '')
 except Exception:
   print('')
 PY
-      "$OUT_DIR/POST__api_v1_orders_from-cart.json")
+      "$OUT_DIR/POST__api_v1_orders.json")
       ok_combined=false
-      if [[ "$ostatus" == "200" && -n "$oid" ]]; then ok_combined=true; fi
-      record "order_create" "POST" "$BASE_URL/orders/from-cart" "$ostatus" "$ok_combined" "order_id=${oid:-}"
+      if [[ ("$ostatus" == "200" || "$ostatus" == "201") && -n "$oid" ]]; then ok_combined=true; fi
+      record "order_create" "POST" "$BASE_URL/orders" "$ostatus" "$ok_combined" "order_id=${oid:-}"
     # Brief summary
     log "Cart+Order minimal flow attempted (product=$prod_id, sku=${sku_id:-})"
 
