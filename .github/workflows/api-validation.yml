@@ -109,6 +109,20 @@ jobs:
         run: |
           go run ./scripts/seed_demo_user.go
 
+      - name: Seed admin user
+        if: env.CI_SEED == '1'
+        working-directory: tea-api
+        env:
+          TEA_DATABASE_HOST: 127.0.0.1
+          TEA_DATABASE_PORT: 3306
+          TEA_DATABASE_USERNAME: root
+          TEA_DATABASE_PASSWORD: root
+          TEA_DATABASE_DBNAME: tea_shop
+          SEED_ADMIN_USER: admin
+          SEED_ADMIN_PASS: pass
+        run: |
+          go run ./scripts/seed_admin.go
+
       - name: Run public API validation
         run: |
           bash scripts/run_api_validation.sh | tee build-ci-logs/api-validation-$(date +%Y%m%d%H%M%S).log
