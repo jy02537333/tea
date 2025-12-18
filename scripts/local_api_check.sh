@@ -165,24 +165,7 @@ if [[ -n "$AUTH_HEADER" ]]; then
   # Fetch products to pick one
   products_json=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/products?page=1&size=10" || true)
   echo "$products_json" > "$OUT_DIR/GET__api_v1_products_page_1_size_10.json"
-  prod_id=$(echo "$products_json" | python3 - <<'PY'
-import sys, json
-try:
-  data=json.loads(sys.stdin.read())
-  if isinstance(data, dict):
-    items = data.get('data') or []
-    if isinstance(items, list) and items:
-      p = items[0]
-      pid = p.get('id')
-      print(pid if pid is not None else "")
-    else:
-      print("")
-  else:
-    print("")
-except Exception:
-  print("")
-PY
-  )
+  prod_id=$(echo "$products_json" | jq -r '.data[0].id // empty' 2>/dev/null || echo "")
 
   if [[ -n "$prod_id" ]]; then
     # Try product detail to get sku_id if present
@@ -204,29 +187,12 @@ PY
       ok_combined=false
       if [[ "$pstatus" == "200" && "$pok" == "true" ]]; then ok_combined=true; fi
       record "product_detail" "GET" "$BASE_URL/products/$prod_id" "$pstatus" "$ok_combined" "sku_list=$pok"
-    sku_id=$(echo "$detail_json" | python3 - <<'PY'
-import sys, json
-try:
-  d=json.loads(sys.stdin.read())
-  if isinstance(d, dict):
-    sku=d.get('sku') or []
-    if isinstance(sku, list) and sku:
-      sid=sku[0].get('id') or sku[0].get('sku_id')
-      print(sid if sid is not None else "")
-    else:
-      print("")
-  else:
-    print("")
-except Exception:
-  print("")
-PY
-    )
+    sku_id=$(echo "$detail_json" | jq -r '.sku[0].id // .sku[0].sku_id // empty' 2>/dev/null || echo "")
     qty=1
-    add_body=$(python3 - <<PY
-import json
-print(json.dumps({"product_id": int("$prod_id"), "sku_id": (int("$sku_id") if "$sku_id" else None), "quantity": $qty}))
-PY
-    )
+    add_body=$(jq -n --argjson pid "$prod_id" --argjson qty "$qty" --arg sku "$sku_id" '
+      {product_id: ($pid|tonumber), quantity: ($qty|tonumber)}
+      + ( ($sku|tostring|length)>0 and {sku_id: ($sku|tonumber)} or {} )
+    ')
     # POST /cart
     add_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$add_body" "$BASE_URL/api/v1/cart" || true)
     echo "$add_resp" > "$OUT_DIR/POST__api_v1_cart.json"
@@ -250,41 +216,17 @@ PY
       if [[ "$cstatus" == "200" && "$cok" == "true" ]]; then ok_combined=true; fi
       record "cart_items" "GET" "$BASE_URL/cart" "$cstatus" "$ok_combined" "items_list=$cok"
     # Try to create order from cart items (minimal fields)
-    order_body=$(echo "$cart_resp" | python3 - <<'PY'
-import sys, json
-try:
-  c=json.loads(sys.stdin.read())
-  items=[]
-  if isinstance(c, dict):
-    for it in (c.get('items') or []):
-      pid=it.get('product_id'); sid=it.get('sku_id'); qty=it.get('qty') or it.get('quantity') or 1
-      one={"product_id": pid, "sku_id": sid, "qty": qty}
-      if pid:
-        items.append(one)
-  body={"user_id": 1, "items": items, "delivery_type": "store", "pay_method": "wechat"}
-  print(json.dumps(body))
-except Exception:
-  print(json.dumps({"user_id":1,"items":[],"delivery_type":"store","pay_method":"wechat"}))
-PY
-    )
+    order_body=$(echo "$cart_resp" | jq -c '{
+      user_id: 1,
+      items: ((.items // []) | map({product_id: .product_id, sku_id: .sku_id, qty: (.qty // .quantity // 1)}) ),
+      delivery_type: "store",
+      pay_method: "wechat"
+    }' 2>/dev/null || echo '{"user_id":1,"items":[],"delivery_type":"store","pay_method":"wechat"}')
     create_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$order_body" "$BASE_URL/api/v1/orders" || true)
     echo "$create_resp" > "$OUT_DIR/POST__api_v1_orders.json"
     # CSV: order create returns order_id and status 200/201
       ostatus=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$order_body" "$BASE_URL/api/v1/orders" || true)
-      oid=$(python3 - <<'PY'
-import sys, json
-path=sys.argv[1]
-try:
-  d=json.loads(open(path, 'r', encoding='utf-8').read())
-  # support {order_id,...} or {data:{order_id}}
-  oid=d.get('order_id')
-  if not oid and isinstance(d.get('data'), dict):
-    oid=d['data'].get('order_id')
-  print(str(oid) if oid else '')
-except Exception:
-  print('')
-PY
-      "$OUT_DIR/POST__api_v1_orders.json")
+      oid=$(jq -r '.order_id // .data.order_id // empty' "$OUT_DIR/POST__api_v1_orders.json" 2>/dev/null || echo '')
       ok_combined=false
       if [[ ("$ostatus" == "200" || "$ostatus" == "201") && -n "$oid" ]]; then ok_combined=true; fi
       record "order_create" "POST" "$BASE_URL/orders" "$ostatus" "$ok_combined" "order_id=${oid:-}"
