@@ -113,28 +113,7 @@ if [[ -z "$resp" || "$resp" == "null" ]]; then
 fi
 
 # Extract token (if available) and set AUTH_HEADER
-TOKEN=$(echo "$resp" | python3 - <<'PY'
-import sys, json
-try:
-    data=json.loads(sys.stdin.read())
-    # try common token locations
-    if isinstance(data, dict):
-        # format {code,message,data:{token:..}} or {token:..}
-        token = None
-        if 'data' in data and isinstance(data['data'], dict):
-            token = data['data'].get('token')
-        if not token:
-            token = data.get('token')
-        if token:
-            print(token)
-        else:
-            print("")
-    else:
-        print("")
-except Exception:
-    print("")
-PY
-)
+TOKEN=$(echo "$resp" | jq -r '.data.token // .token // empty' 2>/dev/null || echo "")
 
 if [[ -z "$TOKEN" ]]; then
   # Fallback: reuse token from prior run logs if available
