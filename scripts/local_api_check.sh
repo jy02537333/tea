@@ -97,22 +97,12 @@ record "health" "GET" "$BASE_URL/api/v1/health" "$status" "$([[ "$status" == "20
 
 # 2) Dev login to obtain token (prefer auth/login, fallback to user/dev-login)
 AUTH_LOGIN_URL="$BASE_URL/api/v1/user/login"
-# Try username/password first, then openid
+# Try username/password first
 AUTH_LOGIN_BODY1='{"username":"admin","password":"pass"}'
 resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY1" "$AUTH_LOGIN_URL" || true)
 echo "$resp" > "$OUT_DIR/POST__api_v1_auth_login.json"
-if [[ -z "$resp" || "$resp" == "null" ]]; then
-  AUTH_LOGIN_BODY2='{"openid":"admin_openid"}'
-  resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY2" "$BASE_URL/api/v1/user/dev-login" || true)
-  echo "$resp" > "$OUT_DIR/POST__api_v1_user_dev-login_openid.json"
-  if [[ -z "$resp" || "$resp" == "null" ]]; then
-    DEV_LOGIN_BODY='{"openid":"user_openid_local_stateful"}'
-    resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$DEV_LOGIN_BODY" "$BASE_URL/api/v1/user/dev-login" || true)
-    echo "$resp" > "$OUT_DIR/POST__api_v1_user_dev-login.json"
-  fi
-fi
 
-# Extract token (if available) and set AUTH_HEADER
+# Extract token (if available) from first attempt
 TOKEN=$(echo "$resp" | python3 - <<'PY'
 import sys, json
 try:
@@ -136,11 +126,57 @@ except Exception:
 PY
 )
 
+# If no token yet, fallback to dev-login flows
 if [[ -z "$TOKEN" ]]; then
-  # Fallback: reuse token from prior run logs if available
-  ALT_TOKEN_FILE="$ROOT_DIR/build-ci-logs/admin_login_response.json"
-  if [[ -f "$ALT_TOKEN_FILE" ]]; then
-    TOKEN=$(grep -Po '"token"\s*:\s*"\K[^"]+' "$ALT_TOKEN_FILE" || true)
+  AUTH_LOGIN_BODY2='{"openid":"admin_openid"}'
+  resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY2" "$BASE_URL/api/v1/user/dev-login" || true)
+  echo "$resp" > "$OUT_DIR/POST__api_v1_user_dev-login_openid.json"
+  TOKEN=$(echo "$resp" | python3 - <<'PY'
+import sys, json
+try:
+  data=json.loads(sys.stdin.read())
+  token = None
+  if isinstance(data, dict):
+    if 'data' in data and isinstance(data['data'], dict):
+      token = data['data'].get('token')
+    if not token:
+      token = data.get('token')
+  print(token or "")
+except Exception:
+  print("")
+PY
+  )
+  if [[ -z "$TOKEN" ]]; then
+  DEV_LOGIN_BODY='{"openid":"user_openid_local_stateful"}'
+  resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$DEV_LOGIN_BODY" "$BASE_URL/api/v1/user/dev-login" || true)
+  echo "$resp" > "$OUT_DIR/POST__api_v1_user_dev-login.json"
+  TOKEN=$(echo "$resp" | python3 - <<'PY'
+import sys, json
+try:
+  data=json.loads(sys.stdin.read())
+  token = None
+  if isinstance(data, dict):
+    if 'data' in data and isinstance(data['data'], dict):
+      token = data['data'].get('token')
+    if not token:
+      token = data.get('token')
+  print(token or "")
+except Exception:
+  print("")
+PY
+  )
+  fi
+fi
+
+if [[ -z "$TOKEN" ]]; then
+  # Fallback: reuse token from prior run logs if available or from env TOKEN_FILE/ADMIN_TOKEN
+  if [[ -n "${ADMIN_TOKEN:-}" ]]; then
+    TOKEN="$ADMIN_TOKEN"
+  else
+    ALT_TOKEN_FILE="${TOKEN_FILE:-$ROOT_DIR/build-ci-logs/admin_login_response.json}"
+    if [[ -f "$ALT_TOKEN_FILE" ]]; then
+      TOKEN=$(grep -Po '"token"\s*:\s*"\K[^"]+' "$ALT_TOKEN_FILE" || true)
+    fi
   fi
 fi
 
