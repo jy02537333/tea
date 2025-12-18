@@ -35,7 +35,7 @@ func main() {
 		password = "Admin@123"
 	}
 
-	phone := "seed-" + utils.GenerateUID()
+	phone := "13800000001"
 
 	var existing model.User
 	if err := database.GetDB().Where("username = ?", username).First(&existing).Error; err == nil && existing.ID != 0 {
@@ -49,7 +49,7 @@ func main() {
 	}
 
 	user := model.User{
-		Username:     username,
+		Username:     &username,
 		PasswordHash: hash,
 		Phone:        phone,
 		Nickname:     "管理员",

@@ -100,6 +100,8 @@
 > - 严格断言脚本：`scripts/assert_api_validation.sh` 读取 `order_detail_*_checked.json` / `order_amounts_summary.json` 等证据，严格校验 `pay_amount = total_amount - discount_amount`，`make verify-sprint-a[-strict]` 为统一入口。
 > - CI 集成：`.github/workflows/api-validation.yml` 中的 `stateful-api-check` job 会在公共 API、自状态化检查后执行 `make verify-sprint-a-strict`，并将上述证据文件作为工件归档，用于回归与审计。
 
+> 迭代策略（以 A 为主）：当前迭代将 Sprint A 作为主线与 CI 阻断标准；支付回调 ST（`POST /api/v1/payments/callback`）作为关键校验点，会在统一下单后通过模拟支付回调验证签名与订单状态流转。Sprint B 的检查作为“观察项”（非阻断），不影响合并结论。
+
 
 ---
 
@@ -148,6 +150,8 @@
 > - 状态化脚本：`scripts/run_membership_integration.sh` 负责跑通会员套餐列表 → 创建会员订单 → 统一下单 → 模拟支付回调 → 查询会员订单 → 最后调用 `GET /api/v1/users/me/summary`，并将聚合视图快照与会员等级检查结果落盘为 `build-ci-logs/membership_summary_after_purchase.json`、`build-ci-logs/membership_b_flow_checked.json`。
 > - 严格断言脚本：`scripts/assert_membership_flow.sh` 读取 `membership_b_flow_checked.json`，要求 `.ok == true`（例如会员等级从 visitor 升级为具体等级）；`make verify-sprint-b[-strict]` 提供本地与 CI 统一入口。
 > - CI 集成：在 `.github/workflows/api-validation.yml` 的 `stateful-api-check` job 中，Sprint A 严格断言之后会执行上述会员脚本与 `make verify-sprint-b-strict`，并将相关 JSON 及日志文件作为工件归档，作为 Sprint B 会员成功路径的自动化保护。
+>
+> 注意：本迭代以 A 为主，Sprint B 在 CI 中为非阻断检查（失败不阻塞合并），用于提前暴露问题与收集证据，具体见 workflow 的 `continue-on-error` 设置。
 
 ### Sprint B — 我的/个人中心 & 钱包/积分/优惠券（任务拆分）
 

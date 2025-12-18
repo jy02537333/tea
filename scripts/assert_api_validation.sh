@@ -47,15 +47,25 @@ echo "All critical admin endpoints returned 200"
 # --- Sprint A: Order amount deduction assertion ---
 echo "Asserting Sprint A order amount deduction..."
 
-ORDER_CHECK_JSON="$LOG_DIR/order_detail_156_checked.json"
-ORDER_DETAIL_JSON="$LOG_DIR/order_detail_156.json"
+# Prefer checked evidence file, then summary, then any order_detail file
 ORDER_SUMMARY_JSON="$LOG_DIR/order_amounts_summary.json"
 
-if [ -f "$ORDER_CHECK_JSON" ]; then
-  if jq -e '.check==true' "$ORDER_CHECK_JSON" >/dev/null 2>&1; then
-    echo "Amount check passed via $ORDER_CHECK_JSON"
+# Helper: find first matching file for a glob pattern
+find_first() {
+  local pattern="$1"
+  local match
+  match=$(compgen -G "$pattern" | head -n1 || true)
+  if [ -n "$match" ]; then echo "$match"; fi
+}
+
+ORDER_CHECK_ANY=$(find_first "$LOG_DIR/order_detail_*_checked.json")
+ORDER_DETAIL_ANY=$(find_first "$LOG_DIR/order_detail_[0-9]*.json")
+
+if [ -n "$ORDER_CHECK_ANY" ] && [ -f "$ORDER_CHECK_ANY" ]; then
+  if jq -e '.check==true' "$ORDER_CHECK_ANY" >/dev/null 2>&1; then
+    echo "Amount check passed via $ORDER_CHECK_ANY"
   else
-    echo "ERROR: Amount check failed (.check!=true) in $ORDER_CHECK_JSON"
+    echo "ERROR: Amount check failed (.check!=true) in $ORDER_CHECK_ANY"
     exit 4
   fi
 elif [ -f "$ORDER_SUMMARY_JSON" ]; then
@@ -65,24 +75,26 @@ elif [ -f "$ORDER_SUMMARY_JSON" ]; then
     echo "ERROR: Amount check failed via $ORDER_SUMMARY_JSON"
     exit 4
   fi
-elif [ -f "$ORDER_DETAIL_JSON" ]; then
+elif [ -n "$ORDER_DETAIL_ANY" ] && [ -f "$ORDER_DETAIL_ANY" ]; then
+  OID=$(basename "$ORDER_DETAIL_ANY" | sed -E 's/order_detail_([0-9]+)\.json/\1/')
+  ORDER_CHECK_OUT="$LOG_DIR/order_detail_${OID}_checked.json"
   tmp_compute=$(jq '{id: .data.id,
                      store_id: .data.store_id,
                      total_amount: (.data.total_amount|tonumber),
                      discount_amount: (.data.discount_amount|tonumber),
                      pay_amount: (.data.pay_amount|tonumber),
-                     check: ((.data.pay_amount|tonumber) == ((.data.total_amount|tonumber) - (.data.discount_amount|tonumber))) }' "$ORDER_DETAIL_JSON")
-  echo "$tmp_compute" > "$ORDER_CHECK_JSON" || true
+                     check: ((.data.pay_amount|tonumber) == ((.data.total_amount|tonumber) - (.data.discount_amount|tonumber))) }' "$ORDER_DETAIL_ANY")
+  echo "$tmp_compute" > "$ORDER_CHECK_OUT" || true
   if echo "$tmp_compute" | jq -e '.check==true' >/dev/null 2>&1; then
-    echo "Amount check passed via $ORDER_DETAIL_JSON (computed -> $ORDER_CHECK_JSON)"
+    echo "Amount check passed via $ORDER_DETAIL_ANY (computed -> $ORDER_CHECK_OUT)"
   else
-    echo "ERROR: Amount check failed via $ORDER_DETAIL_JSON"
+    echo "ERROR: Amount check failed via $ORDER_DETAIL_ANY"
     exit 4
   fi
 else
   if [ "$REQUIRE_ORDER_CHECK" = "1" ]; then
     echo "ERROR: No order verification files found while REQUIRE_ORDER_CHECK=1"
-    echo "Expected one of: $ORDER_CHECK_JSON | $ORDER_SUMMARY_JSON | $ORDER_DETAIL_JSON"
+    echo "Expected one of: $LOG_DIR/order_detail_*_checked.json | $ORDER_SUMMARY_JSON | $LOG_DIR/order_detail_[0-9]*.json"
     exit 5
   else
     echo "WARNING: No order verification files found; skipping amount check"

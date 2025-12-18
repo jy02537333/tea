@@ -179,6 +179,22 @@ PY
   )
 fi
 
+# If still empty, fallback to dev-login in local/dev envs
+if [ -z "$TOKEN" ]; then
+  curl -sS -H "Content-Type: application/json" -d '{"openid":"admin_openid"}' "http://127.0.0.1:${PORT_USE}/api/v1/user/dev-login" -o "$RESP_FILE" || true
+  TOKEN=$(python3 - "$RESP_FILE" <<'PY'
+import sys, json
+try:
+    obj = json.load(open(sys.argv[1]))
+except Exception:
+    print("")
+    sys.exit(0)
+data = obj.get('data') or obj
+print((data.get('token') if isinstance(data, dict) else "") or "")
+PY
+  )
+fi
+
 if [ -z "$TOKEN" ]; then
   echo "[run-tea-api] Failed to obtain token from $LOGIN_URL. See $RESP_FILE and server log."
   exit 3

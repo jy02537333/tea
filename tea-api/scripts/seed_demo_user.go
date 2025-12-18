@@ -2,13 +2,19 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"time"
 
+	"tea-api/internal/config"
 	"tea-api/pkg/database"
 )
 
 // Seed a demo user and related records for E2E summary aggregation.
 func main() {
+	// Load config to populate database connection from config file and env overrides
+	if err := config.LoadConfig("configs/config.yaml"); err != nil {
+		log.Fatalf("load config: %v", err)
+	}
 	_, err := database.InitWithoutMigrate()
 	if err != nil {
 		panic(err)
