@@ -53,13 +53,13 @@ jobs:
       - name: Start tea-api server
         working-directory: tea-api
         env:
-          DB_HOST: 127.0.0.1
-          DB_PORT: 3306
-          DB_USER: root
-          DB_PASSWORD: root
-          DB_NAME: tea_shop
+          TEA_DATABASE_HOST: 127.0.0.1
+          TEA_DATABASE_PORT: 3306
+          TEA_DATABASE_USERNAME: root
+          TEA_DATABASE_PASSWORD: root
+          TEA_DATABASE_DBNAME: tea_shop
           REDIS_ADDR: 127.0.0.1:6379
-          GIN_MODE: release
+          TEA_AUTO_MIGRATE: "1"
         run: |
           mkdir -p ../build-ci-logs
           ./tea-api > ../build-ci-logs/tea-api.out 2>&1 & echo $! > ../build-ci-logs/tea-api.pid
@@ -99,11 +99,11 @@ jobs:
         if: env.CI_SEED == '1'
         working-directory: tea-api
         env:
-          DB_HOST: 127.0.0.1
-          DB_PORT: 3306
-          DB_USER: root
-          DB_PASSWORD: root
-          DB_NAME: tea_shop
+          TEA_DATABASE_HOST: 127.0.0.1
+          TEA_DATABASE_PORT: 3306
+          TEA_DATABASE_USERNAME: root
+          TEA_DATABASE_PASSWORD: root
+          TEA_DATABASE_DBNAME: tea_shop
         run: |
           go run ./scripts/seed_demo_user.go
 
