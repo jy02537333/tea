@@ -6,6 +6,12 @@
 
 This folder contains CI job templates to run the repository's `scripts/run_api_validation.sh` in CI and collect artifacts.
 
+## 版本标签（Releases / Tags）
+
+- `v0.1-a-first`：启用“主线门禁（A-first）”，将 Sprint A 作为阻断检查（严格断言：订单金额校验 + 回调签名），Sprint B 为非阻断，仅归档证据。此标签定位于 `master` 当前稳定点，便于回溯证据文件（位于 `build-ci-logs/`，由 CI 工件归档）。
+  - 查看代码：`https://github.com/jy02537333/tea/tree/v0.1-a-first`
+  - 查看工作流运行与工件：`https://github.com/jy02537333/tea/actions/workflows/api-validation.yml`
+
 Provided files:
 
 - `.github/workflows/api-validation.yml` — GitHub Actions workflow that: checks out the repo, starts MySQL/Redis/RabbitMQ as services, builds and runs `tea-api`, seeds example SKU, runs `scripts/run_api_validation.sh`, and uploads `build-ci-logs` as artifacts.

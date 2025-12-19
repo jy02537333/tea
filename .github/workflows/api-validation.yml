@@ -79,20 +79,17 @@ jobs:
           MYSQL_PASS=root
           MYSQL_DB=tea_shop
           cat > /tmp/seed.sql <<'EOF'
-          INSERT INTO categories (id, uid, name, status)
-          SELECT 1, 'cat-seed-1', '默认分类', 1
+          -- Adapted to current GORM models (decimal prices in products/product_skus)
+          INSERT INTO categories (id, name, description, image, sort, status, parent_id)
+          SELECT 1, '默认分类', '', '', 0, 1, 0
           WHERE NOT EXISTS (SELECT 1 FROM categories WHERE id=1);
 
-          INSERT INTO stores (id, uid, name, address, phone, latitude, longitude, business_hours, status)
-          SELECT 1, 'store-seed-1', '测试门店', '上海某路1号', '12345678', 31.2304, 121.4737, '09:00-21:00', 1
-          WHERE NOT EXISTS (SELECT 1 FROM stores WHERE id=1);
-
-          INSERT INTO products (id, uid, category_id, name, description, price, status)
-          SELECT 1001, 'prod-seed-1001', 1, '测试商品', '自动化测试用商品', 19.99, 1
+          INSERT INTO products (id, category_id, name, description, images, price, original_price, stock, status)
+          SELECT 1001, 1, '测试商品', '自动化测试用商品', '[]', 19.99, 19.99, 100, 1
           WHERE NOT EXISTS (SELECT 1 FROM products WHERE id=1001);
 
-          INSERT INTO product_skus (id, uid, product_id, sku_name, price, stock, status)
-          SELECT 2001, 'sku-seed-2001', 1001, '默认SKU', 19.99, 100, 1
+          INSERT INTO product_skus (id, product_id, sku_name, sku_code, price, stock, status)
+          SELECT 2001, 1001, '默认SKU', 'sku-seed-2001', 19.99, 100, 1
           WHERE NOT EXISTS (SELECT 1 FROM product_skus WHERE id=2001);
           EOF
           mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PASS" "$MYSQL_DB" < /tmp/seed.sql

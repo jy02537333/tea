@@ -305,12 +305,24 @@ func (h *StoreHandler) ExportFinanceTransactions(c *gin.Context) {
 		var jsonPhase, jsonWithdrawNo, jsonAmountCents, jsonFeeCents, jsonNetCents, jsonCurrency string
 		var rm map[string]any
 		if err := json.Unmarshal([]byte(item.Remark), &rm); err == nil && rm != nil {
-			if v, ok := rm["phase"].(string); ok { jsonPhase = v }
-			if v, ok := rm["withdraw_no"].(string); ok { jsonWithdrawNo = v }
-			if v, ok := rm["currency"].(string); ok { jsonCurrency = v }
-			if v, ok := rm["amount_cents"].(float64); ok { jsonAmountCents = fmt.Sprintf("%d", int64(v)) }
-			if v, ok := rm["fee_cents"].(float64); ok { jsonFeeCents = fmt.Sprintf("%d", int64(v)) }
-			if v, ok := rm["net_cents"].(float64); ok { jsonNetCents = fmt.Sprintf("%d", int64(v)) }
+			if v, ok := rm["phase"].(string); ok {
+				jsonPhase = v
+			}
+			if v, ok := rm["withdraw_no"].(string); ok {
+				jsonWithdrawNo = v
+			}
+			if v, ok := rm["currency"].(string); ok {
+				jsonCurrency = v
+			}
+			if v, ok := rm["amount_cents"].(float64); ok {
+				jsonAmountCents = fmt.Sprintf("%d", int64(v))
+			}
+			if v, ok := rm["fee_cents"].(float64); ok {
+				jsonFeeCents = fmt.Sprintf("%d", int64(v))
+			}
+			if v, ok := rm["net_cents"].(float64); ok {
+				jsonNetCents = fmt.Sprintf("%d", int64(v))
+			}
 		}
 
 		line := fmt.Sprintf("%d,%s,%s,%.2f,%.2f,%d,%d,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
