@@ -37,7 +37,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-            go-version: '1.22'
+            go-version: '1.24.x'
 
       - name: Install system deps
         run: |
@@ -83,6 +83,11 @@ jobs:
           INSERT INTO categories (id, name, description, image, sort, status, parent_id)
           SELECT 1, '默认分类', '', '', 0, 1, 0
           WHERE NOT EXISTS (SELECT 1 FROM categories WHERE id=1);
+
+          -- Seed a demo store for admin stats assertions
+          INSERT INTO stores (id, name, address, phone, latitude, longitude, business_hours, images, status)
+          SELECT 1, '测试门店', '上海某路1号', '12345678', 31.2304, 121.4737, '09:00-21:00', '[]', 1
+          WHERE NOT EXISTS (SELECT 1 FROM stores WHERE id=1);
 
           INSERT INTO products (id, category_id, name, description, images, price, original_price, stock, status)
           SELECT 1001, 1, '测试商品', '自动化测试用商品', '[]', 19.99, 19.99, 100, 1
@@ -130,17 +135,17 @@ jobs:
         run: |
           bash scripts/local_api_check.sh | tee build-ci-logs/api-validation-stateful-$(date +%Y%m%d%H%M%S).log
 
-      - name: Admin dev-login (token for assertions)
+      - name: Admin login (token for assertions)
         run: |
           mkdir -p build-ci-logs
-          LOGIN_URL="http://127.0.0.1:9292/api/v1/user/login"
+          LOGIN_URL="http://127.0.0.1:9292/api/v1/auth/login"
           RESP_FILE="build-ci-logs/admin_login_response.json"
-          # Try username/password first
+          # Try username/password first (unified auth/login)
           curl -sS -H 'Content-Type: application/json' -d '{"username":"admin","password":"pass"}' "$LOGIN_URL" -o "$RESP_FILE" || true
           TOKEN=$(jq -r '.data.token // .token // empty' "$RESP_FILE" 2>/dev/null || echo "")
           if [[ -z "$TOKEN" ]]; then
-            # Fallback to openid login
-            curl -sS -H 'Content-Type: application/json' -d '{"openid":"admin_openid"}' "http://127.0.0.1:9292/api/v1/user/dev-login" -o "$RESP_FILE" || true
+            # Fallback: try openid body on unified auth endpoint
+            curl -sS -H 'Content-Type: application/json' -d '{"openid":"admin_openid"}' "$LOGIN_URL" -o "$RESP_FILE" || true
             TOKEN=$(jq -r '.data.token // .token // empty' "$RESP_FILE" 2>/dev/null || echo "")
           fi
           if [[ -z "$TOKEN" ]]; then
