@@ -95,16 +95,21 @@ status=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/v1/health" || tru
 curl_json GET /api/v1/health no || true
 record "health" "GET" "$BASE_URL/api/v1/health" "$status" "$([[ "$status" == "200" ]] && echo true || echo false)" ""
 
-# 2) Dev login to obtain token (unified auth/login)
-AUTH_LOGIN_URL="$BASE_URL/api/v1/auth/login"
-# Try username/password first, then openid on the same endpoint
+# 2) Dev login to obtain token (try unified and legacy paths)
+# Attempt unified auth/login first
 AUTH_LOGIN_BODY1='{"username":"admin","password":"pass"}'
-resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY1" "$AUTH_LOGIN_URL" || true)
+resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY1" "$BASE_URL/api/v1/auth/login" || true)
 echo "$resp" > "$OUT_DIR/POST__api_v1_auth_login.json"
 if [[ -z "$resp" || "$resp" == "null" ]]; then
+  # Fallback to legacy user/login
+  resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY1" "$BASE_URL/api/v1/user/login" || true)
+  echo "$resp" > "$OUT_DIR/POST__api_v1_user_login.json"
+fi
+if [[ -z "$resp" || "$resp" == "null" ]]; then
+  # Fallback to dev-login openid
   AUTH_LOGIN_BODY2='{"openid":"admin_openid"}'
-  resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY2" "$AUTH_LOGIN_URL" || true)
-  echo "$resp" > "$OUT_DIR/POST__api_v1_auth_login_openid.json"
+  resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY2" "$BASE_URL/api/v1/user/dev-login" || true)
+  echo "$resp" > "$OUT_DIR/POST__api_v1_user_dev-login_openid.json"
 fi
 
 # Extract token (prefer jq for robustness)
