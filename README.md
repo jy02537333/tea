@@ -1,5 +1,9 @@
 # API Validation CI Templates
 
+> 主线门禁：`master` 分支已启用分支保护，合并必须通过 “API Validation” 工作流（Sprint A 阻塞、Sprint B 非阻塞）。详见 `doc/prd.md` 与 `doc/prd_sprints.md`。
+
+[![API Validation](https://github.com/jy02537333/tea/actions/workflows/api-validation.yml/badge.svg?branch=master)](https://github.com/jy02537333/tea/actions/workflows/api-validation.yml)
+
 This folder contains CI job templates to run the repository's `scripts/run_api_validation.sh` in CI and collect artifacts.
 
 Provided files:
@@ -15,6 +19,7 @@ How it works (summary):
 3. Run seeder steps (example SKU creation) so validation has minimal data.
 4. Run `sh scripts/run_api_validation.sh` which performs HTTP requests and writes responses under `build-ci-logs/api_validation/` and `build-ci-logs/admin_login_response.json`.
 5. Upload `build-ci-logs` as CI artifacts for QA review.
+6. Evidence artifacts: key verification files are saved under `build-ci-logs/` (e.g., `order_amounts_summary.json`, `order_detail_*_checked.json`, and stateful bodies under `api_validation_stateful/`) and are uploaded for easy triage. See generation and assertions in `scripts/local_api_check.sh` (evidence creation) and `scripts/assert_api_validation.sh` (strict checks).
 
 Notes & tips:
 

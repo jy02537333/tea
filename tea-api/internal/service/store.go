@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -43,6 +44,20 @@ type StoreFinanceTransaction struct {
 	Method    int             `json:"method"`     // 支付方式（对支付/退款有效）
 	Remark    string          `json:"remark"`
 	CreatedAt time.Time       `json:"created_at"`
+}
+
+// buildStoreWithdrawApplyRemark 构造门店发起提现申请阶段的备注(JSON)
+// 与用户钱包提现的 freeze 结构保持一致，便于统一解析
+func buildStoreWithdrawApplyRemark(amountCents, feeCents, netCents int64) string {
+	m := map[string]any{
+		"phase":        "freeze",
+		"amount_cents": amountCents,
+		"fee_cents":    feeCents,
+		"net_cents":    netCents,
+		"currency":     "CNY",
+	}
+	b, _ := json.Marshal(m)
+	return string(b)
 }
 
 // ListStoreAccounts 列出门店收款账户
@@ -501,7 +516,8 @@ func (s *StoreService) ApplyStoreWithdraw(storeID uint, amount decimal.Decimal, 
 		ActualAmount: netAmt,
 		WithdrawType: withdrawType,
 		Status:       model.WithdrawStatusPending,
-		Remark:       remark,
+		// 统一备注为可解析 JSON，包含金额/手续费/净额（分）
+		Remark: buildStoreWithdrawApplyRemark(amountCents, feeCents, netCents),
 	}
 	if err := s.db.Create(rec).Error; err != nil {
 		return nil, err

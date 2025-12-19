@@ -88,6 +88,14 @@ system:
   iplimit_count: 15000
   iplimit_time: 3600
 
+finance:
+  withdrawal:
+    min_amount_cents: 1000     # 最低提现额度（分），默认 10 元
+    fee_fixed_cents: 0         # 固定手续费（分）
+    fee_rate_bp: 30            # 比例手续费，单位基点（万分制），30=0.30%
+    fee_min_cents: 100         # 最低手续费（分），默认 1 元
+    fee_cap_cents: 0           # 手续费封顶（分），0 表示不封顶
+
 # AI / LLM runtime configuration (optional)
 # To enable a specific model for all clients, set `enabled: true` and
 # provide the MODEL_API_KEY via environment or secret management.

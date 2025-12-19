@@ -171,6 +171,7 @@ type System struct {
 type Finance struct {
 	Accrual           Accrual           `mapstructure:"accrual" json:"accrual" yaml:"accrual"`
 	CommissionRelease CommissionRelease `mapstructure:"commission_release" json:"commission_release" yaml:"commission_release"`
+	Withdrawal        Withdrawal        `mapstructure:"withdrawal" json:"withdrawal" yaml:"withdrawal"`
 }
 
 type Accrual struct {
@@ -193,6 +194,15 @@ type CommissionRelease struct {
 	LockTTLSecond int    `mapstructure:"lock_ttl_second" json:"lock_ttl_second" yaml:"lock_ttl_second"`
 	Timezone      string `mapstructure:"timezone" json:"timezone" yaml:"timezone"`
 	BatchSize     int    `mapstructure:"batch_size" json:"batch_size" yaml:"batch_size"`
+}
+
+// Withdrawal 提现费用与限额配置
+type Withdrawal struct {
+	MinAmountCents int64 `mapstructure:"min_amount_cents" json:"min_amount_cents" yaml:"min_amount_cents"`
+	FeeFixedCents  int64 `mapstructure:"fee_fixed_cents" json:"fee_fixed_cents" yaml:"fee_fixed_cents"`
+	FeeRateBp      int64 `mapstructure:"fee_rate_bp" json:"fee_rate_bp" yaml:"fee_rate_bp"` // 手续费比例，基点（万分制），如 30 表示 0.30%
+	FeeMinCents    int64 `mapstructure:"fee_min_cents" json:"fee_min_cents" yaml:"fee_min_cents"`
+	FeeCapCents    int64 `mapstructure:"fee_cap_cents" json:"fee_cap_cents" yaml:"fee_cap_cents"`
 }
 
 // Observability 可观测性配置
@@ -265,6 +275,13 @@ func LoadConfig(path string) error {
 	viper.SetDefault("rabbitmq.username", "guest")
 	viper.SetDefault("rabbitmq.password", "guest")
 	viper.SetDefault("rabbitmq.vhost", "/")
+
+	// Withdrawal defaults
+	viper.SetDefault("finance.withdrawal.min_amount_cents", 1000) // 最低提现 10 元
+	viper.SetDefault("finance.withdrawal.fee_fixed_cents", 0)     // 固定手续费（默认 0）
+	viper.SetDefault("finance.withdrawal.fee_rate_bp", 30)        // 比例手续费：0.30%
+	viper.SetDefault("finance.withdrawal.fee_min_cents", 100)     // 最低手续费 1 元
+	viper.SetDefault("finance.withdrawal.fee_cap_cents", 0)       // 封顶手续费（0 表示不封顶）
 
 	if err := viper.ReadInConfig(); err != nil {
 		return fmt.Errorf("failed to read config file: %w", err)

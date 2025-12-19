@@ -54,6 +54,27 @@ func SetupRouter() *gin.Engine {
 	// Sprint B: 我的/个人中心聚合（最小连通性）
 	api.GET("/users/me/summary", middleware.AuthJWT(), handler.GetUserSummary)
 
+	// Sprint B: 用户钱包（余额与流水）
+	api.GET("/wallet", middleware.AuthJWT(), handler.GetMyWallet)
+	api.GET("/wallet/transactions", middleware.AuthJWT(), handler.ListMyWalletTransactions)
+
+	// Sprint B: 用户提现账户与申请
+	api.GET("/wallet/bank-accounts", middleware.AuthJWT(), handler.ListMyBankAccounts)
+	api.POST("/wallet/bank-accounts", middleware.AuthJWT(), handler.CreateMyBankAccount)
+	api.DELETE("/wallet/bank-accounts/:id", middleware.AuthJWT(), handler.DeleteMyBankAccount)
+	// 两种入口：按 PRD 支持 /wallet/withdrawals 以及 /users/{id}/withdrawals
+	api.POST("/wallet/withdrawals", middleware.AuthJWT(), handler.CreateMyWithdrawal)
+	api.GET("/users/:id/withdrawals", middleware.AuthJWT(), handler.ListUserWithdrawals)
+	api.POST("/users/:id/withdrawals", middleware.AuthJWT(), handler.CreateUserWithdrawal)
+
+	// Sprint B: 积分查询与流水
+	api.GET("/points", middleware.AuthJWT(), handler.GetMyPoints)
+	api.GET("/points/transactions", middleware.AuthJWT(), handler.ListMyPointsTransactions)
+
+	// Sprint B: 优惠券模板与领取
+	api.GET("/coupons/templates", middleware.AuthJWT(), handler.ListCouponTemplates)
+	api.POST("/coupons/claim", middleware.AuthJWT(), handler.ClaimCouponFromTemplate)
+
 	// 会员相关（小程序/用户侧只读接口）
 	api.GET("/membership-packages", middleware.AuthMiddleware(), membershipHandler.ListPackages)
 	api.POST("/membership-orders", middleware.AuthMiddleware(), membershipHandler.CreateOrder)
@@ -129,6 +150,11 @@ func SetupRouter() *gin.Engine {
 		adminGroup.POST("/partner-levels", membershipAdminHandler.CreatePartnerLevel)
 		adminGroup.PUT("/partner-levels/:id", membershipAdminHandler.UpdatePartnerLevel)
 		adminGroup.DELETE("/partner-levels/:id", membershipAdminHandler.DeletePartnerLevel)
+
+		// 提现申请审批（管理员）别名路径，复用 withdraws 处理器
+		adminGroup.GET("/withdrawals", withdrawAdminHandler.List)
+		adminGroup.POST("/withdrawals/:id/approve", withdrawAdminHandler.Approve)
+		adminGroup.POST("/withdrawals/:id/reject", withdrawAdminHandler.Reject)
 	}
 
 	// 调试与容错：为订单趋势提供一个仅鉴权、不做角色校验的别名，便于前端联调
