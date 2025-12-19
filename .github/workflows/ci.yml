@@ -51,11 +51,11 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22.x'
+          go-version: '1.24.x'
 
-      - name: tea-api build
+      - name: tea-api build (module only)
         working-directory: tea-api
-        run: go build ./...
+        run: go build -o tea-api ./
 
       # 可选：如果你希望在未来跑 go 测试，请取消下面注释；当前仓库有历史集成测试失败
       # - name: tea-api test
