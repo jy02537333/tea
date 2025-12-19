@@ -138,14 +138,18 @@ jobs:
       - name: Admin login (token for assertions)
         run: |
           mkdir -p build-ci-logs
-          LOGIN_URL="http://127.0.0.1:9292/api/v1/auth/login"
           RESP_FILE="build-ci-logs/admin_login_response.json"
-          # Try username/password first (unified auth/login)
-          curl -sS -H 'Content-Type: application/json' -d '{"username":"admin","password":"pass"}' "$LOGIN_URL" -o "$RESP_FILE" || true
+          # Attempt unified auth/login (username/password)
+          curl -sS -H 'Content-Type: application/json' -d '{"username":"admin","password":"pass"}' "http://127.0.0.1:9292/api/v1/auth/login" -o "$RESP_FILE" || true
           TOKEN=$(jq -r '.data.token // .token // empty' "$RESP_FILE" 2>/dev/null || echo "")
           if [[ -z "$TOKEN" ]]; then
-            # Fallback: try openid body on unified auth endpoint
-            curl -sS -H 'Content-Type: application/json' -d '{"openid":"admin_openid"}' "$LOGIN_URL" -o "$RESP_FILE" || true
+            # Fallback 1: legacy user/login
+            curl -sS -H 'Content-Type: application/json' -d '{"username":"admin","password":"pass"}' "http://127.0.0.1:9292/api/v1/user/login" -o "$RESP_FILE" || true
+            TOKEN=$(jq -r '.data.token // .token // empty' "$RESP_FILE" 2>/dev/null || echo "")
+          fi
+          if [[ -z "$TOKEN" ]]; then
+            # Fallback 2: dev-login openid
+            curl -sS -H 'Content-Type: application/json' -d '{"openid":"admin_openid"}' "http://127.0.0.1:9292/api/v1/user/dev-login" -o "$RESP_FILE" || true
             TOKEN=$(jq -r '.data.token // .token // empty' "$RESP_FILE" 2>/dev/null || echo "")
           fi
           if [[ -z "$TOKEN" ]]; then
