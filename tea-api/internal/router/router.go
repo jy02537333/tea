@@ -2,7 +2,7 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
-    
+
 	"tea-api/internal/handler"
 	"tea-api/internal/middleware"
 	"tea-api/internal/service"
