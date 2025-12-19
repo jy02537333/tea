@@ -184,6 +184,30 @@ TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
 > 1）本 PRD 主要聚焦业务与交互层面的「做什么」和「大致怎么做」，具体字段、接口入参与状态流转细节，请以上述技术文档为准，并保持两侧同步维护。
 > 2）后续新增任意与本项目相关的设计/运维/协作文档，建议在创建后同步在本节按类别添加一行说明，保持「文档地图」完整，方便新成员快速上手。
 
+    ### 主分支保护与 CI 门禁（master）
+
+    为确保主线稳定性与可回溯性，`master` 分支已启用如下保护与门禁策略（以 GitHub Branch Protection 为准）：
+
+    - 必需状态检查：`API Validation`（strict=true）。
+    - 管理员强制（enforce_admins）：启用。
+    - 线性历史（required_linear_history）：启用。
+    - 会话解析必需（required_conversation_resolution）：启用。
+
+    合并策略与建议：
+
+    - 一律通过 Pull Request 合并至 `master`，在 CI 通过后方可合并。
+    - 审核人数：目前未强制要求最少审批数；如需更严格控制，建议开启「至少 1 个批准」并启用「驳回过期审批」。
+
+    门禁规则（A-first 策略）：
+
+    - Sprint A 为阻塞项：必须通过订单金额等式校验证据（`build-ci-logs/order_amounts_summary.json` 或 `order_detail_*_checked.json`），否则禁止合并。
+    - Sprint B 为非阻塞项：会员购买成功路径的证据会被归档与展示，但不阻塞合并，可在后续迭代提升为阻塞。
+
+    变更与维护：
+
+    - 分支保护规则通过 GitHub 设置或 API（Branch Protection）维护；`API Validation` 的工作流定义位于 `.github/workflows/api-validation.yml`。
+    - 若新增/调整必需检查项，请同步更新本节与工作流名称，保持文档与系统配置一致。
+
 ## 五、系统流程（文字版）
 
 本节以文字形式描述核心业务流程，串联前端、后端与门店后台在「下单 → 支付 → 履约 → 分销/合伙人结算」中的关键节点，便于研发、测试和运营对齐整体业务路径。
