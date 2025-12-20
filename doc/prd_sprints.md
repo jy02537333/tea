@@ -262,6 +262,21 @@
   - 分销佣金计算场景、提现阈值与提现流程测试
   - 门店接单并打印流程测试（本地或模拟打印机服务）
 
+#### PR 进展（#44 / #45 / #46）
+
+- 已交付（#44）：
+  - 分销/推荐关系与闭包表、佣金计算与冻结解冻流、合伙人礼包购买与升级、门店后台接单/拒单与打印任务、`POST /api/v1/admin/storage/oss/policy` 策略签发。
+  - 路由接入：用户佣金查询与汇总、推荐关系记录与统计、门店订单列表与接单/拒单、OSS 直传策略（Admin）。
+  - 待补项：后台商品 CRUD 与相关 DB 迁移（`products/product_skus/product_media/brands/product_categories`）；拒单退款实际集成/待办队列；API 文档补充 `doc/api/oss.md` 与 Sprint C 对应章节标注交付状态。
+
+- 支撑测试（#45）：
+  - 新增 Sprint A/B 回归测试脚本与 Go 测试，作为 Sprint C 的基线稳定性保障（非阻断）。
+
+- 开发工具（#46）：
+  - 改进 `scripts/gh-create.pr.sh` 未提交改动提示（双语/更清晰），提升 PR 提交流程的可用性。
+
+验收建议：待 #44 完成后台商品 CRUD + 迁移与退款路径补齐后，整体满足 Sprint C 主干目标；并在 `doc/prd_sprints.md`、OpenAPI 规范中同步接口与错误码说明。
+
 ### Sprint C — 关键 API（草案）
 
 - POST /api/v1/admin/products
