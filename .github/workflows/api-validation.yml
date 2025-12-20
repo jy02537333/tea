@@ -130,6 +130,34 @@ jobs:
           fi
 
           echo "HTTP seeding completed."
+      
+      - name: Seed default SKU for first product (Go script)
+        working-directory: tea-api
+        env:
+          TEA_DATABASE_HOST: 127.0.0.1
+          TEA_DATABASE_PORT: 3306
+          TEA_DATABASE_USERNAME: root
+          TEA_DATABASE_PASSWORD: root
+          TEA_DATABASE_DBNAME: tea_shop
+        run: |
+          set -euo pipefail
+          echo "Seeding a default SKU for the first product if none exists"
+          BASE_URL="http://127.0.0.1:9292"
+          PJSON=$(curl -sS "$BASE_URL/api/v1/products?page=1&limit=10" || echo '{}')
+          PID=$(echo "$PJSON" | jq -r '.data[0].id // empty' 2>/dev/null || echo "")
+          if [[ -n "$PID" ]]; then
+            DJSON=$(curl -sS "$BASE_URL/api/v1/products/$PID" || echo '{}')
+            SKUS_COUNT=$(echo "$DJSON" | jq -r '.data.skus | length' 2>/dev/null || echo 0)
+            if [[ "$SKUS_COUNT" == "0" ]]; then
+              echo "Creating a default SKU for product id=$PID"
+              # Use tea-api config to connect to the same DB
+              go run ./scripts/seed_skus --config=configs/config.yaml --product="$PID" --sku_name="默认规格" --price="19.99" --stock=100 || true
+            else
+              echo "Product id=$PID already has $SKUS_COUNT SKU(s)"
+            fi
+          else
+            echo "No product found; skipping SKU seeding"
+          fi
       # Removed DB client-based seeding; HTTP seeding above ensures minimal records
 
       - name: Seed demo user and membership data
