@@ -161,9 +161,9 @@ record "cart_get" "GET" "$BASE_URL/api/v1/cart" "$cstat" "$([[ "$cstat" == "200"
 curl_json GET /api/v1/user/coupons yes || true
 
 # 4) Basic catalog endpoints (no auth)
-plist=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/v1/products" || true)
-curl_json GET /api/v1/products no || true
-record "products_list" "GET" "$BASE_URL/api/v1/products" "$plist" "$([[ "$plist" == "200" ]] && echo true || echo false)" ""
+plist=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/v1/products?page=1&limit=10" || true)
+curl_json GET /api/v1/products?page=1\&limit=10 no || true
+record "products_list" "GET" "$BASE_URL/api/v1/products?page=1&limit=10" "$plist" "$([[ "$plist" == "200" ]] && echo true || echo false)" ""
 
 clist=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/v1/categories" || true)
 curl_json GET /api/v1/categories no || true
@@ -182,8 +182,14 @@ if [[ -n "$AUTH_HEADER" ]]; then
   set +e
   log "Attempting minimal cart/order flow with existing catalog"
   # Fetch products to pick one
-  products_json=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/products?page=1&size=10" || true)
-  echo "$products_json" > "$OUT_DIR/GET__api_v1_products_page_1_size_10.json"
+  # Prefer store-specific product listing if STORE_ID available
+  if [[ -n "$STORE_ID" ]]; then
+    products_json=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/products?page=1&limit=10&store_id=$STORE_ID" || true)
+    echo "$products_json" > "$OUT_DIR/GET__api_v1_products_page_1_limit_10_store_$STORE_ID.json"
+  else
+    products_json=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/products?page=1&limit=10" || true)
+    echo "$products_json" > "$OUT_DIR/GET__api_v1_products_page_1_limit_10.json"
+  fi
   prod_id=$(echo "$products_json" | jq -r '.data[0].id // empty' 2>/dev/null || echo "")
 
   if [[ -n "$prod_id" ]]; then
@@ -197,16 +203,18 @@ import sys, json
 path=sys.argv[1]
 try:
   d=json.loads(open(path, 'r', encoding='utf-8').read())
-  sku=d.get('sku')
-  print('true' if isinstance(sku, list) else 'false')
+  data=d.get('data') if isinstance(d, dict) else {}
+  skus=(data or {}).get('skus') if isinstance(data, dict) else None
+  print('true' if isinstance(skus, list) else 'false')
 except Exception:
   print('false')
 PY
       "$OUT_DIR/GET__api_v1_products_${prod_id}.json")
       ok_combined=false
       if [[ "$pstatus" == "200" && "$pok" == "true" ]]; then ok_combined=true; fi
-      record "product_detail" "GET" "$BASE_URL/products/$prod_id" "$pstatus" "$ok_combined" "sku_list=$pok"
-    sku_id=$(echo "$detail_json" | jq -r '.sku[0].id // .sku[0].sku_id // empty' 2>/dev/null || echo "")
+      record "product_detail" "GET" "$BASE_URL/api/v1/products/$prod_id" "$pstatus" "$ok_combined" "skus_list=$pok"
+    # Prefer first skus id under data.skus
+    sku_id=$(echo "$detail_json" | jq -r '.data.skus[0].id // .data.skus[0].sku_id // empty' 2>/dev/null || echo "")
     qty=1
     add_body=$(jq -n --argjson pid "$prod_id" --argjson qty "$qty" --arg sku "$sku_id" --arg store "$STORE_ID" '
       {product_id: ($pid|tonumber), quantity: ($qty|tonumber)}
@@ -226,8 +234,8 @@ import sys, json
 path=sys.argv[1]
 try:
   c=json.loads(open(path, 'r', encoding='utf-8').read())
-  items=c.get('items')
-  print('true' if isinstance(items, list) else 'false')
+  data=c.get('data') if isinstance(c, dict) else None
+  print('true' if isinstance(data, list) else 'false')
 except Exception:
   print('false')
 PY
@@ -236,7 +244,8 @@ PY
       if [[ "$cstatus" == "200" && "$cok" == "true" ]]; then ok_combined=true; fi
       record "cart_items" "GET" "$BASE_URL/cart" "$cstatus" "$ok_combined" "items_list=$cok"
     # Create order from cart（最小必需字段）: delivery_type=1(自取), order_type=1(商城)
-    order_body=$(jq -n '{delivery_type: 1, order_type: 1}')
+    # Include store_id if available to ensure store-based stock path
+    order_body=$(jq -n --arg store "$STORE_ID" '{delivery_type: 1, order_type: 1} + ( ($store|tostring|length)>0 and {store_id: ($store|tonumber)} or {} )')
     create_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$order_body" "$BASE_URL/api/v1/orders/from-cart" || true)
     echo "$create_resp" > "$OUT_DIR/POST__api_v1_orders_from-cart.json"
     # CSV: order create returns id and status 200
