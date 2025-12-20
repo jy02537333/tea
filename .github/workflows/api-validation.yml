@@ -71,8 +71,12 @@ jobs:
       - name: Seed minimal data (conditional)
         if: env.CI_SEED == '1'
         run: |
+          set -e
           echo "Seeding minimal data for stable assertions (CI_SEED=1)"
-          sudo apt-get update -y && sudo apt-get install -y mysql-client || true
+          sudo apt-get update -y
+          # Install MySQL client; default-mysql-client works across Ubuntu images
+          sudo apt-get install -y default-mysql-client
+          mysql --version
           MYSQL_HOST=127.0.0.1
           MYSQL_PORT=3306
           MYSQL_USER=root
