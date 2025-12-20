@@ -75,7 +75,7 @@ jobs:
           echo "Seeding minimal data for stable assertions (CI_SEED=1)"
           sudo apt-get update -y
           # Install MySQL client; default-mysql-client works across Ubuntu images
-          sudo apt-get install -y default-mysql-client
+          sudo apt-get install -y default-mysql-client || sudo apt-get install -y mariadb-client
           mysql --version
           MYSQL_HOST=127.0.0.1
           MYSQL_PORT=3306
