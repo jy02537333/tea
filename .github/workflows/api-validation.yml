@@ -153,10 +153,19 @@ jobs:
             TOKEN=$(jq -r '.data.token // .token // empty' "$RESP_FILE" 2>/dev/null || echo "")
           fi
           if [[ -z "$TOKEN" ]]; then
-            echo "WARN: admin token not obtained; Sprint A assertions may skip or fail auth-dependent checks."
+            echo "::error:: Admin token not obtained; failing fast before Sprint A assertions."
+            echo "admin_login_response.json saved at build-ci-logs/admin_login_response.json for diagnostics"
+            exit 1
           else
             echo "Token acquired (truncated): ${TOKEN:0:12}..."
           fi
+
+      - name: Verify Sprint A evidence presence
+        run: |
+          echo "Checking Sprint A evidence files..."
+          test -f build-ci-logs/order_amounts_summary.json || { echo "::error:: Missing build-ci-logs/order_amounts_summary.json"; exit 1; }
+          # At least one checked detail should exist
+          ls build-ci-logs/order_detail_*_checked.json >/dev/null 2>&1 || { echo "::error:: Missing order_detail_*_checked.json"; exit 1; }
 
       - name: Sprint A verification assertions (strict)
         env:
@@ -203,6 +212,7 @@ jobs:
             build-ci-logs/api-validation-*.log
             build-ci-logs/api-validation-stateful-*.log
             build-ci-logs/tea-api.out
+            build-ci-logs/admin_login_response.json
             build-ci-logs/order_detail_*_checked.json
             build-ci-logs/order_detail_*.json
             build-ci-logs/order_amounts_summary.json

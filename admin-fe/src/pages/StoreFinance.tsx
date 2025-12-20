@@ -122,8 +122,8 @@ export default function StoreFinancePage() {
         <Card>
           {walletQuery.isLoading && <Spin />}
           {walletQuery.isError && <Alert type="error" message="无法获取钱包信息" showIcon />}
-              {withdrawListQuery.data && (
-                <Table<StoreWithdrawRecord>
+          {walletQuery.data && (
+            <>
               <Descriptions column={3} size="small" bordered>
                 <Descriptions.Item label="门店ID">{walletQuery.data.store_id}</Descriptions.Item>
                 <Descriptions.Item label="总收入">￥{Number(walletQuery.data.total_paid).toFixed(2)}</Descriptions.Item>
@@ -134,15 +134,6 @@ export default function StoreFinancePage() {
               <Divider />
             </>
           )}
-                  columns={[
-                    // 解析 remark JSON 的辅助渲染
-                    // 仅在 remark 为合法 JSON 时展示解析列
-                    // 否则该列返回 '-'
-                    {
-                      title: '时间',
-                      dataIndex: 'created_at',
-                      width: 160,
-                    },
           <Space align="start" style={{ width: '100%' }} size={24}>
             <Form
               layout="vertical"
@@ -153,62 +144,6 @@ export default function StoreFinancePage() {
               <Form.Item label="提现状态筛选">
                 <Select
                   allowClear
-                    { title: '备注', dataIndex: 'remark' },
-                    {
-                      title: '阶段',
-                      key: 'remark_phase',
-                      width: 100,
-                      render: (_, record) => {
-                        try {
-                          const obj = record.remark ? JSON.parse(record.remark) : null;
-                          return obj?.phase ?? '-';
-                        } catch { return '-'; }
-                      },
-                    },
-                    {
-                      title: '币种',
-                      key: 'remark_currency',
-                      width: 80,
-                      render: (_, record) => {
-                        try {
-                          const obj = record.remark ? JSON.parse(record.remark) : null;
-                          return obj?.currency ?? '-';
-                        } catch { return '-'; }
-                      },
-                    },
-                    {
-                      title: '金额(分)',
-                      key: 'remark_amount_cents',
-                      width: 120,
-                      render: (_, record) => {
-                        try {
-                          const obj = record.remark ? JSON.parse(record.remark) : null;
-                          return obj?.amount_cents ?? '-';
-                        } catch { return '-'; }
-                      },
-                    },
-                    {
-                      title: '手续费(分)',
-                      key: 'remark_fee_cents',
-                      width: 120,
-                      render: (_, record) => {
-                        try {
-                          const obj = record.remark ? JSON.parse(record.remark) : null;
-                          return obj?.fee_cents ?? '-';
-                        } catch { return '-'; }
-                      },
-                    },
-                    {
-                      title: '实付(分)',
-                      key: 'remark_net_cents',
-                      width: 120,
-                      render: (_, record) => {
-                        try {
-                          const obj = record.remark ? JSON.parse(record.remark) : null;
-                          return obj?.net_cents ?? '-';
-                        } catch { return '-'; }
-                      },
-                    },
                   value={walletStatus}
                   onChange={(val) => {
                     setWalletStatus(val);

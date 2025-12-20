@@ -95,43 +95,58 @@ status=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/v1/health" || tru
 curl_json GET /api/v1/health no || true
 record "health" "GET" "$BASE_URL/api/v1/health" "$status" "$([[ "$status" == "200" ]] && echo true || echo false)" ""
 
-# 2) Dev login to obtain token (try unified and legacy paths)
-# Attempt unified auth/login first
+# 2) Dev login to obtain token (try unified and legacy paths) with fail-fast visibility
 AUTH_LOGIN_BODY1='{"username":"admin","password":"pass"}'
-resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY1" "$BASE_URL/api/v1/auth/login" || true)
-echo "$resp" > "$OUT_DIR/POST__api_v1_auth_login.json"
-if [[ -z "$resp" || "$resp" == "null" ]]; then
+AUTH_LOGIN_URL=""
+TOKEN=""
+login_status=""
+
+# Try unified auth/login first
+resp1=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY1" "$BASE_URL/api/v1/auth/login" || true)
+echo "$resp1" > "$OUT_DIR/POST__api_v1_auth_login.json"
+token1=$(echo "$resp1" | jq -r '.data.token // .token // empty' 2>/dev/null || echo "")
+status1=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY1" "$BASE_URL/api/v1/auth/login" || true)
+if [[ -n "$token1" ]]; then
+  TOKEN="$token1"; AUTH_LOGIN_URL="/api/v1/auth/login"; login_status="$status1"
+else
   # Fallback to legacy user/login
-  resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY1" "$BASE_URL/api/v1/user/login" || true)
-  echo "$resp" > "$OUT_DIR/POST__api_v1_user_login.json"
-fi
-if [[ -z "$resp" || "$resp" == "null" ]]; then
-  # Fallback to dev-login openid
-  AUTH_LOGIN_BODY2='{"openid":"admin_openid"}'
-  resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY2" "$BASE_URL/api/v1/user/dev-login" || true)
-  echo "$resp" > "$OUT_DIR/POST__api_v1_user_dev-login_openid.json"
+  resp2=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY1" "$BASE_URL/api/v1/user/login" || true)
+  echo "$resp2" > "$OUT_DIR/POST__api_v1_user_login.json"
+  token2=$(echo "$resp2" | jq -r '.data.token // .token // empty' 2>/dev/null || echo "")
+  status2=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY1" "$BASE_URL/api/v1/user/login" || true)
+  if [[ -n "$token2" ]]; then
+    TOKEN="$token2"; AUTH_LOGIN_URL="/api/v1/user/login"; login_status="$status2"
+  else
+    # Fallback to dev-login openid
+    AUTH_LOGIN_BODY2='{"openid":"admin_openid"}'
+    resp3=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY2" "$BASE_URL/api/v1/user/dev-login" || true)
+    echo "$resp3" > "$OUT_DIR/POST__api_v1_user_dev-login_openid.json"
+    token3=$(echo "$resp3" | jq -r '.data.token // .token // empty' 2>/dev/null || echo "")
+    status3=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY2" "$BASE_URL/api/v1/user/dev-login" || true)
+    if [[ -n "$token3" ]]; then
+      TOKEN="$token3"; AUTH_LOGIN_URL="/api/v1/user/dev-login"; login_status="$status3"
+    fi
+  fi
 fi
 
-# Extract token (prefer jq for robustness)
-TOKEN=$(echo "$resp" | jq -r '.data.token // .token // empty' 2>/dev/null || echo "")
-
+# Fallback: reuse token from prior run logs if available
 if [[ -z "$TOKEN" ]]; then
-  # Fallback: reuse token from prior run logs if available
   ALT_TOKEN_FILE="$ROOT_DIR/build-ci-logs/admin_login_response.json"
   if [[ -f "$ALT_TOKEN_FILE" ]]; then
     TOKEN=$(grep -Po '"token"\s*:\s*"\K[^"]+' "$ALT_TOKEN_FILE" || true)
+    [[ -n "$TOKEN" ]] && AUTH_LOGIN_URL="(reused) admin_login_response.json"
   fi
 fi
 
 if [[ -n "$TOKEN" ]]; then
   AUTH_HEADER="Authorization: Bearer $TOKEN"
-  log "Obtained token via dev-login."
-  record "dev_login" "POST" "$AUTH_LOGIN_URL" "200" "true" "token acquired"
+  log "Obtained token via endpoint: $AUTH_LOGIN_URL (status=${login_status:-unknown})."
+  record "dev_login" "POST" "$BASE_URL$AUTH_LOGIN_URL" "${login_status:-200}" "true" "token acquired"
 else
   AUTH_HEADER=""
   log "Dev-login did not return a token; proceeding without Authorization header."
-  # record as false if no token
-  record "dev_login" "POST" "$AUTH_LOGIN_URL" "200" "false" "no token"
+  echo "NO_TOKEN" > "$OUT_DIR/NO_TOKEN"
+  record "dev_login" "POST" "$BASE_URL${AUTH_LOGIN_URL:-/api/v1/auth/login}" "${login_status:-401}" "false" "no token"
 fi
 
 # 3) User-facing endpoints with auth to avoid FK issues
