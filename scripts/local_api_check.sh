@@ -173,6 +173,10 @@ slist=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/v1/stores" || true
 curl_json GET /api/v1/stores no || true
 record "stores_list" "GET" "$BASE_URL/api/v1/stores" "$slist" "$([[ "$slist" == "200" ]] && echo true || echo false)" ""
 
+# Pick a store_id for cart operations if available
+stores_json_seed=$(curl -sS -X GET "$BASE_URL/api/v1/stores?page=1&size=10" || echo '{}')
+STORE_ID=$(echo "$stores_json_seed" | jq -r '.data[0].id // empty' 2>/dev/null || echo "")
+
 # 5) Minimal success path assertions: cart add -> cart get -> order create (conditional)
 if [[ -n "$AUTH_HEADER" ]]; then
   set +e
@@ -204,9 +208,10 @@ PY
       record "product_detail" "GET" "$BASE_URL/products/$prod_id" "$pstatus" "$ok_combined" "sku_list=$pok"
     sku_id=$(echo "$detail_json" | jq -r '.sku[0].id // .sku[0].sku_id // empty' 2>/dev/null || echo "")
     qty=1
-    add_body=$(jq -n --argjson pid "$prod_id" --argjson qty "$qty" --arg sku "$sku_id" '
+    add_body=$(jq -n --argjson pid "$prod_id" --argjson qty "$qty" --arg sku "$sku_id" --arg store "$STORE_ID" '
       {product_id: ($pid|tonumber), quantity: ($qty|tonumber)}
       + ( ($sku|tostring|length)>0 and {sku_id: ($sku|tonumber)} or {} )
+      + ( ($store|tostring|length)>0 and {store_id: ($store|tonumber)} or {} )
     ')
     # POST /cart/items（更稳妥，避免部分框架对 /cart 与 /cart/ 的差异）
     add_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$add_body" "$BASE_URL/api/v1/cart/items" || true)
