@@ -95,43 +95,58 @@ status=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/v1/health" || tru
 curl_json GET /api/v1/health no || true
 record "health" "GET" "$BASE_URL/api/v1/health" "$status" "$([[ "$status" == "200" ]] && echo true || echo false)" ""
 
-# 2) Dev login to obtain token (prefer auth/login, fallback to user/dev-login)
-AUTH_LOGIN_URL="$BASE_URL/api/v1/user/login"
-# Try username/password first, then openid
+# 2) Dev login to obtain token (try unified and legacy paths) with fail-fast visibility
 AUTH_LOGIN_BODY1='{"username":"admin","password":"pass"}'
-resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY1" "$AUTH_LOGIN_URL" || true)
-echo "$resp" > "$OUT_DIR/POST__api_v1_auth_login.json"
-if [[ -z "$resp" || "$resp" == "null" ]]; then
-  AUTH_LOGIN_BODY2='{"openid":"admin_openid"}'
-  resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY2" "$BASE_URL/api/v1/user/dev-login" || true)
-  echo "$resp" > "$OUT_DIR/POST__api_v1_user_dev-login_openid.json"
-  if [[ -z "$resp" || "$resp" == "null" ]]; then
-    DEV_LOGIN_BODY='{"openid":"user_openid_local_stateful"}'
-    resp=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$DEV_LOGIN_BODY" "$BASE_URL/api/v1/user/dev-login" || true)
-    echo "$resp" > "$OUT_DIR/POST__api_v1_user_dev-login.json"
+AUTH_LOGIN_URL=""
+TOKEN=""
+login_status=""
+
+# Try unified auth/login first
+resp1=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY1" "$BASE_URL/api/v1/auth/login" || true)
+echo "$resp1" > "$OUT_DIR/POST__api_v1_auth_login.json"
+token1=$(echo "$resp1" | jq -r '.data.token // .token // empty' 2>/dev/null || echo "")
+status1=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY1" "$BASE_URL/api/v1/auth/login" || true)
+if [[ -n "$token1" ]]; then
+  TOKEN="$token1"; AUTH_LOGIN_URL="/api/v1/auth/login"; login_status="$status1"
+else
+  # Fallback to legacy user/login
+  resp2=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY1" "$BASE_URL/api/v1/user/login" || true)
+  echo "$resp2" > "$OUT_DIR/POST__api_v1_user_login.json"
+  token2=$(echo "$resp2" | jq -r '.data.token // .token // empty' 2>/dev/null || echo "")
+  status2=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY1" "$BASE_URL/api/v1/user/login" || true)
+  if [[ -n "$token2" ]]; then
+    TOKEN="$token2"; AUTH_LOGIN_URL="/api/v1/user/login"; login_status="$status2"
+  else
+    # Fallback to dev-login openid
+    AUTH_LOGIN_BODY2='{"openid":"admin_openid"}'
+    resp3=$(curl -sS -X POST -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY2" "$BASE_URL/api/v1/user/dev-login" || true)
+    echo "$resp3" > "$OUT_DIR/POST__api_v1_user_dev-login_openid.json"
+    token3=$(echo "$resp3" | jq -r '.data.token // .token // empty' 2>/dev/null || echo "")
+    status3=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d "$AUTH_LOGIN_BODY2" "$BASE_URL/api/v1/user/dev-login" || true)
+    if [[ -n "$token3" ]]; then
+      TOKEN="$token3"; AUTH_LOGIN_URL="/api/v1/user/dev-login"; login_status="$status3"
+    fi
   fi
 fi
 
-# Extract token (prefer jq for robustness)
-TOKEN=$(echo "$resp" | jq -r '.data.token // .token // empty' 2>/dev/null || echo "")
-
+# Fallback: reuse token from prior run logs if available
 if [[ -z "$TOKEN" ]]; then
-  # Fallback: reuse token from prior run logs if available
   ALT_TOKEN_FILE="$ROOT_DIR/build-ci-logs/admin_login_response.json"
   if [[ -f "$ALT_TOKEN_FILE" ]]; then
     TOKEN=$(grep -Po '"token"\s*:\s*"\K[^"]+' "$ALT_TOKEN_FILE" || true)
+    [[ -n "$TOKEN" ]] && AUTH_LOGIN_URL="(reused) admin_login_response.json"
   fi
 fi
 
 if [[ -n "$TOKEN" ]]; then
   AUTH_HEADER="Authorization: Bearer $TOKEN"
-  log "Obtained token via dev-login."
-  record "dev_login" "POST" "$AUTH_LOGIN_URL" "200" "true" "token acquired"
+  log "Obtained token via endpoint: $AUTH_LOGIN_URL (status=${login_status:-unknown})."
+  record "dev_login" "POST" "$BASE_URL$AUTH_LOGIN_URL" "${login_status:-200}" "true" "token acquired"
 else
   AUTH_HEADER=""
   log "Dev-login did not return a token; proceeding without Authorization header."
-  # record as false if no token
-  record "dev_login" "POST" "$AUTH_LOGIN_URL" "200" "false" "no token"
+  echo "NO_TOKEN" > "$OUT_DIR/NO_TOKEN"
+  record "dev_login" "POST" "$BASE_URL${AUTH_LOGIN_URL:-/api/v1/auth/login}" "${login_status:-401}" "false" "no token"
 fi
 
 # 3) User-facing endpoints with auth to avoid FK issues
@@ -146,9 +161,9 @@ record "cart_get" "GET" "$BASE_URL/api/v1/cart" "$cstat" "$([[ "$cstat" == "200"
 curl_json GET /api/v1/user/coupons yes || true
 
 # 4) Basic catalog endpoints (no auth)
-plist=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/v1/products" || true)
-curl_json GET /api/v1/products no || true
-record "products_list" "GET" "$BASE_URL/api/v1/products" "$plist" "$([[ "$plist" == "200" ]] && echo true || echo false)" ""
+plist=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/v1/products?page=1&limit=10" || true)
+curl_json GET /api/v1/products?page=1\&limit=10 no || true
+record "products_list" "GET" "$BASE_URL/api/v1/products?page=1&limit=10" "$plist" "$([[ "$plist" == "200" ]] && echo true || echo false)" ""
 
 clist=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/v1/categories" || true)
 curl_json GET /api/v1/categories no || true
@@ -158,13 +173,23 @@ slist=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/v1/stores" || true
 curl_json GET /api/v1/stores no || true
 record "stores_list" "GET" "$BASE_URL/api/v1/stores" "$slist" "$([[ "$slist" == "200" ]] && echo true || echo false)" ""
 
+# Pick a store_id for cart operations if available
+stores_json_seed=$(curl -sS -X GET "$BASE_URL/api/v1/stores?page=1&size=10" || echo '{}')
+STORE_ID=$(echo "$stores_json_seed" | jq -r '.data[0].id // empty' 2>/dev/null || echo "")
+
 # 5) Minimal success path assertions: cart add -> cart get -> order create (conditional)
 if [[ -n "$AUTH_HEADER" ]]; then
   set +e
   log "Attempting minimal cart/order flow with existing catalog"
   # Fetch products to pick one
-  products_json=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/products?page=1&size=10" || true)
-  echo "$products_json" > "$OUT_DIR/GET__api_v1_products_page_1_size_10.json"
+  # Prefer store-specific product listing if STORE_ID available
+  if [[ -n "$STORE_ID" ]]; then
+    products_json=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/products?page=1&limit=10&store_id=$STORE_ID" || true)
+    echo "$products_json" > "$OUT_DIR/GET__api_v1_products_page_1_limit_10_store_$STORE_ID.json"
+  else
+    products_json=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/products?page=1&limit=10" || true)
+    echo "$products_json" > "$OUT_DIR/GET__api_v1_products_page_1_limit_10.json"
+  fi
   prod_id=$(echo "$products_json" | jq -r '.data[0].id // empty' 2>/dev/null || echo "")
 
   if [[ -n "$prod_id" ]]; then
@@ -178,24 +203,38 @@ import sys, json
 path=sys.argv[1]
 try:
   d=json.loads(open(path, 'r', encoding='utf-8').read())
-  sku=d.get('sku')
-  print('true' if isinstance(sku, list) else 'false')
+  data=d.get('data') if isinstance(d, dict) else {}
+  skus=(data or {}).get('skus') if isinstance(data, dict) else None
+  print('true' if isinstance(skus, list) else 'false')
 except Exception:
   print('false')
 PY
       "$OUT_DIR/GET__api_v1_products_${prod_id}.json")
       ok_combined=false
       if [[ "$pstatus" == "200" && "$pok" == "true" ]]; then ok_combined=true; fi
-      record "product_detail" "GET" "$BASE_URL/products/$prod_id" "$pstatus" "$ok_combined" "sku_list=$pok"
-    sku_id=$(echo "$detail_json" | jq -r '.sku[0].id // .sku[0].sku_id // empty' 2>/dev/null || echo "")
+      record "product_detail" "GET" "$BASE_URL/api/v1/products/$prod_id" "$pstatus" "$ok_combined" "skus_list=$pok"
+    # Prefer first skus id under data.skus
+    sku_id=$(echo "$detail_json" | jq -r '.data.skus[0].id // .data.skus[0].sku_id // empty' 2>/dev/null || echo "")
     qty=1
-    add_body=$(jq -n --argjson pid "$prod_id" --argjson qty "$qty" --arg sku "$sku_id" '
+    add_body=$(jq -n --argjson pid "$prod_id" --argjson qty "$qty" --arg sku "$sku_id" --arg store "$STORE_ID" '
       {product_id: ($pid|tonumber), quantity: ($qty|tonumber)}
       + ( ($sku|tostring|length)>0 and {sku_id: ($sku|tonumber)} or {} )
+      + ( ($store|tostring|length)>0 and {store_id: ($store|tonumber)} or {} )
     ')
+    # Save payload for diagnostics
+    echo "$add_body" > "$OUT_DIR/REQ__api_v1_cart_items.json"
     # POST /cart/items（更稳妥，避免部分框架对 /cart 与 /cart/ 的差异）
+    add_status=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$add_body" "$BASE_URL/api/v1/cart/items" || true)
     add_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$add_body" "$BASE_URL/api/v1/cart/items" || true)
     echo "$add_resp" > "$OUT_DIR/POST__api_v1_cart_items.json"
+    record "cart_add_items" "POST" "$BASE_URL/api/v1/cart/items" "$add_status" "$([[ "$add_status" == "200" || "$add_status" == "201" ]] && echo true || echo false)" "payload=REQ__api_v1_cart_items.json"
+    # Fallback: try POST /api/v1/cart if /items failed
+    if [[ "$add_status" != "200" && "$add_status" != "201" ]]; then
+      add_status2=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$add_body" "$BASE_URL/api/v1/cart" || true)
+      add_resp2=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$add_body" "$BASE_URL/api/v1/cart" || true)
+      echo "$add_resp2" > "$OUT_DIR/POST__api_v1_cart.json"
+      record "cart_add" "POST" "$BASE_URL/api/v1/cart" "$add_status2" "$([[ "$add_status2" == "200" || "$add_status2" == "201" ]] && echo true || echo false)" "payload=REQ__api_v1_cart_items.json"
+    fi
     # GET /cart
     cart_resp=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/cart" || true)
     echo "$cart_resp" > "$OUT_DIR/GET__api_v1_cart.json"
@@ -206,8 +245,8 @@ import sys, json
 path=sys.argv[1]
 try:
   c=json.loads(open(path, 'r', encoding='utf-8').read())
-  items=c.get('items')
-  print('true' if isinstance(items, list) else 'false')
+  data=c.get('data') if isinstance(c, dict) else None
+  print('true' if isinstance(data, list) else 'false')
 except Exception:
   print('false')
 PY
@@ -216,7 +255,8 @@ PY
       if [[ "$cstatus" == "200" && "$cok" == "true" ]]; then ok_combined=true; fi
       record "cart_items" "GET" "$BASE_URL/cart" "$cstatus" "$ok_combined" "items_list=$cok"
     # Create order from cart（最小必需字段）: delivery_type=1(自取), order_type=1(商城)
-    order_body=$(jq -n '{delivery_type: 1, order_type: 1}')
+    # Include store_id if available to ensure store-based stock path
+    order_body=$(jq -n --arg store "$STORE_ID" '{delivery_type: 1, order_type: 1} + ( ($store|tostring|length)>0 and {store_id: ($store|tonumber)} or {} )')
     create_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$order_body" "$BASE_URL/api/v1/orders/from-cart" || true)
     echo "$create_resp" > "$OUT_DIR/POST__api_v1_orders_from-cart.json"
     # CSV: order create returns id and status 200

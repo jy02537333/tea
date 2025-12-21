@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -297,10 +298,34 @@ func (h *StoreHandler) ExportFinanceTransactions(c *gin.Context) {
 	}
 
 	var buf bytes.Buffer
-	// 表头
-	buf.WriteString("id,type,direction,amount,fee,method,related_id,related_no,remark,created_at\n")
+	// 表头（追加解析后的 JSON 字段列）
+	buf.WriteString("id,type,direction,amount,fee,method,related_id,related_no,remark,created_at,json_phase,json_withdraw_no,json_amount_cents,json_fee_cents,json_net_cents,json_currency\n")
 	for _, item := range list {
-		line := fmt.Sprintf("%d,%s,%s,%.2f,%.2f,%d,%d,%s,%s,%s\n",
+		// 尝试解析 remark 中的 JSON（仅提现场景有效），失败则留空
+		var jsonPhase, jsonWithdrawNo, jsonAmountCents, jsonFeeCents, jsonNetCents, jsonCurrency string
+		var rm map[string]any
+		if err := json.Unmarshal([]byte(item.Remark), &rm); err == nil && rm != nil {
+			if v, ok := rm["phase"].(string); ok {
+				jsonPhase = v
+			}
+			if v, ok := rm["withdraw_no"].(string); ok {
+				jsonWithdrawNo = v
+			}
+			if v, ok := rm["currency"].(string); ok {
+				jsonCurrency = v
+			}
+			if v, ok := rm["amount_cents"].(float64); ok {
+				jsonAmountCents = fmt.Sprintf("%d", int64(v))
+			}
+			if v, ok := rm["fee_cents"].(float64); ok {
+				jsonFeeCents = fmt.Sprintf("%d", int64(v))
+			}
+			if v, ok := rm["net_cents"].(float64); ok {
+				jsonNetCents = fmt.Sprintf("%d", int64(v))
+			}
+		}
+
+		line := fmt.Sprintf("%d,%s,%s,%.2f,%.2f,%d,%d,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
 			item.ID,
 			item.Type,
 			item.Direction,
@@ -311,6 +336,12 @@ func (h *StoreHandler) ExportFinanceTransactions(c *gin.Context) {
 			escapeCSV(item.RelatedNo),
 			escapeCSV(item.Remark),
 			item.CreatedAt.Format("2006-01-02 15:04:05"),
+			escapeCSV(jsonPhase),
+			escapeCSV(jsonWithdrawNo),
+			jsonAmountCents,
+			jsonFeeCents,
+			jsonNetCents,
+			escapeCSV(jsonCurrency),
 		)
 		buf.WriteString(line)
 	}

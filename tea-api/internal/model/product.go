@@ -19,6 +19,7 @@ type Category struct {
 type Product struct {
 	BaseModel
 	CategoryID    uint            `gorm:"index;not null" json:"category_id"`
+	BrandID       *uint           `gorm:"index" json:"brand_id"`
 	Name          string          `gorm:"type:varchar(100);not null" json:"name"`
 	Description   string          `gorm:"type:text" json:"description"`
 	Images        string          `gorm:"type:text" json:"images"` // JSON数组
@@ -33,6 +34,7 @@ type Product struct {
 	IsRecommend   bool            `gorm:"default:false" json:"is_recommend"`
 
 	Category Category     `gorm:"foreignKey:CategoryID"`
+	Brand    *Brand       `gorm:"foreignKey:BrandID" json:"brand"`
 	Skus     []ProductSku `gorm:"foreignKey:ProductID" json:"skus"`
 }
 

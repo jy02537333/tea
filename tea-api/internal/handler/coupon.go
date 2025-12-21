@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 
 	"tea-api/internal/model"
 	"tea-api/internal/service"
+	"tea-api/pkg/database"
 	"tea-api/pkg/response"
 )
 
@@ -196,6 +198,63 @@ func (h *CouponHandler) ListMyCoupons(c *gin.Context) {
 		return
 	}
 	response.Success(c, list)
+}
+
+// ListCouponTemplates GET /api/v1/coupons/templates
+// 简化：直接读取 coupons_templates 表，返回全部或分页（此处返回全部）
+func ListCouponTemplates(c *gin.Context) {
+	type tplRow struct {
+		ID             uint   `json:"id"`
+		Name           string `json:"name"`
+		Type           string `json:"type"`
+		Value          int64  `json:"value"`
+		MinOrderAmount int64  `json:"min_order_amount"`
+		TotalQuantity  int    `json:"total_quantity"`
+		ValidFrom      string `json:"valid_from"`
+		ValidTo        string `json:"valid_to"`
+	}
+	var list []tplRow
+	if err := database.GetDB().Table("coupons_templates").
+		Select("id,name,type,value,min_order_amount,total_quantity,DATE_FORMAT(valid_from,'%Y-%m-%dT%H:%i:%sZ') as valid_from, DATE_FORMAT(valid_to,'%Y-%m-%dT%H:%i:%sZ') as valid_to").
+		Order("id desc").Find(&list).Error; err != nil {
+		response.Error(c, http.StatusInternalServerError, "查询模板失败")
+		return
+	}
+	response.Success(c, list)
+}
+
+// ClaimCouponFromTemplate POST /api/v1/coupons/claim
+// Body: {template_id}
+func ClaimCouponFromTemplate(c *gin.Context) {
+	uid, ok := currentUserID(c)
+	if !ok {
+		response.Unauthorized(c, "未获取到用户身份")
+		return
+	}
+	var req struct {
+		TemplateID uint `json:"template_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.TemplateID == 0 {
+		response.BadRequest(c, "参数错误")
+		return
+	}
+	// 生成简单券码
+	code := fmt.Sprintf("U%d-T%d-%d", uid, req.TemplateID, time.Now().Unix())
+	// 读取模板有效期作为券的过期时间（简化处理）
+	type tplRow struct{ ValidTo time.Time }
+	var tpl tplRow
+	if err := database.GetDB().Table("coupons_templates").Select("valid_to").Where("id = ?", req.TemplateID).Take(&tpl).Error; err != nil {
+		response.Error(c, http.StatusBadRequest, "模板不存在")
+		return
+	}
+	// 创建用户券
+	tx := database.GetDB().Exec("INSERT INTO coupons (template_id, user_id, code, status, expires_at, claimed_at) VALUES (?,?,?,?,?,NOW())",
+		req.TemplateID, uid, code, "unused", tpl.ValidTo)
+	if tx.Error != nil {
+		response.Error(c, http.StatusInternalServerError, "领取失败")
+		return
+	}
+	response.Success(c, gin.H{"coupon_code": code, "expires_at": tpl.ValidTo.Format(time.RFC3339)})
 }
 
 func atoi(s string) int {

@@ -102,6 +102,8 @@
 
 > 迭代策略（以 A 为主）：当前迭代将 Sprint A 作为主线与 CI 阻断标准；支付回调 ST（`POST /api/v1/payments/callback`）作为关键校验点，会在统一下单后通过模拟支付回调验证签名与订单状态流转。Sprint B 的检查作为“观察项”（非阻断），不影响合并结论。
 
+> 主线门禁提示（master）：已启用分支保护并将 “API Validation” 设为必需状态检查（strict=true）。Sprint A 断言失败会阻断合并；Sprint B 为非阻断、仅归档证据。详见 `doc/prd.md` 的“主分支保护与 CI 门禁（master）”。
+
 
 ---
 
@@ -114,13 +116,13 @@
 | 序号 | 模块 | 子任务 / 交付物 | 关键接口 / 代码位置 | 负责人 | 预计完成 | 完成情况 | 依赖 / 备注 |
 | ---- | ---- | ---------------- | -------------------- | ------ | -------- | -------- | ------------ |
 | B-01 | 后端 | 会员体系相关数据库迁移：新增/更新 `users` 扩展字段、`memberships`、`wallet_accounts`、`wallet_ledger`、`points_ledger`、`coupon_templates`、`user_coupons`、`user_bank_accounts`、`withdrawal_requests` | `db/migrations/*.sql`、`tea-api/pkg/database/migrate.go` | 陈伟（后端） | W4-D2 | [ ] | 需与 DBA 对齐字段命名及幂等策略 |
-| B-02 | 后端 | 聚合个人中心数据服务：实现 `GET /api/v1/users/me/summary`，补充 service/cache 层 | `tea-api/internal/handler/user_summary.go`、`tea-api/internal/service/profile` | 陈伟（后端） | W4-D3 | [ ] | 依赖 B-01 的表结构 |
-| B-03 | 后端 | 鉴权登录升级：支持手机号+验证码/微信登录合并，返回 token+用户信息 | `POST /api/v1/auth/login`、`tea-api/internal/handler/auth.go` | 刘敏（后端） | W4-D3 | [ ] | 需与短信/微信网关联调，关注幂等 |
-| B-04 | 后端 | 钱包接口：`GET /api/v1/wallet`、`GET /api/v1/wallet/transactions`、`POST /api/v1/wallet/withdrawals` 及风控校验 | `tea-api/internal/handler/wallet.go`、`tea-api/internal/service/wallet` | 刘敏（后端） | W4-D5 | [ ] | 依赖提现审批流程设计（B-07） |
+| B-02 | 后端 | 聚合个人中心数据服务：实现 `GET /api/v1/users/me/summary`，补充 service/cache 层 | `tea-api/internal/handler/user_summary.go`、`tea-api/internal/service/profile` | 陈伟（后端） | W4-D3 | [进行中] | 已接入 `SummaryDeps` 并返回钱包/积分/券/会员聚合；依赖 B-01 表结构完善 |
+| B-03 | 后端 | 鉴权登录升级：支持手机号+验证码/微信登录合并，返回 token+用户信息 | `POST /api/v1/auth/login`、`tea-api/internal/handler/auth.go` | 刘敏（后端） | W4-D3 | [进行中] | 已提供占位校验与统一 JWT 签发，后续接入短信/微信网关 |
+| B-04 | 后端 | 钱包接口：`GET /api/v1/wallet`、`GET /api/v1/wallet/transactions`、`POST /api/v1/wallet/withdrawals` 及风控校验 | `tea-api/internal/handler/wallet.go`、`tea-api/internal/service/wallet` | 刘敏（后端） | W4-D5 | [部分完成] | 新增用户钱包余额与流水只读接口；提现申请手续费（用户端）已完成；风控待接入 |
 | B-05 | 后端 | 积分接口：查询、流水、可兑换商品列表；实现积分增减通用服务 | `GET /api/v1/points*`、`tea-api/internal/service/points` | 王磊（后端） | W4-D5 | [ ] | 与订单服务约定积分获取/消费事件 |
 | B-06 | 后端 | 优惠券接口：模板列表、领取、用户券列表；下单可用券查询 RPC | `GET /api/v1/coupons*`、`POST /api/v1/coupons/claim`、`tea-api/internal/service/coupon` | 王磊（后端） | W5-D1 | [ ] | 依赖营销规则配置，提供错误码 |
-| B-07 | 后端 | 提现账户管理与审批流：`/wallet/bank-accounts` CRUD、`/users/{id}/withdrawals`、`/admin/withdrawals` 审批 | `tea-api/internal/handler/withdrawal.go`、`tea-api/internal/service/withdrawal` | 陈伟（后端） | W5-D1 | [ ] | 需与财务确认限额；复用幂等键 |
-| B-08 | 后端 | 会员购买流程：`POST /api/v1/membership/purchase` -> 支付回调 -> 权益发放（茶币/优惠券/等级升级） | `tea-api/internal/handler/membership.go`、`tea-api/internal/service/membership` | 刘敏（后端） | W5-D2 | [ ] | 依赖支付回调完成度；需要幂等处理 |
+| B-07 | 后端 | 提现账户管理与审批流：`/wallet/bank-accounts` CRUD、`/users/{id}/withdrawals`、`/admin/withdrawals` 审批 | `tea-api/internal/handler/withdrawal.go`、`tea-api/internal/service/withdrawal` | 陈伟（后端） | W5-D1 | [进行中] | 用户端手续费已完成；管理员 `paid/complete` 流已串联钱包扣减与手续费记账；`reject` 场景已实现解冻并返还可用余额；钱包流水 `remark` 统一为可解析 JSON；门店提现备注结构已统一为 JSON；前端/管理端列表已解析展示 remark JSON 字段；限额与幂等待补充 |
+| B-08 | 后端 | 会员购买流程：`POST /api/v1/membership/purchase` -> 支付回调 -> 权益发放（茶币/优惠券/等级升级） | `tea-api/internal/handler/membership.go`、`tea-api/internal/service/membership` | 刘敏（后端） | W5-D2 | [部分完成] | 已提供套餐列表与创建会员订单；支付回调与权益发放待联调 |
 | B-09 | 后端 | 分享/门店管理员接口：`GET /api/v1/users/me/share-stats`、`GET /api/v1/users/me/store-role` | `tea-api/internal/handler/profile_extra.go` | 王磊（后端） | W5-D2 | [ ] | 需从分销/门店模块获取数据 |
 | B-10 | 前端 | 登录/注册页面逻辑（手机号验证码、微信授权）、Token 管理、中台登录态拦截 | `wx-fe/src/pages/auth/*`、`wx-fe/src/store/auth.ts` | 林晓（前端） | W4-D3 | [ ] | 依赖 B-03 登录接口 |
 | B-11 | 前端 | 「我的」首页聚合：头像、会员等级、余额/积分/券数量、订单入口 | `wx-fe/src/pages/mine/index.tsx` | 林晓（前端） | W4-D4 | [ ] | 依赖 B-02 API；与 UI 对齐 |
@@ -259,6 +261,21 @@
 - 测试任务
   - 分销佣金计算场景、提现阈值与提现流程测试
   - 门店接单并打印流程测试（本地或模拟打印机服务）
+
+#### PR 进展（#44 / #45 / #46）
+
+- 已交付（#44）：
+  - 分销/推荐关系与闭包表、佣金计算与冻结解冻流、合伙人礼包购买与升级、门店后台接单/拒单与打印任务、`POST /api/v1/admin/storage/oss/policy` 策略签发。
+  - 路由接入：用户佣金查询与汇总、推荐关系记录与统计、门店订单列表与接单/拒单、OSS 直传策略（Admin）。
+  - 待补项：后台商品 CRUD 与相关 DB 迁移（`products/product_skus/product_media/brands/product_categories`）；拒单退款实际集成/待办队列；API 文档补充 `doc/api/oss.md` 与 Sprint C 对应章节标注交付状态。
+
+- 支撑测试（#45）：
+  - 新增 Sprint A/B 回归测试脚本与 Go 测试，作为 Sprint C 的基线稳定性保障（非阻断）。
+
+- 开发工具（#46）：
+  - 改进 `scripts/gh-create.pr.sh` 未提交改动提示（双语/更清晰），提升 PR 提交流程的可用性。
+
+验收建议：待 #44 完成后台商品 CRUD + 迁移与退款路径补齐后，整体满足 Sprint C 主干目标；并在 `doc/prd_sprints.md`、OpenAPI 规范中同步接口与错误码说明。
 
 ### Sprint C — 关键 API（草案）
 

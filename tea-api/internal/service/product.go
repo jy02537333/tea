@@ -113,11 +113,11 @@ func (s *ProductService) CreateProduct(product *model.Product) error {
 }
 
 // GetProducts 获取商品列表
-func (s *ProductService) GetProducts(page, limit int, categoryID *uint, status, keyword string) ([]*model.Product, int64, error) {
+func (s *ProductService) GetProducts(page, limit int, categoryID *uint, status, keyword string, brandID *uint) ([]*model.Product, int64, error) {
 	var products []*model.Product
 	var total int64
 
-	query := s.db.Model(&model.Product{}).Preload("Category")
+	query := s.db.Model(&model.Product{}).Preload("Category").Preload("Brand")
 
 	// 条件过滤
 	if categoryID != nil {
@@ -130,6 +130,10 @@ func (s *ProductService) GetProducts(page, limit int, categoryID *uint, status, 
 
 	if keyword != "" {
 		query = query.Where("name LIKE ? OR description LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+	}
+
+	if brandID != nil {
+		query = query.Where("brand_id = ?", *brandID)
 	}
 
 	// 获取总数
@@ -151,10 +155,11 @@ type ProductWithStore struct {
 	model.Product
 	StoreStock         *int    `json:"store_stock"`
 	StorePriceOverride *string `json:"store_price_override"`
+	BrandName          *string `json:"brand_name"`
 }
 
 // GetProductsForStore 获取指定门店维度的商品列表（含门店库存与覆盖价）
-func (s *ProductService) GetProductsForStore(page, limit int, categoryID *uint, status, keyword string, storeID uint) ([]*ProductWithStore, int64, error) {
+func (s *ProductService) GetProductsForStore(page, limit int, categoryID *uint, status, keyword string, brandID *uint, storeID uint) ([]*ProductWithStore, int64, error) {
 	var list []*ProductWithStore
 	var total int64
 
@@ -173,14 +178,18 @@ func (s *ProductService) GetProductsForStore(page, limit int, categoryID *uint, 
 	if keyword != "" {
 		base = base.Where("p.name LIKE ? OR p.description LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
 	}
+	if brandID != nil {
+		base = base.Where("p.brand_id = ?", *brandID)
+	}
 	if err := base.Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("获取商品总数失败: %w", err)
 	}
 
 	// 具体查询（左连接门店商品）
 	query := s.db.Table("products p").
-		Select("p.*, sp.stock AS store_stock, sp.price_override AS store_price_override").
-		Joins("LEFT JOIN store_products sp ON sp.product_id = p.id AND sp.store_id = ?", storeID)
+		Select("p.*, sp.stock AS store_stock, sp.price_override AS store_price_override, b.name AS brand_name").
+		Joins("LEFT JOIN store_products sp ON sp.product_id = p.id AND sp.store_id = ?", storeID).
+		Joins("LEFT JOIN brands b ON b.id = p.brand_id")
 
 	if categoryID != nil {
 		query = query.Where("p.category_id = ?", *categoryID)
@@ -190,6 +199,9 @@ func (s *ProductService) GetProductsForStore(page, limit int, categoryID *uint, 
 	}
 	if keyword != "" {
 		query = query.Where("p.name LIKE ? OR p.description LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+	}
+	if brandID != nil {
+		query = query.Where("p.brand_id = ?", *brandID)
 	}
 
 	offset := (page - 1) * limit
@@ -202,7 +214,7 @@ func (s *ProductService) GetProductsForStore(page, limit int, categoryID *uint, 
 // GetProduct 获取商品详情
 func (s *ProductService) GetProduct(id uint) (*model.Product, error) {
 	var product model.Product
-	if err := s.db.Preload("Category").Preload("Skus").First(&product, id).Error; err != nil {
+	if err := s.db.Preload("Category").Preload("Brand").Preload("Skus").First(&product, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrProductNotFound
 		}

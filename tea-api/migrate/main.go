@@ -34,6 +34,7 @@ func main() {
 		&model.Product{},
 		&model.ProductSku{},
 		&model.ProductImage{},
+		&model.Brand{},
 
 		// 订单管理
 		&model.Store{},

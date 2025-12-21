@@ -1,0 +1,106 @@
+name: Minimal Integration CI
+
+on:
+  push:
+    branches:
+      - feat/withdraw-remark-json-ui-docs
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      STRICT_MIN:
+        description: "Enable strict minimal assertions (0 or 1)"
+        required: false
+        default: "0"
+
+jobs:
+  run-min-tests:
+    runs-on: ubuntu-latest
+    env:
+      STRICT_MIN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.STRICT_MIN || '0' }}
+
+    services:
+      mysql:
+        image: mysql:8.0
+        ports:
+          - 3308:3306
+        env:
+          MYSQL_ROOT_PASSWORD: gs963852
+          MYSQL_DATABASE: tea_shop
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost -p'gs963852'" \
+          --health-interval 10s \
+          --health-timeout 5s \
+          --health-retries 10 \
+          --env TZ=Asia/Shanghai \
+          --character-set-server=utf8mb4 \
+          --collation-server=utf8mb4_general_ci \
+          --default-authentication-plugin=mysql_native_password
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping" \
+          --health-interval 10s \
+          --health-timeout 5s \
+          --health-retries 10 \
+          redis-server --requirepass 123456 --appendonly yes
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install tools
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y jq
+
+      - name: Start tea-api service
+        env:
+          TEA_AUTO_MIGRATE: '0'
+          TEA_JWT_SECRET: 'tea-shop-jwt-secret-key-2023'
+        run: |
+          bash ./run-tea-api.sh
+
+      - name: Run stateful validation (optional)
+        run: |
+          bash ./scripts/local_api_check.sh || true
+
+      - name: Run admin product minimal flow
+        env:
+          STRICT_MIN: ${{ env.STRICT_MIN }}
+        run: |
+          bash ./scripts/run_admin_product_min.sh
+
+      - name: Run commission minimal flow
+        env:
+          STRICT_MIN: ${{ env.STRICT_MIN }}
+        run: |
+          bash ./scripts/run_commission_min.sh
+
+      - name: Strict minimal assertions (when enabled)
+        if: env.STRICT_MIN == '1'
+        run: |
+          echo "Running strict assertions..."
+          test -f build-ci-logs/commission_release_resp.json || { echo "Missing commission_release_resp.json"; exit 1; }
+          test -f build-ci-logs/local_api_summary.txt || { echo "Missing local_api_summary.txt"; exit 1; }
+          # Sprint A evidence presence
+          ls build-ci-logs/order_detail_*_checked.json >/dev/null 2>&1 || test -f build-ci-logs/order_amounts_summary.json || { echo "Missing Sprint A evidence"; exit 1; }
+
+      - name: Upload CI artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-ci-logs
+          path: |
+            build-ci-logs/**
+            build-ci-logs/api_validation/**
+            build-ci-logs/api_validation_stateful/**

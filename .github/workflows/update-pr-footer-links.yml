@@ -1,0 +1,238 @@
+name: Standardize PR footer links after merge
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  update-footer:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare variables
+        shell: bash
+        run: |
+          set -e
+          REPO="${{ github.repository }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          echo "REPO=$REPO" >> "$GITHUB_ENV"
+          echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
+
+      - name: Check docs exist on master
+        shell: bash
+        env:
+          REPO: ${{ env.REPO }}
+        run: |
+          set -e
+          DOC_URL="https://api.github.com/repos/${REPO}/contents/docs/ci/minimal-integration.md?ref=master"
+          CONTRIB_URL="https://api.github.com/repos/${REPO}/contents/CONTRIBUTING.md?ref=master"
+          DOC_STATUS=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "$DOC_URL" -o /dev/null -w "%{http_code}")
+          CONTRIB_STATUS=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "$CONTRIB_URL" -o /dev/null -w "%{http_code}")
+          echo "DOC_EXISTS=$([ "$DOC_STATUS" = "200" ] && echo 1 || echo 0)" >> "$GITHUB_ENV"
+          echo "CONTRIB_EXISTS=$([ "$CONTRIB_STATUS" = "200" ] && echo 1 || echo 0)" >> "$GITHUB_ENV"
+
+      - name: Fetch PR body
+        shell: bash
+        env:
+          REPO: ${{ env.REPO }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
+        run: |
+          set -e
+          curl -s -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}" | jq -r .body > body.md
+          awk '/^### PR 描述固定尾注/{exit} {print}' body.md > body_prefix.md
+
+      - name: Build standardized footer
+        shell: bash
+        env:
+          REPO: ${{ env.REPO }}
+          DOC_EXISTS: ${{ env.DOC_EXISTS }}
+          CONTRIB_EXISTS: ${{ env.CONTRIB_EXISTS }}
+        run: |
+          set -e
+          : > footer.md
+          if [ "${DOC_EXISTS}" = "1" ]; then
+            printf "\n---\n\n### PR 描述固定尾注\n- [CI 临时开启严格模式指引](docs/ci/minimal-integration.md)\n" >> footer.md
+            if [ "${CONTRIB_EXISTS}" = "1" ]; then
+              printf "- 更多 CI 与联调指南见 [CONTRIBUTING.md](CONTRIBUTING.md)\n" >> footer.md
+            fi
+          else
+            # Fallback: point to CI docs directory on master if file not found
+            printf "\n---\n\n### PR 描述固定尾注\n- [CI 临时开启严格模式指引](https://github.com/${REPO}/tree/master/docs/ci)\n" >> footer.md
+          fi
+          cat body_prefix.md footer.md > new_body.md
+          jq -Rs '{body: .}' < new_body.md > payload.json
+
+      - name: Patch PR body
+        shell: bash
+        env:
+          REPO: ${{ env.REPO }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
+        run: |
+          set -e
+          curl -s -X PATCH -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
+            -d @payload.json "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}" | jq -r .body | grep -q "PR 描述固定尾注"
+
+      - name: Verify footer links
+        shell: bash
+        env:
+          REPO: ${{ env.REPO }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
+        run: |
+          set -e
+          curl -s -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github.html+json" \
+            "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}" | jq -r .body_html > body.html
+          REL_CI_OK=0
+          REL_CONTRIB_OK=0
+          grep -q 'href="docs/ci/minimal-integration.md"' body.html && REL_CI_OK=1 || true
+          grep -q 'href="CONTRIBUTING.md"' body.html && REL_CONTRIB_OK=1 || true
+          echo "REL_CI_OK=$REL_CI_OK" >> "$GITHUB_ENV"
+          echo "REL_CONTRIB_OK=$REL_CONTRIB_OK" >> "$GITHUB_ENV"
+
+      - name: Comment result to PR
+        shell: bash
+        env:
+          REPO: ${{ env.REPO }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
+          REL_CI_OK: ${{ env.REL_CI_OK }}
+          REL_CONTRIB_OK: ${{ env.REL_CONTRIB_OK }}
+        run: |
+          set -e
+          CI_STATUS=$([ "$REL_CI_OK" = "1" ] && echo "✅ CI 文档相对链接有效 (docs/ci/minimal-integration.md)" || echo "⚠️ CI 文档相对链接未检测到，已回退为目录链接或需补文档")
+          CONTRIB_STATUS=$([ "$REL_CONTRIB_OK" = "1" ] && echo "✅ CONTRIBUTING 相对链接有效 (CONTRIBUTING.md)" || echo "ℹ️ CONTRIBUTING 链接未添加（master 不存在或暂不恢复）")
+          COMMENT=$(cat << 'EOF'
+合并后自动验证结果：
+
+- ${CI_STATUS}
+- ${CONTRIB_STATUS}
+
+说明：本工作流在合并后统一将“PR 描述固定尾注”链接改为相对路径，若 master 上缺少对应文件，则临时回退为目录链接避免 404。若需恢复 CONTRIBUTING，请先在 master 添加该文件。
+EOF
+)
+          jq -n --arg body "$COMMENT" '{body: $body}' > comment.json
+          curl -s -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
+            -d @comment.json "https://api.github.com/repos/${REPO}/issues/${PR_NUMBER}/comments" | jq -r .id > /dev/null
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Puppeteer
+        run: |
+          set -e
+          npm init -y
+          npm install puppeteer@22
+
+      - name: Capture screenshots
+        shell: bash
+        env:
+          REPO: ${{ env.REPO }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
+          DOC_EXISTS: ${{ env.DOC_EXISTS }}
+          CONTRIB_EXISTS: ${{ env.CONTRIB_EXISTS }}
+        run: |
+          set -e
+          mkdir -p screens
+          PR_URL="https://github.com/${REPO}/pull/${PR_NUMBER}"
+          if [ "$DOC_EXISTS" = "1" ]; then
+            CI_URL="https://github.com/${REPO}/blob/master/docs/ci/minimal-integration.md"
+          else
+            CI_URL="https://github.com/${REPO}/tree/master/docs/ci"
+          fi
+          if [ "$CONTRIB_EXISTS" = "1" ]; then
+            CONTRIB_URL="https://github.com/${REPO}/blob/master/CONTRIBUTING.md"
+          else
+            CONTRIB_URL="https://github.com/${REPO}"
+          fi
+          node - << 'NODE'
+          const fs = require('fs');
+          const puppeteer = require('puppeteer');
+          (async () => {
+            const env = process.env;
+            const prUrl = env.PR_URL;
+            const ciUrl = env.CI_URL;
+            const contribUrl = env.CONTRIB_URL;
+            const outDir = 'screens';
+            const browser = await puppeteer.launch({args: ['--no-sandbox','--disable-setuid-sandbox']});
+            const page = await browser.newPage();
+            page.setViewport({width: 1440, height: 900});
+            async function snap(url, name){
+              await page.goto(url, {waitUntil: 'networkidle2', timeout: 60000});
+              await page.screenshot({path: `${outDir}/${name}.png`, fullPage: true});
+            }
+            await snap(prUrl, 'pr-body-after-merge');
+            await snap(ciUrl, 'ci-doc-on-master');
+            await snap(contribUrl, 'contributing-on-master');
+            await browser.close();
+          })().catch(err => { console.error(err); process.exit(0); });
+          NODE
+
+      - name: Upload screenshots artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-merge-screenshots-pr-${{ env.PR_NUMBER }}
+          path: screens/*.png
+          if-no-files-found: warn
+
+      - name: Comment screenshots links
+        shell: bash
+        env:
+          REPO: ${{ env.REPO }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
+        run: |
+          set -e
+          RUN_URL="https://github.com/${REPO}/actions/runs/${{ github.run_id }}"
+          COMMENT=$(cat << EOF
+截图与证据：
+
+- Actions 运行页面（可下载 Artifact）：${RUN_URL}
+- Artifact 名称：post-merge-screenshots-pr-${PR_NUMBER}
+
+包含：
+- pr-body-after-merge.png（PR 页展示尾注相对链接）
+- ci-doc-on-master.png（CI 文档页面）
+- contributing-on-master.png（CONTRIBUTING 页面或仓库主页占位）
+EOF
+)
+          jq -n --arg body "$COMMENT" '{body: $body}' > comment.json
+          curl -s -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
+            -d @comment.json "https://api.github.com/repos/${REPO}/issues/${PR_NUMBER}/comments" | jq -r .id > /dev/null
+
+      - name: Comment direct artifact link
+        shell: bash
+        env:
+          REPO: ${{ env.REPO }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
+        run: |
+          set -e
+          # List artifacts for this run
+          ARTIFACTS_JSON=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${REPO}/actions/runs/${{ github.run_id }}/artifacts")
+          NAME="post-merge-screenshots-pr-${PR_NUMBER}"
+          ART_ID=$(echo "$ARTIFACTS_JSON" | jq -r --arg NAME "$NAME" '.artifacts[] | select(.name == $NAME) | .id' | head -n1)
+          if [ -n "$ART_ID" ] && [ "$ART_ID" != "null" ]; then
+            UI_LINK="https://github.com/${REPO}/actions/runs/${{ github.run_id }}/artifacts/${ART_ID}"
+            API_LINK=$(echo "$ARTIFACTS_JSON" | jq -r --arg NAME "$NAME" '.artifacts[] | select(.name == $NAME) | .archive_download_url' | head -n1)
+            COMMENT=$(cat << EOF
+直接下载链接：
+
+- Artifact UI 页面：${UI_LINK}
+- API 下载地址（需授权）：${API_LINK}
+EOF
+)
+          else
+            COMMENT=$(cat << EOF
+未找到 Artifact 直接链接（可能因命名或上传延迟）。请通过运行页面下载：
+https://github.com/${REPO}/actions/runs/${{ github.run_id }}
+EOF
+)
+          fi
+          jq -n --arg body "$COMMENT" '{body: $body}' > comment.json
+          curl -s -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
+            -d @comment.json "https://api.github.com/repos/${REPO}/issues/${PR_NUMBER}/comments" | jq -r .id > /dev/null
