@@ -1,0 +1,79 @@
+name: Standardize PR footer links after merge
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  update-footer:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare variables
+        shell: bash
+        run: |
+          set -e
+          REPO="${{ github.repository }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          echo "REPO=$REPO" >> "$GITHUB_ENV"
+          echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
+
+      - name: Check docs exist on master
+        shell: bash
+        env:
+          REPO: ${{ env.REPO }}
+        run: |
+          set -e
+          DOC_URL="https://api.github.com/repos/${REPO}/contents/docs/ci/minimal-integration.md?ref=master"
+          CONTRIB_URL="https://api.github.com/repos/${REPO}/contents/CONTRIBUTING.md?ref=master"
+          DOC_STATUS=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "$DOC_URL" -o /dev/null -w "%{http_code}")
+          CONTRIB_STATUS=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "$CONTRIB_URL" -o /dev/null -w "%{http_code}")
+          echo "DOC_EXISTS=$([ "$DOC_STATUS" = "200" ] && echo 1 || echo 0)" >> "$GITHUB_ENV"
+          echo "CONTRIB_EXISTS=$([ "$CONTRIB_STATUS" = "200" ] && echo 1 || echo 0)" >> "$GITHUB_ENV"
+
+      - name: Fetch PR body
+        shell: bash
+        env:
+          REPO: ${{ env.REPO }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
+        run: |
+          set -e
+          curl -s -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}" | jq -r .body > body.md
+          awk '/^### PR 描述固定尾注/{exit} {print}' body.md > body_prefix.md
+
+      - name: Build standardized footer
+        shell: bash
+        env:
+          REPO: ${{ env.REPO }}
+          DOC_EXISTS: ${{ env.DOC_EXISTS }}
+          CONTRIB_EXISTS: ${{ env.CONTRIB_EXISTS }}
+        run: |
+          set -e
+          : > footer.md
+          if [ "${DOC_EXISTS}" = "1" ]; then
+            printf "\n---\n\n### PR 描述固定尾注\n- [CI 临时开启严格模式指引](docs/ci/minimal-integration.md)\n" >> footer.md
+            if [ "${CONTRIB_EXISTS}" = "1" ]; then
+              printf "- 更多 CI 与联调指南见 [CONTRIBUTING.md](CONTRIBUTING.md)\n" >> footer.md
+            fi
+          else
+            # Fallback: point to CI docs directory on master if file not found
+            printf "\n---\n\n### PR 描述固定尾注\n- [CI 临时开启严格模式指引](https://github.com/${REPO}/tree/master/docs/ci)\n" >> footer.md
+          fi
+          cat body_prefix.md footer.md > new_body.md
+          jq -Rs '{body: .}' < new_body.md > payload.json
+
+      - name: Patch PR body
+        shell: bash
+        env:
+          REPO: ${{ env.REPO }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
+        run: |
+          set -e
+          curl -s -X PATCH -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
+            -d @payload.json "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}" | jq -r .body | grep -q "PR 描述固定尾注"
