@@ -7,10 +7,18 @@ on:
   pull_request:
     branches:
       - master
+  workflow_dispatch:
+    inputs:
+      STRICT_MIN:
+        description: "Enable strict minimal assertions (0 or 1)"
+        required: false
+        default: "0"
 
 jobs:
   run-min-tests:
     runs-on: ubuntu-latest
+    env:
+      STRICT_MIN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.STRICT_MIN || '0' }}
 
     services:
       mysql:
@@ -67,12 +75,25 @@ jobs:
           bash ./scripts/local_api_check.sh || true
 
       - name: Run admin product minimal flow
+        env:
+          STRICT_MIN: ${{ env.STRICT_MIN }}
         run: |
           bash ./scripts/run_admin_product_min.sh
 
       - name: Run commission minimal flow
+        env:
+          STRICT_MIN: ${{ env.STRICT_MIN }}
         run: |
           bash ./scripts/run_commission_min.sh
+
+      - name: Strict minimal assertions (when enabled)
+        if: env.STRICT_MIN == '1'
+        run: |
+          echo "Running strict assertions..."
+          test -f build-ci-logs/commission_release_resp.json || { echo "Missing commission_release_resp.json"; exit 1; }
+          test -f build-ci-logs/local_api_summary.txt || { echo "Missing local_api_summary.txt"; exit 1; }
+          # Sprint A evidence presence
+          ls build-ci-logs/order_detail_*_checked.json >/dev/null 2>&1 || test -f build-ci-logs/order_amounts_summary.json || { echo "Missing Sprint A evidence"; exit 1; }
 
       - name: Upload CI artifacts
         uses: actions/upload-artifact@v4

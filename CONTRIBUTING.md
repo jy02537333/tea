@@ -1,39 +1,36 @@
-# CONTRIBUTING
+# Contributing Guide
 
-## 目标
-- 提供最小可执行联调路径，统一证据归档到 `build-ci-logs/`。
-- 在 CI 中自动运行最小脚本，并支持可选严格模式（默认关闭）。
+感谢您的贡献！为便于协作与验证，这里提供最小联调与 CI 指南。
 
-## 快速联调（Minimal Integration）
+## 最小联调（Minimal Integration）
+- 文档：docs/ci/minimal-integration.md
 - 本地一键：
+
 ```bash
 make run-min-integration
 ```
-- 产物位置：`build-ci-logs/**`；摘要：`build-ci-logs/local_api_summary.txt`。
-- 相关脚本：`scripts/run_admin_product_min.sh`、`scripts/run_commission_min.sh`、`scripts/local_api_check.sh`（可选）。
+
+- 产物位置：`build-ci-logs/**`（摘要：`build-ci-logs/local_api_summary.txt`）
 
 ## CI 工作流
-- 工作流文件：`.github/workflows/minimal-integration.yml`
-- 触发：push/PR 时运行；内置 MySQL/Redis；上传 `build-ci-logs/**` 为 Actions Artifacts。
+- 工作流文件：.github/workflows/minimal-integration.yml
+- 触发方式：push 到功能分支或提交对 master 的 PR 时自动执行，产物上传为 Actions Artifacts。
 
-## 严格模式（Strict，可选）
-- 行为：额外断言关键环节（创建数据、上传 URL、图片回填、佣金释放等），失败保留证据与摘要。
-- 本地开启：
+### 临时开启严格模式（CI）
+- UI 方式：Actions 页面选择 “Minimal Integration CI” → “Run workflow”，将输入框 `STRICT_MIN` 设为 `1`，选择需要的分支后运行。
+- gh CLI 方式：
+
 ```bash
-make run-min-integration-strict   # 等价 STRICT_MIN=1
+# 针对指定分支触发严格模式
+gh workflow run minimal-integration.yml -r feat/withdraw-remark-json-ui-docs -f STRICT_MIN=1
+
+# 针对某个 PR 的 head 分支触发（以 PR #50 为例）
+BRANCH=$(gh pr view 50 --json headRefName --jq .headRefName)
+gh workflow run minimal-integration.yml -r "$BRANCH" -f STRICT_MIN=1
 ```
 
-## 临时开启严格模式（CI）
-- UI：在 Actions 选择 `minimal-integration` 工作流 → `Run workflow` → 输入 `STRICT_MIN=1`。
-- CLI（示例）：
-```bash
-# 使用 GitHub CLI 手动触发一次严格模式运行（需已安装 gh 并登录）
-# 注意：工作流名称以仓库实际为准
-gh workflow run minimal-integration.yml -f STRICT_MIN=1
-```
-- 说明：严格模式默认关闭，仅在需要时临时开启；失败会上传完整证据便于排查。
+- 行为说明：严格模式执行额外断言；失败时任务标红，但仍会上传 `build-ci-logs/**` 用于排查。
 
-## 参考链接
-- 最小集成与 CI 指南：`docs/ci/minimal-integration.md`（合并后在 master 可用）
-- README 的“快速联调”小节：`README.md`
-
+## 开发约定
+- 与 `doc/`、`docs/` 的约束保持一致，更新相关文档与清单。
+- 如涉及上传与商品/分销链路，请优先使用最小联调命令验证，并在 PR 描述中附上关键产物说明。
