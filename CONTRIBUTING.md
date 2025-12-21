@@ -1,5 +1,7 @@
 # Contributing Guide
 
+> 快速提示：已添加默认 PR 模板与评审清单自动化。新建或切为可评审的 PR 将自动附加“评审速览 Checklist”，并包含固定尾注；详见 `.github/PULL_REQUEST_TEMPLATE.md` 与 `docs/ci/pr-review-checklist.md`。
+
 感谢您的贡献！为便于协作与验证，这里提供最小联调与 CI 指南。
 
 ## 最小联调（Minimal Integration）

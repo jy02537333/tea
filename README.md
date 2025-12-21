@@ -2,6 +2,8 @@
 
 > 主线门禁：`master` 分支已启用分支保护，合并必须通过 “API Validation” 工作流（Sprint A 阻塞、Sprint B 非阻塞）。详见 `doc/prd.md` 与 `doc/prd_sprints.md`。
 
+> 快速提示：已添加 PR 模板与评审清单自动化。新建或切为可评审的 PR 将默认包含“评审速览 Checklist”与固定尾注；模板见 `.github/PULL_REQUEST_TEMPLATE.md`；更多说明见 `docs/ci/pr-review-checklist.md` 与 `CONTRIBUTING.md`。
+
 [![API Validation](https://github.com/jy02537333/tea/actions/workflows/api-validation.yml/badge.svg?branch=master)](https://github.com/jy02537333/tea/actions/workflows/api-validation.yml)
 
 This folder contains CI job templates to run the repository's `scripts/run_api_validation.sh` in CI and collect artifacts.
