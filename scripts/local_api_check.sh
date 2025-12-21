@@ -216,11 +216,32 @@ PY
     # Prefer first skus id under data.skus
     sku_id=$(echo "$detail_json" | jq -r '.data.skus[0].id // .data.skus[0].sku_id // empty' 2>/dev/null || echo "")
     qty=1
-    add_body=$(jq -n --argjson pid "$prod_id" --argjson qty "$qty" --arg sku "$sku_id" --arg store "$STORE_ID" '
-      {product_id: ($pid|tonumber), quantity: ($qty|tonumber)}
-      + ( ($sku|tostring|length)>0 and {sku_id: ($sku|tonumber)} or {} )
-      + ( ($store|tostring|length)>0 and {store_id: ($store|tonumber)} or {} )
-    ')
+    add_body=$(python3 - <<'PYTHON' "$prod_id" "$qty" "$sku_id" "$STORE_ID"
+import json, sys
+
+prod_id, qty, sku_id, store_id = sys.argv[1:5]
+
+payload = {
+    "product_id": int(prod_id),
+    "quantity": int(qty),
+}
+
+def optional_int(value: str):
+    if value and value.lower() not in ("null", "none"):
+        return int(value)
+    return None
+
+sku = optional_int(sku_id)
+if sku is not None:
+    payload["sku_id"] = sku
+
+store = optional_int(store_id)
+if store is not None:
+    payload["store_id"] = store
+
+print(json.dumps(payload, ensure_ascii=False))
+PYTHON
+    )
     # Save payload for diagnostics
     echo "$add_body" > "$OUT_DIR/REQ__api_v1_cart_items.json"
     # POST /cart/items（更稳妥，避免部分框架对 /cart 与 /cart/ 的差异）
@@ -256,7 +277,7 @@ PY
       record "cart_items" "GET" "$BASE_URL/cart" "$cstatus" "$ok_combined" "items_list=$cok"
     # Create order from cart（最小必需字段）: delivery_type=1(自取), order_type=1(商城)
     # Include store_id if available to ensure store-based stock path
-    order_body=$(jq -n --arg store "$STORE_ID" '{delivery_type: 1, order_type: 1} + ( ($store|tostring|length)>0 and {store_id: ($store|tonumber)} or {} )')
+    order_body='{"delivery_type":1,"order_type":1}'
     create_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$order_body" "$BASE_URL/api/v1/orders/from-cart" || true)
     echo "$create_resp" > "$OUT_DIR/POST__api_v1_orders_from-cart.json"
     # CSV: order create returns id and status 200
@@ -277,53 +298,53 @@ PY
         echo "$order_detail" > "$DETAIL_PATH_ROOT/order_detail_${oid}.json"
 
         # Compute amounts summary and checked json via Python (no jq dependency)
-        python3 - <<'PY'
-    import sys, json, pathlib
-    root = pathlib.Path(sys.argv[1])
-    oid = sys.argv[2]
-    detail_text = (root / f"order_detail_{oid}.json").read_text(encoding='utf-8', errors='ignore')
-    try:
-      obj = json.loads(detail_text)
-      data = obj.get('data', obj) if isinstance(obj, dict) else {}
-    except Exception:
-      data = {}
+        python3 - "$DETAIL_PATH_ROOT" "$oid" <<'PY'
+import sys, json, pathlib
+root = pathlib.Path(sys.argv[1])
+oid = sys.argv[2]
+detail_text = (root / f"order_detail_{oid}.json").read_text(encoding='utf-8', errors='ignore')
+try:
+  obj = json.loads(detail_text)
+  data = obj.get('data', obj) if isinstance(obj, dict) else {}
+except Exception:
+  data = {}
 
-    def num(v):
-      try:
-        # Accept int/float/str
-        if isinstance(v, (int, float)):
-          return v
-        if isinstance(v, str):
-          return float(v) if ('.' in v) else int(v)
-      except Exception:
-        pass
-      return 0
+def num(v):
+  try:
+    # Accept int/float/str
+    if isinstance(v, (int, float)):
+      return v
+    if isinstance(v, str):
+      return float(v) if ('.' in v) else int(v)
+  except Exception:
+    pass
+  return 0
 
-    summary = {
-      "order_id": data.get('id') or oid,
-      "store_id": data.get('store_id'),
-      "total_amount": num(data.get('total_amount')),
-      "discount_amount": num(data.get('discount_amount')),
-      "pay_amount": num(data.get('pay_amount')),
-    }
-    summary["check"] = (summary["pay_amount"] == (summary["total_amount"] - summary["discount_amount"]))
+order_obj = data.get('order') if isinstance(data, dict) else {}
+summary = {
+  "order_id": (order_obj or {}).get('id') or oid,
+  "store_id": (order_obj or {}).get('store_id'),
+  "total_amount": num((order_obj or {}).get('total_amount')),
+  "discount_amount": num((order_obj or {}).get('discount_amount')),
+  "pay_amount": num((order_obj or {}).get('pay_amount')),
+}
+summary["check"] = (summary["pay_amount"] == (summary["total_amount"] - summary["discount_amount"]))
 
-    summary_path = root / 'order_amounts_summary.json'
-    checked_path = root / f'order_detail_{oid}_checked.json'
+summary_path = root / 'order_amounts_summary.json'
+checked_path = root / f'order_detail_{oid}_checked.json'
 
-    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
-    checked_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
+summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
+checked_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
 
-    # Also append a human readable line to local_api_summary.txt if present
-    summary_txt = root / 'local_api_summary.txt'
-    line = f"order_id={summary['order_id']}, store_id={summary.get('store_id')}, total={summary['total_amount']}, discount={summary['discount_amount']}, pay={summary['pay_amount']}, check={str(summary['check']).lower()}\n"
-    try:
-      with open(summary_txt, 'a', encoding='utf-8') as f:
-        f.write(line)
-    except Exception:
-      pass
+# Also append a human readable line to local_api_summary.txt if present
+summary_txt = root / 'local_api_summary.txt'
+line = f"order_id={summary['order_id']}, store_id={summary.get('store_id')}, total={summary['total_amount']}, discount={summary['discount_amount']}, pay={summary['pay_amount']}, check={str(summary['check']).lower()}\n"
+try:
+  with open(summary_txt, 'a', encoding='utf-8') as f:
+    f.write(line)
+except Exception:
+  pass
 PY
-        "$DETAIL_PATH_ROOT" "$oid"
         log "Order evidence generated: order_detail_${oid}.json, order_amounts_summary.json, order_detail_${oid}_checked.json"
       fi
   else
@@ -365,7 +386,7 @@ if [[ -n "$store_id" ]]; then
   log "Parsed store detail for id=$store_id"
   # CSV status for store detail
   status=$(curl -s -o /dev/null -w '%{http_code}' ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/stores/$store_id" || true)
-  python3 - <<'PY'
+  python3 - "$OUT_DIR/GET__api_v1_stores_${store_id}.json" <<'PY'
 import sys, json
 try:
   data=json.loads(open(sys.argv[1], 'r', encoding='utf-8').read())
@@ -387,9 +408,8 @@ try:
 except Exception as e:
   print("store detail parse error:", e)
 PY
-  "$OUT_DIR/GET__api_v1_stores_${store_id}.json"
   # Record into CSV: ok if status==200 and menus is list
-    ok=$(python3 - <<'PY'
+    ok=$(python3 - "$OUT_DIR/GET__api_v1_stores_${store_id}.json" <<'PY'
 import sys, json
 path=sys.argv[1]
 try:
@@ -399,7 +419,7 @@ try:
 except Exception:
   print('false')
 PY
-    "$OUT_DIR/GET__api_v1_stores_${store_id}.json")
+  )
     # ok requires both status 200 and menus list
     ok_combined=false
     if [[ "$status" == "200" && "$ok" == "true" ]]; then ok_combined=true; fi
