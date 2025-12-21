@@ -221,9 +221,20 @@ PY
       + ( ($sku|tostring|length)>0 and {sku_id: ($sku|tonumber)} or {} )
       + ( ($store|tostring|length)>0 and {store_id: ($store|tonumber)} or {} )
     ')
+    # Save payload for diagnostics
+    echo "$add_body" > "$OUT_DIR/REQ__api_v1_cart_items.json"
     # POST /cart/items（更稳妥，避免部分框架对 /cart 与 /cart/ 的差异）
+    add_status=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$add_body" "$BASE_URL/api/v1/cart/items" || true)
     add_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$add_body" "$BASE_URL/api/v1/cart/items" || true)
     echo "$add_resp" > "$OUT_DIR/POST__api_v1_cart_items.json"
+    record "cart_add_items" "POST" "$BASE_URL/api/v1/cart/items" "$add_status" "$([[ "$add_status" == "200" || "$add_status" == "201" ]] && echo true || echo false)" "payload=REQ__api_v1_cart_items.json"
+    # Fallback: try POST /api/v1/cart if /items failed
+    if [[ "$add_status" != "200" && "$add_status" != "201" ]]; then
+      add_status2=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$add_body" "$BASE_URL/api/v1/cart" || true)
+      add_resp2=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$add_body" "$BASE_URL/api/v1/cart" || true)
+      echo "$add_resp2" > "$OUT_DIR/POST__api_v1_cart.json"
+      record "cart_add" "POST" "$BASE_URL/api/v1/cart" "$add_status2" "$([[ "$add_status2" == "200" || "$add_status2" == "201" ]] && echo true || echo false)" "payload=REQ__api_v1_cart_items.json"
+    fi
     # GET /cart
     cart_resp=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/cart" || true)
     echo "$cart_resp" > "$OUT_DIR/GET__api_v1_cart.json"
