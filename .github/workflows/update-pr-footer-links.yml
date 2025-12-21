@@ -203,3 +203,36 @@ EOF
           jq -n --arg body "$COMMENT" '{body: $body}' > comment.json
           curl -s -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
             -d @comment.json "https://api.github.com/repos/${REPO}/issues/${PR_NUMBER}/comments" | jq -r .id > /dev/null
+
+      - name: Comment direct artifact link
+        shell: bash
+        env:
+          REPO: ${{ env.REPO }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
+        run: |
+          set -e
+          # List artifacts for this run
+          ARTIFACTS_JSON=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${REPO}/actions/runs/${{ github.run_id }}/artifacts")
+          NAME="post-merge-screenshots-pr-${PR_NUMBER}"
+          ART_ID=$(echo "$ARTIFACTS_JSON" | jq -r --arg NAME "$NAME" '.artifacts[] | select(.name == $NAME) | .id' | head -n1)
+          if [ -n "$ART_ID" ] && [ "$ART_ID" != "null" ]; then
+            UI_LINK="https://github.com/${REPO}/actions/runs/${{ github.run_id }}/artifacts/${ART_ID}"
+            API_LINK=$(echo "$ARTIFACTS_JSON" | jq -r --arg NAME "$NAME" '.artifacts[] | select(.name == $NAME) | .archive_download_url' | head -n1)
+            COMMENT=$(cat << EOF
+直接下载链接：
+
+- Artifact UI 页面：${UI_LINK}
+- API 下载地址（需授权）：${API_LINK}
+EOF
+)
+          else
+            COMMENT=$(cat << EOF
+未找到 Artifact 直接链接（可能因命名或上传延迟）。请通过运行页面下载：
+https://github.com/${REPO}/actions/runs/${{ github.run_id }}
+EOF
+)
+          fi
+          jq -n --arg body "$COMMENT" '{body: $body}' > comment.json
+          curl -s -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
+            -d @comment.json "https://api.github.com/repos/${REPO}/issues/${PR_NUMBER}/comments" | jq -r .id > /dev/null
