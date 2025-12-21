@@ -42,7 +42,14 @@ Notes & tips:
 make run-min-integration
 ```
 
+- 严格模式示例（可选，默认关闭）：
+
+```bash
+STRICT_MIN=1 make run-min-integration
+```
+
 - CI 自动执行：工作流 [minimal-integration.yml](.github/workflows/minimal-integration.yml) 会在 push/PR 时运行并将 `build-ci-logs/**` 上传为 Artifacts。
+ - 贡献者说明：更多 CI 与联调指南见 [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## 移除 Git 历史中的大文件（推送被 100MB 限制阻断时）
 
