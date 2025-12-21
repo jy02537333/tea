@@ -26,6 +26,21 @@ bash scripts/run_commission_min.sh
   - 使用内置服务启动 MySQL/Redis，安装 Go 与 jq，执行上述最小脚本。
   - 将 build-ci-logs/**（含子目录）上传为 Actions Artifacts，可在任务详情的 Artifacts 区下载查看证据文件。
 
+### 临时开启严格模式（CI）
+- UI 方式：在 GitHub 仓库的 Actions 页面选择 “Minimal Integration CI”，点击 “Run workflow”，将输入框 `STRICT_MIN` 设为 `1`，选择需要的分支（如 feat/withdraw-remark-json-ui-docs 或 PR 的 head 分支），提交运行。
+- gh CLI 方式：
+
+```bash
+# 针对指定分支手动触发（STRICT_MIN=1）
+gh workflow run minimal-integration.yml -r feat/withdraw-remark-json-ui-docs -f STRICT_MIN=1
+
+# 针对某个 PR 的 head 分支触发（以 PR #50 为例）
+BRANCH=$(gh pr view 50 --json headRefName --jq .headRefName)
+gh workflow run minimal-integration.yml -r "$BRANCH" -f STRICT_MIN=1
+```
+
+- 行为说明：严格模式会执行更严格的断言步骤（见下文“严格模式（Strict）”），若断言失败，任务会标红，但仍会上传 `build-ci-logs/**` 以便排查。
+
 ## 常用环境变量
 - API_BASE：后端地址（默认 http://127.0.0.1:9292）。
 - ADMIN_TOKEN：管理员 JWT（未提供时脚本会尝试从日志发现或使用本地登录 admin/pass）。
@@ -41,3 +56,17 @@ bash scripts/run_commission_min.sh
 ## 参考
 - Makefile 目标：run-min-integration（串联最小链路，产物写入 build-ci-logs/）。
 - 脚本：scripts/run_admin_product_min.sh、scripts/run_commission_min.sh。
+
+## 严格模式（Strict）
+
+- 开关：将环境变量 `STRICT_MIN=1` 传递给脚本或 CI 步骤以启用严格断言。
+- 校验范围：
+  - 后台商品链路：要求品牌/分类/商品均成功创建并可查询到；上传返回 `url` 且商品主图成功回填；摘要文件存在并包含 product_id。
+  - 分销解冻链路：`POST /admin/finance/commission/release` 返回 200 且响应体标记成功；存在至少一种 Sprint A 证据文件（`order_detail_*_checked.json` 或 `order_amounts_summary.json`），并且其 `check` 字段为 true（如存在）。
+- 失败处理：开启严格模式时，任一断言不满足将立即退出并返回非零码；CI 中对应步骤会标红，但仍会上传 `build-ci-logs/**` 以便排查。
+- 示例：
+
+```bash
+STRICT_MIN=1 make run-min-integration
+```
+
