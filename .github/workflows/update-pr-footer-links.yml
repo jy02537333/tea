@@ -117,3 +117,89 @@ EOF
           jq -n --arg body "$COMMENT" '{body: $body}' > comment.json
           curl -s -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
             -d @comment.json "https://api.github.com/repos/${REPO}/issues/${PR_NUMBER}/comments" | jq -r .id > /dev/null
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Puppeteer
+        run: |
+          set -e
+          npm init -y
+          npm install puppeteer@22
+
+      - name: Capture screenshots
+        shell: bash
+        env:
+          REPO: ${{ env.REPO }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
+          DOC_EXISTS: ${{ env.DOC_EXISTS }}
+          CONTRIB_EXISTS: ${{ env.CONTRIB_EXISTS }}
+        run: |
+          set -e
+          mkdir -p screens
+          PR_URL="https://github.com/${REPO}/pull/${PR_NUMBER}"
+          if [ "$DOC_EXISTS" = "1" ]; then
+            CI_URL="https://github.com/${REPO}/blob/master/docs/ci/minimal-integration.md"
+          else
+            CI_URL="https://github.com/${REPO}/tree/master/docs/ci"
+          fi
+          if [ "$CONTRIB_EXISTS" = "1" ]; then
+            CONTRIB_URL="https://github.com/${REPO}/blob/master/CONTRIBUTING.md"
+          else
+            CONTRIB_URL="https://github.com/${REPO}"
+          fi
+          node - << 'NODE'
+          const fs = require('fs');
+          const puppeteer = require('puppeteer');
+          (async () => {
+            const env = process.env;
+            const prUrl = env.PR_URL;
+            const ciUrl = env.CI_URL;
+            const contribUrl = env.CONTRIB_URL;
+            const outDir = 'screens';
+            const browser = await puppeteer.launch({args: ['--no-sandbox','--disable-setuid-sandbox']});
+            const page = await browser.newPage();
+            page.setViewport({width: 1440, height: 900});
+            async function snap(url, name){
+              await page.goto(url, {waitUntil: 'networkidle2', timeout: 60000});
+              await page.screenshot({path: `${outDir}/${name}.png`, fullPage: true});
+            }
+            await snap(prUrl, 'pr-body-after-merge');
+            await snap(ciUrl, 'ci-doc-on-master');
+            await snap(contribUrl, 'contributing-on-master');
+            await browser.close();
+          })().catch(err => { console.error(err); process.exit(0); });
+          NODE
+
+      - name: Upload screenshots artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-merge-screenshots-pr-${{ env.PR_NUMBER }}
+          path: screens/*.png
+          if-no-files-found: warn
+
+      - name: Comment screenshots links
+        shell: bash
+        env:
+          REPO: ${{ env.REPO }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
+        run: |
+          set -e
+          RUN_URL="https://github.com/${REPO}/actions/runs/${{ github.run_id }}"
+          COMMENT=$(cat << EOF
+截图与证据：
+
+- Actions 运行页面（可下载 Artifact）：${RUN_URL}
+- Artifact 名称：post-merge-screenshots-pr-${PR_NUMBER}
+
+包含：
+- pr-body-after-merge.png（PR 页展示尾注相对链接）
+- ci-doc-on-master.png（CI 文档页面）
+- contributing-on-master.png（CONTRIBUTING 页面或仓库主页占位）
+EOF
+)
+          jq -n --arg body "$COMMENT" '{body: $body}' > comment.json
+          curl -s -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
+            -d @comment.json "https://api.github.com/repos/${REPO}/issues/${PR_NUMBER}/comments" | jq -r .id > /dev/null
