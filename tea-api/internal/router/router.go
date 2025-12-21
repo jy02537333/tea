@@ -37,6 +37,7 @@ func SetupRouter() *gin.Engine {
 	storeHandler := handler.NewStoreHandler()
 	invHandler := handler.NewStoreInventoryHandler()
 	modelHandler := handler.NewModelHandler()
+	brandHandler := handler.NewBrandHandler()
 	uploadHandler := handler.NewUploadHandler()
 	activityHandler := handler.NewActivityHandler()
 	ticketHandler := handler.NewTicketHandler()
@@ -118,10 +119,32 @@ func SetupRouter() *gin.Engine {
 		adminGroup.PUT("/users/:id", userHandler.AdminUpdateUser)
 		adminGroup.POST("/users/:id/reset-password", userHandler.AdminResetPassword)
 		adminGroup.POST("/uploads", uploadHandler.UploadMedia)
+		// 品牌管理（Admin）
+		adminGroup.GET("/brands", brandHandler.List)
+		adminGroup.POST("/brands", brandHandler.Create)
+		adminGroup.GET("/brands/:id", brandHandler.Get)
+		adminGroup.PUT("/brands/:id", brandHandler.Update)
+		adminGroup.DELETE("/brands/:id", brandHandler.Delete)
+		// 管理端商品 CRUD（Sprint C）
+		adminGroup.GET("/products", productHandler.GetProducts)
+		adminGroup.POST("/products", productHandler.CreateProduct)
+		adminGroup.GET("/products/:id", productHandler.GetProduct)
+		adminGroup.PUT("/products/:id", productHandler.UpdateProduct)
+		adminGroup.DELETE("/products/:id", productHandler.DeleteProduct)
+		adminGroup.PUT("/products/:id/stock", productHandler.UpdateProductStock)
+
+		// 管理端 OSS 直传策略获取
+		adminGroup.GET("/storage/oss/policy", uploadHandler.GetOSSPolicy)
 		// 门店订单统计
 		adminGroup.GET("/stores/:id/orders/stats", storeHandler.OrderStats)
 		// 门店订单列表（按门店维度查看订单）
 		adminGroup.GET("/stores/:id/orders", orderHandler.AdminStoreOrders)
+		// 门店后台快捷拒单入口：标记退款中（需财务权限）
+		adminGroup.POST("/stores/:id/orders/:orderId/reject", middleware.RequirePermission("order:refund"), func(c *gin.Context) {
+			// 透传至统一退款入口，复用 AdminRefundStart
+			c.Params = append(c.Params, gin.Param{Key: "id", Value: c.Param("orderId")})
+			orderHandler.AdminRefundStart(c)
+		})
 		// 门店库存管理
 		adminGroup.GET("/stores/:id/products", invHandler.List)
 		adminGroup.POST("/stores/:id/products", invHandler.Upsert)
