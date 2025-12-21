@@ -1,11 +1,10 @@
 name: API Validation
 
 on:
-  push:
-    branches: [ chore/hygiene-guards ]
+  workflow_dispatch:
   pull_request:
     branches: [ master ]
-  workflow_dispatch:
+    types: [opened, synchronize, reopened]
 
 jobs:
   stateful-api-check:
