@@ -64,7 +64,8 @@ func (h *OrderHandler) CreateFromCart(c *gin.Context) {
 
 	var req createOrderReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "参数错误")
+		// 返回更详细的错误信息，便于快速定位请求体问题
+		response.Error(c, http.StatusBadRequest, "参数错误", err.Error())
 		return
 	}
 	order, err := h.svc.CreateOrderFromCart(userID, req.DeliveryType, req.AddressInfo, req.Remark, req.UserCouponID, req.StoreID, req.OrderType)
