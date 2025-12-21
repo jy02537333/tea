@@ -148,6 +148,10 @@ TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
   - Git 分支快照规则：当需要为「某一天的项目整体进度」打快照时，从主开发分支当前提交创建只读分支，命名为 `YYYYMMDD`（例如 `20251209`），该分支仅用于归档当天进度，不在其上继续开发。
 
 - **关键成功路径自动化与证据文件**：
+  - 最小集成执行说明与入口：
+    - 文档：`docs/ci/minimal-integration.md`
+    - 本地一键：`make run-min-integration`
+    - CI 工作流：`.github/workflows/minimal-integration.yml`（运行并上传 `build-ci-logs/**` 为 Artifacts）
   - Sprint A（下单与抵扣验证）：
     - 核心脚本与入口：
       - `scripts/local_api_check.sh`：在本地/CI 中执行状态化下单路径（购物车→下单→订单详情），生成订单金额证据与人类可读摘要。
@@ -687,6 +691,11 @@ TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
   - 后端生成带签名的 OSS Policy/STS 临时凭证，返回给前端。
   - 前端使用该凭证直接向 OSS 进行表单直传或 SDK 上传，上传成功后拿到文件 URL/key。
   - 前端将图片 URL/key 回填到商品/品牌表单并提交保存；后端只存储 OSS 对象 key 与访问 URL，不处理二次上传。
+
+  联调提示（当前实现）
+  - 已开放公开端点（无需鉴权/权限）：`GET /api/v1/storage/oss/policy`、`POST /api/v1/uploads`。
+  - 当前为“无限制”对外开放，仅用于联调/演示；生产需恢复鉴权/权限或启用严格限速、类型/大小白名单与对象前缀校验。
+  - 本条为进度标记，无需再次确认。
 
 - 基本约束
   - 图片格式限制：`jpg/jpeg/png/webp`，单张大小上限（如 2MB，可配置）。
