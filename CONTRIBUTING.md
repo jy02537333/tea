@@ -34,3 +34,9 @@ gh workflow run minimal-integration.yml -r "$BRANCH" -f STRICT_MIN=1
 ## 开发约定
 - 与 `doc/`、`docs/` 的约束保持一致，更新相关文档与清单。
 - 如涉及上传与商品/分销链路，请优先使用最小联调命令验证，并在 PR 描述中附上关键产物说明。
+
+## 提 PR 指南（必读）
+
+- 评审清单自动化：当 PR 从草稿切为可评审，或添加标签 “Ready for review”，系统会自动在评论中附加“评审速览 Checklist”。若评论已存在同名清单，工作流不会重复发布。
+- 模板与说明：请参考 `docs/ci/pr-review-checklist.md` 的“自动化说明”段落（包含标准提示模板与运行链接示例）。
+- 运行链接：可在 PR 页面点击 “Checks”，或直接使用模板 `https://github.com/<owner>/<repo>/pull/<number>/checks` 跳转到对应运行。
