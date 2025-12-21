@@ -14,3 +14,14 @@
 - 当前状态：Ready for review
 
 说明：本清单为评审辅助材料，实际以 PR 描述、变更文件与 CI 结果为准。
+
+  ## 自动化说明
+
+  - 工作流名称：Attach Review Checklist（位于 `.github/workflows/attach-review-checklist.yml`）
+  - 触发条件：
+    - PR 从草稿（draft）切换为可评审（ready_for_review）；或
+    - PR 被添加标签 “Ready for review”。
+  - 去重逻辑：若 PR 评论中已存在“评审速览 Checklist”，工作流不会重复发布。
+  - 标准提示模板（复用时替换运行链接）：
+    - 工作流提示：Attach Review Checklist 已触发并检测到清单已存在，故不重复发布。运行链接：<PR checks 链接>
+  - 运行链接模板示例：`https://github.com/<owner>/<repo>/pull/<number>/checks`

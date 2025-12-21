@@ -147,6 +147,11 @@ TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
   - `doc/db_schema.md` / `db/schema.sql`：数据库设计与建表脚本的索引位置，便于在评审进度时快速定位数据层的完成度与变更。
   - Git 分支快照规则：当需要为「某一天的项目整体进度」打快照时，从主开发分支当前提交创建只读分支，命名为 `YYYYMMDD`（例如 `20251209`），该分支仅用于归档当天进度，不在其上继续开发。
 
+#### 评审清单自动化标记
+
+- 评审清单工作流：自动在 PR 切为可评审或添加 “Ready for review” 标签时发布“评审速览 Checklist”评论；若已存在则不重复发布。
+- 标准提示模板：见 [docs/ci/pr-review-checklist.md](../docs/ci/pr-review-checklist.md) 的“自动化说明”段落（包含运行链接模板）。
+
 - **关键成功路径自动化与证据文件**：
   - 最小集成执行说明与入口：
     - 文档：`docs/ci/minimal-integration.md`
