@@ -33,6 +33,17 @@ Notes & tips:
 - Adjust seeder steps in the workflow to match your required test data.
 - Consider adding a short smoke test assertion that checks `build-ci-logs/api_validation/summary.txt` for expected 200 responses to fail the job when regressions occur.
 
+## 快速联调（Minimal Integration）
+
+- 文档说明：见 [docs/ci/minimal-integration.md](docs/ci/minimal-integration.md)
+- 本地一键执行：
+
+```bash
+make run-min-integration
+```
+
+- CI 自动执行：工作流 [minimal-integration.yml](.github/workflows/minimal-integration.yml) 会在 push/PR 时运行并将 `build-ci-logs/**` 上传为 Artifacts。
+
 ## 移除 Git 历史中的大文件（推送被 100MB 限制阻断时）
 
 - 使用步骤：
