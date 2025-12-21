@@ -37,3 +37,9 @@ Status: Ready for review
 ### PR 描述固定尾注
 - CI 临时开启严格模式指引：docs/ci/minimal-integration.md（见文档中的“临时开启严格模式（CI）”小节）
 - 更多 CI 与联调指南：CONTRIBUTING.md
+
+#### 合并版提示（统一风格）
+合并提示：评审清单与模板说明已统一。
+- 自动化：PR 切为可评审或标记“Ready for review”时自动附加“评审速览 Checklist”（含去重）。
+- 文档：CONTRIBUTING.md（提 PR 指南），docs/ci/pr-review-checklist.md（自动化说明与模板）。
+- 运行链接：请查看本 PR 的 Checks 页面。
