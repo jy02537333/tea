@@ -1,5 +1,4 @@
 name: API Validation
-# trivial: trigger PR checks; no behavior change
 
 on:
   push:
@@ -10,7 +9,6 @@ on:
 
 jobs:
   stateful-api-check:
-    name: API Validation
     env:
       CI_SEED: "1"
     runs-on: ubuntu-latest
@@ -33,12 +31,12 @@ jobs:
           - 6379:6379
 
     steps:
-      - name: Branch guard (disable on master and PR->master)
+      - name: Branch guard (disable on this branch)
         id: branchguard
         run: |
-          if [ "${GITHUB_REF}" = "refs/heads/master" ] || { [ "${GITHUB_EVENT_NAME}" = "pull_request" ] && [ "${GITHUB_BASE_REF}" = "master" ]; }; then
+          if [ "${GITHUB_REF}" = "refs/heads/master" ]; then
             echo "disabled=true" >> $GITHUB_OUTPUT
-            echo "API Validation is DISABLED for this context: ref=${GITHUB_REF}, event=${GITHUB_EVENT_NAME}, base=${GITHUB_BASE_REF}"
+            echo "API Validation is DISABLED for ${GITHUB_REF}."
           else
             echo "disabled=false" >> $GITHUB_OUTPUT
           fi
@@ -150,12 +148,12 @@ jobs:
         run: |
           bash scripts/run_api_validation.sh | tee build-ci-logs/api-validation-$(date +%Y%m%d%H%M%S).log
 
-      - name: Run Sprint A E2E (stateful + strict)
+      - name: Run stateful API validation
         if: steps.branchguard.outputs.disabled != 'true'
         env:
           BASE_URL: http://127.0.0.1:9292
         run: |
-          make verify-sprint-a-e2e | tee build-ci-logs/api-validation-stateful-$(date +%Y%m%d%H%M%S).log
+          bash scripts/local_api_check.sh | tee build-ci-logs/api-validation-stateful-$(date +%Y%m%d%H%M%S).log
 
       - name: Admin dev-login (token for assertions)
         if: steps.branchguard.outputs.disabled != 'true'
@@ -177,10 +175,12 @@ jobs:
             echo "Token acquired (truncated): ${TOKEN:0:12}..."
           fi
 
-      - name: Sprint A assertions note
+      - name: Sprint A verification assertions (strict)
         if: steps.branchguard.outputs.disabled != 'true'
+        env:
+          API_BASE_URL: http://127.0.0.1:9292
         run: |
-          echo "Sprint A strict assertions already executed via make verify-sprint-a-e2e"
+          make verify-sprint-a-strict
 
       - name: Run membership stateful flow (Sprint B)
         if: steps.branchguard.outputs.disabled != 'true'

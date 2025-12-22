@@ -43,3 +43,6 @@ deleted_backups/*.tar.gz
 # ignore build outputs and local-only configs
 tea-api/dist/
 tea-api/configs/config.mysql.local.yaml
+
+# Ignore local GitHub token (do not commit)
+.github_token

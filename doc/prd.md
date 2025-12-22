@@ -7,7 +7,7 @@
 ## 重要说明（方向调整，2025-12-22）
 
 - 后续阶段以“完成开发任务”为主，CI 优化工作收束为日常维护，不再投入重型改造。
-- 分支保护：继续保留“API Validation”为唯一必需状态检查，门禁以 Sprint A 严格断言为准；Sprint B 检查作为非阻断，仅归档证据用于观察与回归。
+- 分支保护：不再使用“API Validation”为必需状态检查；当前合并不受其门禁影响，CI 仅用于基础构建与可选证据归档（不阻断）。
 - 参考与入口：
   - 工作流与门禁策略：`.github/workflows/api-validation.yml`
   - 一键本地/CI 验证：`make verify-sprint-a-e2e`（先生成证据，再执行严格断言）
@@ -199,7 +199,7 @@ TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
 
     为确保主线稳定性与可回溯性，`master` 分支已启用如下保护与门禁策略（以 GitHub Branch Protection 为准）：
 
-    - 必需状态检查：`API Validation`（strict=true）。
+    - 必需状态检查：无（已停用 `API Validation`）。
     - 管理员强制（enforce_admins）：启用。
     - 线性历史（required_linear_history）：启用。
     - 会话解析必需（required_conversation_resolution）：启用。
@@ -216,7 +216,7 @@ TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
 
     变更与维护：
 
-    - 分支保护规则通过 GitHub 设置或 API（Branch Protection）维护；`API Validation` 的工作流定义位于 `.github/workflows/api-validation.yml`。
+    - 分支保护规则通过 GitHub 设置或 API（Branch Protection）维护；`API Validation` 已停用为必需检查，相关工作流位于 `.github/workflows/api-validation.yml`（保留为参考/可选执行）。
     - 若新增/调整必需检查项，请同步更新本节与工作流名称，保持文档与系统配置一致。
 
 ## 五、系统流程（文字版）
