@@ -1,6 +1,14 @@
 SHELL := /bin/bash
 MAKEFLAGS += --warn-undefined-variables
 
+## monitor-pr52-ci: Monitor latest API Validation run for PR #52 and auto-comment result
+.PHONY: monitor-pr52-ci
+monitor-pr52-ci:
+	@GH_TOKEN=$${GH_TOKEN:-$$(cat .github_token 2>/dev/null || true)} \
+	OWNER=jy02537333 REPO=tea PR_NUMBER=52 BRANCH=chore/ci-disable-api-validation-on-master WORKFLOW_FILE=api-validation.yml \
+	POLL_INTERVAL=30 \
+	bash scripts/ci/monitor_workflow_and_comment.sh
+
 # Optional extra args, e.g. make package PACKAGE_ARGS="--os linux --arch amd64"
 PACKAGE_ARGS ?=
 

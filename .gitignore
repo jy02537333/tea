@@ -1,4 +1,5 @@
-.$设计图.drawio.bkp
+# Local GitHub token file for CI monitor (do NOT commit secrets)
+.github_token.$设计图.drawio.bkp
 *.exe
 design/.$设计图.drawio.dtmp
 test/test.db
