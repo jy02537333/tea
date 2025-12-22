@@ -149,12 +149,12 @@ jobs:
         run: |
           bash scripts/run_api_validation.sh | tee build-ci-logs/api-validation-$(date +%Y%m%d%H%M%S).log
 
-      - name: Run stateful API validation
+      - name: Run Sprint A E2E (stateful + strict)
         if: steps.branchguard.outputs.disabled != 'true'
         env:
           BASE_URL: http://127.0.0.1:9292
         run: |
-          bash scripts/local_api_check.sh | tee build-ci-logs/api-validation-stateful-$(date +%Y%m%d%H%M%S).log
+          make verify-sprint-a-e2e | tee build-ci-logs/api-validation-stateful-$(date +%Y%m%d%H%M%S).log
 
       - name: Admin dev-login (token for assertions)
         if: steps.branchguard.outputs.disabled != 'true'
@@ -176,12 +176,10 @@ jobs:
             echo "Token acquired (truncated): ${TOKEN:0:12}..."
           fi
 
-      - name: Sprint A verification assertions (strict)
+      - name: Sprint A assertions note
         if: steps.branchguard.outputs.disabled != 'true'
-        env:
-          API_BASE_URL: http://127.0.0.1:9292
         run: |
-          make verify-sprint-a-strict
+          echo "Sprint A strict assertions already executed via make verify-sprint-a-e2e"
 
       - name: Run membership stateful flow (Sprint B)
         if: steps.branchguard.outputs.disabled != 'true'

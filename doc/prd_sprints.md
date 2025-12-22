@@ -98,6 +98,7 @@
 > 自动化与 CI 保护：
 > - 本地/CI 状态化脚本：`scripts/local_api_check.sh` 会在登录后完成最小下单路径（购物车→下单→订单详情），并生成以上订单金额证据文件与 `build-ci-logs/local_api_summary.txt`。
 > - 严格断言脚本：`scripts/assert_api_validation.sh` 读取 `order_detail_*_checked.json` / `order_amounts_summary.json` 等证据，严格校验 `pay_amount = total_amount - discount_amount`，`make verify-sprint-a[-strict]` 为统一入口。
+> - 一键本地验证：`make verify-sprint-a-e2e` 将先执行状态化脚本生成证据，再自动运行严格断言（等价于依次执行 `scripts/local_api_check.sh` 与 `REQUIRE_ORDER_CHECK=1 scripts/assert_api_validation.sh`）。
 > - CI 集成：`.github/workflows/api-validation.yml` 中的 `stateful-api-check` job 会在公共 API、自状态化检查后执行 `make verify-sprint-a-strict`，并将上述证据文件作为工件归档，用于回归与审计。
 
 > 迭代策略（以 A 为主）：当前迭代将 Sprint A 作为主线与 CI 阻断标准；支付回调 ST（`POST /api/v1/payments/callback`）作为关键校验点，会在统一下单后通过模拟支付回调验证签名与订单状态流转。Sprint B 的检查作为“观察项”（非阻断），不影响合并结论。
