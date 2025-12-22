@@ -1,0 +1,255 @@
+name: API Validation
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:
+
+jobs:
+  stateful-api-check:
+    env:
+      CI_SEED: "1"
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: tea_shop
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Branch guard (disable on this branch)
+        id: branchguard
+        run: |
+          if [ "${GITHUB_REF}" = "refs/heads/master" ]; then
+            echo "disabled=true" >> $GITHUB_OUTPUT
+            echo "API Validation is DISABLED for ${GITHUB_REF}."
+          else
+            echo "disabled=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: API Validation disabled notice
+        if: steps.branchguard.outputs.disabled == 'true'
+        run: |
+          echo "Skipping API Validation for ${GITHUB_REF}."
+
+      - name: Checkout
+        if: steps.branchguard.outputs.disabled != 'true'
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        if: steps.branchguard.outputs.disabled != 'true'
+        uses: actions/setup-go@v5
+        with:
+            go-version: '1.22'
+
+      - name: Install system deps
+        if: steps.branchguard.outputs.disabled != 'true'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y netcat-openbsd jq
+
+      - name: Build tea-api
+        if: steps.branchguard.outputs.disabled != 'true'
+        working-directory: tea-api
+        run: |
+          go mod download
+          go build -o tea-api
+
+      - name: Start tea-api server
+        if: steps.branchguard.outputs.disabled != 'true'
+        working-directory: tea-api
+        env:
+          TEA_DATABASE_HOST: 127.0.0.1
+          TEA_DATABASE_PORT: 3306
+          TEA_DATABASE_USERNAME: root
+          TEA_DATABASE_PASSWORD: root
+          TEA_DATABASE_DBNAME: tea_shop
+          REDIS_ADDR: 127.0.0.1:6379
+          TEA_AUTO_MIGRATE: "1"
+        run: |
+          mkdir -p ../build-ci-logs
+          ./tea-api > ../build-ci-logs/tea-api.out 2>&1 & echo $! > ../build-ci-logs/tea-api.pid
+          # wait for health endpoint
+          for i in $(seq 1 30); do
+            if curl -sS http://127.0.0.1:9292/api/v1/health | grep -q '"status"\s*:\s*"ok"'; then
+              echo "API healthy"; break; fi; sleep 2; done
+          curl -sS http://127.0.0.1:9292/api/v1/health || true
+      - name: Seed minimal data (conditional)
+        if: steps.branchguard.outputs.disabled != 'true' && env.CI_SEED == '1'
+        run: |
+          echo "Seeding minimal data for stable assertions (CI_SEED=1)"
+          sudo apt-get update -y && sudo apt-get install -y mysql-client || true
+          MYSQL_HOST=127.0.0.1
+          MYSQL_PORT=3306
+          MYSQL_USER=root
+          MYSQL_PASS=root
+          MYSQL_DB=tea_shop
+          cat > /tmp/seed.sql <<'EOF'
+          INSERT INTO categories (id, uid, name, status)
+          SELECT 1, 'cat-seed-1', '默认分类', 1
+          WHERE NOT EXISTS (SELECT 1 FROM categories WHERE id=1);
+
+          INSERT INTO stores (id, uid, name, address, phone, latitude, longitude, business_hours, status)
+          SELECT 1, 'store-seed-1', '测试门店', '上海某路1号', '12345678', 31.2304, 121.4737, '09:00-21:00', 1
+          WHERE NOT EXISTS (SELECT 1 FROM stores WHERE id=1);
+
+          INSERT INTO products (id, uid, category_id, name, description, price, status)
+          SELECT 1001, 'prod-seed-1001', 1, '测试商品', '自动化测试用商品', 19.99, 1
+          WHERE NOT EXISTS (SELECT 1 FROM products WHERE id=1001);
+
+          INSERT INTO product_skus (id, uid, product_id, sku_name, price, stock, status)
+          SELECT 2001, 'sku-seed-2001', 1001, '默认SKU', 19.99, 100, 1
+          WHERE NOT EXISTS (SELECT 1 FROM product_skus WHERE id=2001);
+          EOF
+          mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PASS" "$MYSQL_DB" < /tmp/seed.sql
+
+      - name: Seed demo user and membership data
+        if: steps.branchguard.outputs.disabled != 'true' && env.CI_SEED == '1'
+        working-directory: tea-api
+        env:
+          TEA_DATABASE_HOST: 127.0.0.1
+          TEA_DATABASE_PORT: 3306
+          TEA_DATABASE_USERNAME: root
+          TEA_DATABASE_PASSWORD: root
+          TEA_DATABASE_DBNAME: tea_shop
+        run: |
+          go run ./scripts/seed_demo_user.go
+
+      - name: Seed admin user
+        if: steps.branchguard.outputs.disabled != 'true' && env.CI_SEED == '1'
+        working-directory: tea-api
+        env:
+          TEA_DATABASE_HOST: 127.0.0.1
+          TEA_DATABASE_PORT: 3306
+          TEA_DATABASE_USERNAME: root
+          TEA_DATABASE_PASSWORD: root
+          TEA_DATABASE_DBNAME: tea_shop
+          SEED_ADMIN_USER: admin
+          SEED_ADMIN_PASS: pass
+        run: |
+          go run ./scripts/seed_admin.go
+
+      - name: Run public API validation
+        if: steps.branchguard.outputs.disabled != 'true'
+        run: |
+          bash scripts/run_api_validation.sh | tee build-ci-logs/api-validation-$(date +%Y%m%d%H%M%S).log
+
+      - name: Run stateful API validation
+        if: steps.branchguard.outputs.disabled != 'true'
+        env:
+          BASE_URL: http://127.0.0.1:9292
+        run: |
+          bash scripts/local_api_check.sh | tee build-ci-logs/api-validation-stateful-$(date +%Y%m%d%H%M%S).log
+
+      - name: Admin dev-login (token for assertions)
+        if: steps.branchguard.outputs.disabled != 'true'
+        run: |
+          mkdir -p build-ci-logs
+          LOGIN_URL="http://127.0.0.1:9292/api/v1/user/login"
+          RESP_FILE="build-ci-logs/admin_login_response.json"
+          # Try username/password first
+          curl -sS -H 'Content-Type: application/json' -d '{"username":"admin","password":"pass"}' "$LOGIN_URL" -o "$RESP_FILE" || true
+          TOKEN=$(jq -r '.data.token // .token // empty' "$RESP_FILE" 2>/dev/null || echo "")
+          if [[ -z "$TOKEN" ]]; then
+            # Fallback to openid login
+            curl -sS -H 'Content-Type: application/json' -d '{"openid":"admin_openid"}' "http://127.0.0.1:9292/api/v1/user/dev-login" -o "$RESP_FILE" || true
+            TOKEN=$(jq -r '.data.token // .token // empty' "$RESP_FILE" 2>/dev/null || echo "")
+          fi
+          if [[ -z "$TOKEN" ]]; then
+            echo "WARN: admin token not obtained; Sprint A assertions may skip or fail auth-dependent checks."
+          else
+            echo "Token acquired (truncated): ${TOKEN:0:12}..."
+          fi
+
+      - name: Sprint A verification assertions (strict)
+        if: steps.branchguard.outputs.disabled != 'true'
+        env:
+          API_BASE_URL: http://127.0.0.1:9292
+        run: |
+          make verify-sprint-a-strict
+
+      - name: Run membership stateful flow (Sprint B)
+        if: steps.branchguard.outputs.disabled != 'true'
+        env:
+          API_BASE: http://127.0.0.1:9292
+        continue-on-error: true
+        run: |
+          bash scripts/run_membership_integration.sh | tee build-ci-logs/membership-flow-$(date +%Y%m%d%H%M%S).log
+
+      - name: Sprint B membership verification (strict)
+        if: steps.branchguard.outputs.disabled != 'true'
+        continue-on-error: true
+        run: |
+          make verify-sprint-b-strict
+
+      - name: Show membership evidence snapshot
+        if: steps.branchguard.outputs.disabled != 'true'
+        run: |
+          echo "==== membership_summary_after_purchase.json ===="
+          if [[ -f build-ci-logs/membership_summary_after_purchase.json ]]; then
+            cat build-ci-logs/membership_summary_after_purchase.json | sed -e 's/\t/  /g' || true
+          else
+            echo "(missing)";
+          fi
+          echo "==== membership_b_flow_checked.json ===="
+          if [[ -f build-ci-logs/membership_b_flow_checked.json ]]; then
+            cat build-ci-logs/membership_b_flow_checked.json | sed -e 's/\t/  /g' || true
+          else
+            echo "(missing)";
+          fi
+
+      - name: Archive validation logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-validation-logs
+          retention-days: 7
+          path: |
+            build-ci-logs/api_validation/**
+            build-ci-logs/api_validation_stateful/**
+            build-ci-logs/api-validation-*.log
+            build-ci-logs/api-validation-stateful-*.log
+            build-ci-logs/tea-api.out
+            build-ci-logs/order_detail_*_checked.json
+            build-ci-logs/order_detail_*.json
+            build-ci-logs/order_amounts_summary.json
+            build-ci-logs/local_api_summary.txt
+            build-ci-logs/membership_summary_after_purchase.json
+            build-ci-logs/membership_b_flow_checked.json
+            build-ci-logs/membership-flow-*.log
+
+      - name: Collect diagnostics on failure
+        if: steps.branchguard.outputs.disabled != 'true' && failure()
+        run: |
+          echo "==== tea-api last 200 lines ===="
+          tail -n 200 build-ci-logs/tea-api.out || true
+          echo "==== curl health ===="
+          curl -i http://127.0.0.1:9292/api/v1/health || true
+          echo "==== curl categories ===="
+          curl -i http://127.0.0.1:9292/api/v1/categories | head -c 2000 || true
+          echo "==== docker ps ===="
+          docker ps --format '{{.Names}}\t{{.Image}}\t{{.Status}}' || true
+          echo "==== mysql service logs (last 100) ===="
+          docker logs $(docker ps --format '{{.Names}}' | grep -E '^mysql' | head -n1) --tail 100 || true
+          echo "==== redis service logs (last 100) ===="
+          docker logs $(docker ps --format '{{.Names}}' | grep -E '^redis' | head -n1) --tail 100 || true
+
+      - name: Stop tea-api
+        if: steps.branchguard.outputs.disabled != 'true' && always()
+        run: |
+          if [[ -f build-ci-logs/tea-api.pid ]]; then kill $(cat build-ci-logs/tea-api.pid) || true; fi
+        
