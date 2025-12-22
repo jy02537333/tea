@@ -45,6 +45,10 @@ func AccessLogMiddleware() gin.HandlerFunc {
 			}
 
 			db := database.GetDB()
+			if db == nil {
+				zap.L().Warn("skip access log write: db not initialized")
+				return
+			}
 			if err := db.Create(accessLog).Error; err != nil {
 				// 记录错误日志
 				zap.L().Error("Failed to create access log", zap.Error(err))
@@ -102,6 +106,10 @@ func DetailedAccessLogMiddleware() gin.HandlerFunc {
 			}
 
 			db := database.GetDB()
+			if db == nil {
+				zap.L().Warn("skip detailed access log: db not initialized")
+				return
+			}
 			if err := db.Create(accessLog).Error; err != nil {
 				zap.L().Error("Failed to create detailed access log", zap.Error(err))
 			}

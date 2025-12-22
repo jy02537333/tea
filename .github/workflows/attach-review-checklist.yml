@@ -27,17 +27,7 @@ jobs:
           if [ -f "docs/ci/pr-review-checklist.md" ]; then
             CHECKLIST_CONTENT=$(cat docs/ci/pr-review-checklist.md)
           else
-            CHECKLIST_CONTENT=$(cat << 'EOF'
-评审速览 Checklist
-- 变更范围: 以“Files changed”页面为准，关注受影响模块。
-- 风险点: 文档链接有效性、CI 工作流执行与潜在回归。
-- 验证步骤:
-  - 本地拉取分支并按最小集成说明启动
-  - 点击 PR 尾注中的 CI 文档确认可用
-  - 合并后确认尾注链接已自动转换为 master 相对路径且仍可用
-- 状态: Ready for review
-EOF
-            )
+            CHECKLIST_CONTENT=$'评审速览 Checklist\n- 变更范围: 以“Files changed”页面为准，关注受影响模块。\n- 风险点: 文档链接有效性、CI 工作流执行与潜在回归。\n- 验证步骤:\n  - 本地拉取分支并按最小集成说明启动\n  - 点击 PR 尾注中的 CI 文档确认可用\n  - 合并后确认尾注链接已自动转换为 master 相对路径且仍可用\n- 状态: Ready for review'
           fi
           {
             echo "CHECKLIST<<EOF"

@@ -105,15 +105,7 @@ jobs:
           set -e
           CI_STATUS=$([ "$REL_CI_OK" = "1" ] && echo "✅ CI 文档相对链接有效 (docs/ci/minimal-integration.md)" || echo "⚠️ CI 文档相对链接未检测到，已回退为目录链接或需补文档")
           CONTRIB_STATUS=$([ "$REL_CONTRIB_OK" = "1" ] && echo "✅ CONTRIBUTING 相对链接有效 (CONTRIBUTING.md)" || echo "ℹ️ CONTRIBUTING 链接未添加（master 不存在或暂不恢复）")
-          COMMENT=$(cat << 'EOF'
-合并后自动验证结果：
-
-- ${CI_STATUS}
-- ${CONTRIB_STATUS}
-
-说明：本工作流在合并后统一将“PR 描述固定尾注”链接改为相对路径，若 master 上缺少对应文件，则临时回退为目录链接避免 404。若需恢复 CONTRIBUTING，请先在 master 添加该文件。
-EOF
-)
+          COMMENT=$'合并后自动验证结果：\n\n- ${CI_STATUS}\n- ${CONTRIB_STATUS}\n\n说明：本工作流在合并后统一将“PR 描述固定尾注”链接改为相对路径，若 master 上缺少对应文件，则临时回退为目录链接避免 404。若需恢复 CONTRIBUTING，请先在 master 添加该文件。'
           jq -n --arg body "$COMMENT" '{body: $body}' > comment.json
           curl -s -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
             -d @comment.json "https://api.github.com/repos/${REPO}/issues/${PR_NUMBER}/comments" | jq -r .id > /dev/null
