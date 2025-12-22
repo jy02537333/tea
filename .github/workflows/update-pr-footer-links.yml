@@ -180,18 +180,7 @@ jobs:
         run: |
           set -e
           RUN_URL="https://github.com/${REPO}/actions/runs/${{ github.run_id }}"
-          COMMENT=$(cat << EOF
-截图与证据：
-
-- Actions 运行页面（可下载 Artifact）：${RUN_URL}
-- Artifact 名称：post-merge-screenshots-pr-${PR_NUMBER}
-
-包含：
-- pr-body-after-merge.png（PR 页展示尾注相对链接）
-- ci-doc-on-master.png（CI 文档页面）
-- contributing-on-master.png（CONTRIBUTING 页面或仓库主页占位）
-EOF
-)
+          COMMENT=$(printf '截图与证据：\n\n- Actions 运行页面（可下载 Artifact）：%s\n- Artifact 名称：post-merge-screenshots-pr-%s\n\n包含：\n- pr-body-after-merge.png（PR 页展示尾注相对链接）\n- ci-doc-on-master.png（CI 文档页面）\n- contributing-on-master.png（CONTRIBUTING 页面或仓库主页占位）\n' "$RUN_URL" "$PR_NUMBER")
           jq -n --arg body "$COMMENT" '{body: $body}' > comment.json
           curl -s -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
             -d @comment.json "https://api.github.com/repos/${REPO}/issues/${PR_NUMBER}/comments" | jq -r .id > /dev/null
@@ -211,19 +200,9 @@ EOF
           if [ -n "$ART_ID" ] && [ "$ART_ID" != "null" ]; then
             UI_LINK="https://github.com/${REPO}/actions/runs/${{ github.run_id }}/artifacts/${ART_ID}"
             API_LINK=$(echo "$ARTIFACTS_JSON" | jq -r --arg NAME "$NAME" '.artifacts[] | select(.name == $NAME) | .archive_download_url' | head -n1)
-            COMMENT=$(cat << EOF
-直接下载链接：
-
-- Artifact UI 页面：${UI_LINK}
-- API 下载地址（需授权）：${API_LINK}
-EOF
-)
+            COMMENT=$(printf '直接下载链接：\n\n- Artifact UI 页面：%s\n- API 下载地址（需授权）：%s\n' "$UI_LINK" "$API_LINK")
           else
-            COMMENT=$(cat << EOF
-未找到 Artifact 直接链接（可能因命名或上传延迟）。请通过运行页面下载：
-https://github.com/${REPO}/actions/runs/${{ github.run_id }}
-EOF
-)
+            COMMENT=$(printf '未找到 Artifact 直接链接（可能因命名或上传延迟）。请通过运行页面下载：\nhttps://github.com/%s/actions/runs/%s\n' "$REPO" "${{ github.run_id }}")
           fi
           jq -n --arg body "$COMMENT" '{body: $body}' > comment.json
           curl -s -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
