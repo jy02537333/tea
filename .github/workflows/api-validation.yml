@@ -10,6 +10,7 @@ on:
 
 jobs:
   stateful-api-check:
+    name: API Validation
     env:
       CI_SEED: "1"
     runs-on: ubuntu-latest
