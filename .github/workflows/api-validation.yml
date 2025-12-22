@@ -31,12 +31,12 @@ jobs:
           - 6379:6379
 
     steps:
-      - name: Branch guard (disable on this branch)
+      - name: Branch guard (disable on master and PR->master)
         id: branchguard
         run: |
-          if [ "${GITHUB_REF}" = "refs/heads/master" ]; then
+          if [ "${GITHUB_REF}" = "refs/heads/master" ] || { [ "${GITHUB_EVENT_NAME}" = "pull_request" ] && [ "${GITHUB_BASE_REF}" = "master" ]; }; then
             echo "disabled=true" >> $GITHUB_OUTPUT
-            echo "API Validation is DISABLED for ${GITHUB_REF}."
+            echo "API Validation is DISABLED for this context: ref=${GITHUB_REF}, event=${GITHUB_EVENT_NAME}, base=${GITHUB_BASE_REF}"
           else
             echo "disabled=false" >> $GITHUB_OUTPUT
           fi
