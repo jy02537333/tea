@@ -188,6 +188,40 @@ export default function StoreFinancePage() {
                 <Text>备注：{rec.remark}</Text>
               </View>
             )}
+            {/* 解析 JSON remark 并展示标准化字段 */}
+            {(() => {
+              try {
+                const obj = rec.remark ? JSON.parse(rec.remark) : null;
+                if (!obj || typeof obj !== 'object') return null;
+                const phase = obj.phase;
+                const currency = obj.currency;
+                const amountCents = obj.amount_cents;
+                const feeCents = obj.fee_cents;
+                const netCents = obj.net_cents;
+                const withdrawNo = obj.withdraw_no || rec.related_no;
+                const rows: Array<{ label: string; value: any }> = [];
+                if (phase != null) rows.push({ label: '阶段', value: phase });
+                if (withdrawNo != null) rows.push({ label: '提现单号', value: withdrawNo });
+                if (currency != null) rows.push({ label: '币种', value: currency });
+                if (amountCents != null) rows.push({ label: '金额(分)', value: amountCents });
+                if (feeCents != null) rows.push({ label: '手续费(分)', value: feeCents });
+                if (netCents != null) rows.push({ label: '实付(分)', value: netCents });
+                if (!rows.length) return null;
+                return (
+                  <View style={{ marginTop: 2, marginBottom: 2 }}>
+                    {rows.map((r) => (
+                      <View key={String(r.label)} style={{ marginBottom: 2 }}>
+                        <Text>
+                          {r.label}：{String(r.value)}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                );
+              } catch {
+                return null;
+              }
+            })()}
             {rec.created_at && (
               <View>
                 <Text>时间：{rec.created_at}</Text>

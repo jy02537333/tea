@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
 	"github.com/xuri/excelize/v2"
+	"gorm.io/gorm"
 
 	"tea-api/internal/model"
 	"tea-api/internal/service/commission"
@@ -207,11 +209,18 @@ func (h *WithdrawAdminHandler) Complete(c *gin.Context) {
 	if u, ok := uid.(uint); ok {
 		rec.ProcessedBy = u
 	}
-	if req.Remark != "" {
-		rec.Remark = req.Remark
-	}
+	// 统一完成阶段的备注为 JSON（含 withdraw_no/amount/fee/net）
+	toCents := func(d decimal.Decimal) int64 { return d.Mul(decimal.NewFromInt(100)).IntPart() }
+	rmkPaid := buildPaidRemark(rec.WithdrawNo, toCents(rec.Amount), toCents(rec.Fee), toCents(rec.ActualAmount))
+	rec.Remark = rmkPaid
 	if err := db.Save(&rec).Error; err != nil {
 		utils.Error(c, utils.CodeError, err.Error())
+		return
+	}
+
+	// paid：解冻并完成扣减（申请时已将可用余额转入冻结，这里仅减少冻结并记录完成流水）
+	if err := finalizeWalletForWithdraw(db, &rec); err != nil {
+		utils.Error(c, utils.CodeError, fmt.Sprintf("wallet deduction failed: %s", err.Error()))
 		return
 	}
 
@@ -227,6 +236,93 @@ func (h *WithdrawAdminHandler) Complete(c *gin.Context) {
 		return
 	}
 	utils.Success(c, rec)
+}
+
+// finalizeWalletForWithdraw 解冻冻结金额并记录完成流水（金额单位：分）
+func finalizeWalletForWithdraw(db *gorm.DB, rec *model.WithdrawRecord) error {
+	// 将 decimal 金额转换为分（int64）
+	toCents := func(d decimal.Decimal) int64 { return d.Mul(decimal.NewFromInt(100)).IntPart() }
+	amountCents := toCents(rec.Amount)
+	feeCents := toCents(rec.Fee)
+	netCents := toCents(rec.ActualAmount)
+
+	// 开启事务
+	tx := db.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+
+	// 读取并锁定钱包当前冻结金额
+	var row struct{ Frozen int64 }
+	if err := tx.Table("wallets").Select("frozen").Where("user_id = ?", rec.UserID).Take(&row).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("query wallet frozen: %w", err)
+	}
+	if row.Frozen < amountCents {
+		tx.Rollback()
+		return fmt.Errorf("insufficient wallet frozen: have=%d need=%d", row.Frozen, amountCents)
+	}
+	newFrozen := row.Frozen - amountCents
+	if err := tx.Exec("UPDATE wallets SET frozen = ? WHERE user_id = ?", newFrozen, rec.UserID).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("update wallet frozen: %w", err)
+	}
+	// 记录完成流水（对可用余额无影响，amount=0；备注体现手续费与实付）
+	// 为便于对账，可查询最新余额作为 balance_after
+	var balRow struct{ Balance int64 }
+	if err := tx.Table("wallets").Select("balance").Where("user_id = ?", rec.UserID).Take(&balRow).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("query wallet balance: %w", err)
+	}
+	// remark 统一为 JSON
+	rmkJSON := buildPaidRemark(rec.WithdrawNo, amountCents, feeCents, netCents)
+	if err := tx.Exec("INSERT INTO wallet_transactions (user_id, type, amount, balance_after, remark, created_at) VALUES (?,?,?,?,?,NOW())",
+		rec.UserID, "withdraw_paid", 0, balRow.Balance, rmkJSON).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("insert wallet tx: %w", err)
+	}
+	return tx.Commit().Error
+}
+
+// rollbackWalletForWithdrawReject 拒绝提现：从冻结中释放并返还到可用余额；记录 JSON remark
+func rollbackWalletForWithdrawReject(db *gorm.DB, rec *model.WithdrawRecord) error {
+	// 将 decimal 金额转换为分（int64）
+	toCents := func(d decimal.Decimal) int64 { return d.Mul(decimal.NewFromInt(100)).IntPart() }
+	amountCents := toCents(rec.Amount)
+	feeCents := toCents(rec.Fee)
+	netCents := toCents(rec.ActualAmount)
+
+	tx := db.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+	// 读取并锁定钱包当前余额与冻结
+	var row struct {
+		Balance int64
+		Frozen  int64
+	}
+	if err := tx.Table("wallets").Select("balance,frozen").Where("user_id = ?", rec.UserID).Take(&row).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("query wallet: %w", err)
+	}
+	if row.Frozen < amountCents {
+		tx.Rollback()
+		return fmt.Errorf("insufficient frozen to rollback: have=%d need=%d", row.Frozen, amountCents)
+	}
+	newFrozen := row.Frozen - amountCents
+	newBalance := row.Balance + amountCents
+	if err := tx.Exec("UPDATE wallets SET balance = ?, frozen = ? WHERE user_id = ?", newBalance, newFrozen, rec.UserID).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("update wallet rollback: %w", err)
+	}
+	// 插入解冻流水（可用余额增加），remark 为 JSON
+	rmkJSON := buildRejectUnfreezeRemark(rec.WithdrawNo, amountCents, feeCents, netCents)
+	if err := tx.Exec("INSERT INTO wallet_transactions (user_id, type, amount, balance_after, remark, created_at) VALUES (?,?,?,?,?,NOW())",
+		rec.UserID, "withdraw_reject_unfreeze", amountCents, newBalance, rmkJSON).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("insert wallet tx rollback: %w", err)
+	}
+	return tx.Commit().Error
 }
 
 // POST /api/v1/admin/withdraws/:id/reject 将状态置为已拒绝(4)
@@ -251,11 +347,17 @@ func (h *WithdrawAdminHandler) Reject(c *gin.Context) {
 	if u, ok := uid.(uint); ok {
 		rec.ProcessedBy = u
 	}
-	if req.Remark != "" {
-		rec.Remark = req.Remark
-	}
+	// 统一拒绝阶段的备注为 JSON（含 withdraw_no/amount/fee/net）
+	toCents := func(d decimal.Decimal) int64 { return d.Mul(decimal.NewFromInt(100)).IntPart() }
+	rmkRej := buildRejectUnfreezeRemark(rec.WithdrawNo, toCents(rec.Amount), toCents(rec.Fee), toCents(rec.ActualAmount))
+	rec.Remark = rmkRej
 	if err := db.Save(&rec).Error; err != nil {
 		utils.Error(c, utils.CodeError, err.Error())
+		return
+	}
+	// 拒绝：解冻并恢复可用余额，记录解冻流水
+	if err := rollbackWalletForWithdrawReject(db, &rec); err != nil {
+		utils.Error(c, utils.CodeError, fmt.Sprintf("wallet rollback failed: %s", err.Error()))
 		return
 	}
 	utils.Success(c, rec)

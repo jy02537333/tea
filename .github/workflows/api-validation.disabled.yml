@@ -1,16 +1,10 @@
 name: API Validation
-# trivial: trigger PR checks; no behavior change
 
 on:
-  push:
-    branches: ["**"]
-  pull_request:
-    branches: ["**"]
   workflow_dispatch:
 
 jobs:
   stateful-api-check:
-    name: API Validation
     env:
       CI_SEED: "1"
     runs-on: ubuntu-latest
@@ -33,46 +27,26 @@ jobs:
           - 6379:6379
 
     steps:
-      - name: Branch guard (disable on master and PR->master)
-        id: branchguard
-        run: |
-          if [ "${GITHUB_REF}" = "refs/heads/master" ] || { [ "${GITHUB_EVENT_NAME}" = "pull_request" ] && [ "${GITHUB_BASE_REF}" = "master" ]; }; then
-            echo "disabled=true" >> $GITHUB_OUTPUT
-            echo "API Validation is DISABLED for this context: ref=${GITHUB_REF}, event=${GITHUB_EVENT_NAME}, base=${GITHUB_BASE_REF}"
-          else
-            echo "disabled=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: API Validation disabled notice
-        if: steps.branchguard.outputs.disabled == 'true'
-        run: |
-          echo "Skipping API Validation for ${GITHUB_REF}."
-
       - name: Checkout
-        if: steps.branchguard.outputs.disabled != 'true'
         uses: actions/checkout@v4
 
       - name: Setup Go
-        if: steps.branchguard.outputs.disabled != 'true'
         uses: actions/setup-go@v5
         with:
             go-version: '1.22'
 
       - name: Install system deps
-        if: steps.branchguard.outputs.disabled != 'true'
         run: |
           sudo apt-get update -y
           sudo apt-get install -y netcat-openbsd jq
 
       - name: Build tea-api
-        if: steps.branchguard.outputs.disabled != 'true'
         working-directory: tea-api
         run: |
           go mod download
           go build -o tea-api
 
       - name: Start tea-api server
-        if: steps.branchguard.outputs.disabled != 'true'
         working-directory: tea-api
         env:
           TEA_DATABASE_HOST: 127.0.0.1
@@ -91,7 +65,7 @@ jobs:
               echo "API healthy"; break; fi; sleep 2; done
           curl -sS http://127.0.0.1:9292/api/v1/health || true
       - name: Seed minimal data (conditional)
-        if: steps.branchguard.outputs.disabled != 'true' && env.CI_SEED == '1'
+        if: env.CI_SEED == '1'
         run: |
           echo "Seeding minimal data for stable assertions (CI_SEED=1)"
           sudo apt-get update -y && sudo apt-get install -y mysql-client || true
@@ -120,7 +94,7 @@ jobs:
           mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PASS" "$MYSQL_DB" < /tmp/seed.sql
 
       - name: Seed demo user and membership data
-        if: steps.branchguard.outputs.disabled != 'true' && env.CI_SEED == '1'
+        if: env.CI_SEED == '1'
         working-directory: tea-api
         env:
           TEA_DATABASE_HOST: 127.0.0.1
@@ -132,7 +106,7 @@ jobs:
           go run ./scripts/seed_demo_user.go
 
       - name: Seed admin user
-        if: steps.branchguard.outputs.disabled != 'true' && env.CI_SEED == '1'
+        if: env.CI_SEED == '1'
         working-directory: tea-api
         env:
           TEA_DATABASE_HOST: 127.0.0.1
@@ -146,19 +120,16 @@ jobs:
           go run ./scripts/seed_admin.go
 
       - name: Run public API validation
-        if: steps.branchguard.outputs.disabled != 'true'
         run: |
           bash scripts/run_api_validation.sh | tee build-ci-logs/api-validation-$(date +%Y%m%d%H%M%S).log
 
-      - name: Run Sprint A E2E (stateful + strict)
-        if: steps.branchguard.outputs.disabled != 'true'
+      - name: Run stateful API validation
         env:
           BASE_URL: http://127.0.0.1:9292
         run: |
-          make verify-sprint-a-e2e | tee build-ci-logs/api-validation-stateful-$(date +%Y%m%d%H%M%S).log
+          bash scripts/local_api_check.sh | tee build-ci-logs/api-validation-stateful-$(date +%Y%m%d%H%M%S).log
 
       - name: Admin dev-login (token for assertions)
-        if: steps.branchguard.outputs.disabled != 'true'
         run: |
           mkdir -p build-ci-logs
           LOGIN_URL="http://127.0.0.1:9292/api/v1/user/login"
@@ -177,13 +148,13 @@ jobs:
             echo "Token acquired (truncated): ${TOKEN:0:12}..."
           fi
 
-      - name: Sprint A assertions note
-        if: steps.branchguard.outputs.disabled != 'true'
+      - name: Sprint A verification assertions (strict)
+        env:
+          API_BASE_URL: http://127.0.0.1:9292
         run: |
-          echo "Sprint A strict assertions already executed via make verify-sprint-a-e2e"
+          make verify-sprint-a-strict
 
       - name: Run membership stateful flow (Sprint B)
-        if: steps.branchguard.outputs.disabled != 'true'
         env:
           API_BASE: http://127.0.0.1:9292
         continue-on-error: true
@@ -191,13 +162,11 @@ jobs:
           bash scripts/run_membership_integration.sh | tee build-ci-logs/membership-flow-$(date +%Y%m%d%H%M%S).log
 
       - name: Sprint B membership verification (strict)
-        if: steps.branchguard.outputs.disabled != 'true'
         continue-on-error: true
         run: |
           make verify-sprint-b-strict
 
       - name: Show membership evidence snapshot
-        if: steps.branchguard.outputs.disabled != 'true'
         run: |
           echo "==== membership_summary_after_purchase.json ===="
           if [[ -f build-ci-logs/membership_summary_after_purchase.json ]]; then
@@ -233,7 +202,7 @@ jobs:
             build-ci-logs/membership-flow-*.log
 
       - name: Collect diagnostics on failure
-        if: steps.branchguard.outputs.disabled != 'true' && failure()
+        if: failure()
         run: |
           echo "==== tea-api last 200 lines ===="
           tail -n 200 build-ci-logs/tea-api.out || true
@@ -249,7 +218,7 @@ jobs:
           docker logs $(docker ps --format '{{.Names}}' | grep -E '^redis' | head -n1) --tail 100 || true
 
       - name: Stop tea-api
-        if: steps.branchguard.outputs.disabled != 'true' && always()
+        if: always()
         run: |
           if [[ -f build-ci-logs/tea-api.pid ]]; then kill $(cat build-ci-logs/tea-api.pid) || true; fi
         
