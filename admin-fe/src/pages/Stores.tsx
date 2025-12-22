@@ -534,17 +534,40 @@ export default function StoresPage() {
                     '实付金额',
                     '状态',
                     '备注',
+                    '阶段',
+                    '币种',
+                    '金额(分)',
+                    '手续费(分)',
+                    '实付(分)',
                   ];
-                  const rows = data.map((it) => [
-                    it.id,
-                    it.created_at ?? '',
-                    it.withdraw_no,
-                    it.amount,
-                    it.fee,
-                    it.actual_amount,
-                    WITHDRAW_STATUS_LABELS[it.status] ?? `状态${it.status}`,
-                    (it.remark ?? '').replace(/\n/g, ' '),
-                  ]);
+                  const rows = data.map((it) => {
+                    let phase = '-', currency = '-', amountCents = '-', feeCents = '-', netCents = '-';
+                    try {
+                      const obj = it.remark ? JSON.parse(it.remark) : null;
+                      if (obj) {
+                        phase = obj.phase ?? phase;
+                        currency = obj.currency ?? currency;
+                        amountCents = obj.amount_cents ?? amountCents;
+                        feeCents = obj.fee_cents ?? feeCents;
+                        netCents = obj.net_cents ?? netCents;
+                      }
+                    } catch {}
+                    return [
+                      it.id,
+                      it.created_at ?? '',
+                      it.withdraw_no,
+                      it.amount,
+                      it.fee,
+                      it.actual_amount,
+                      WITHDRAW_STATUS_LABELS[it.status] ?? `状态${it.status}`,
+                      (it.remark ?? '').replace(/\n/g, ' '),
+                      phase,
+                      currency,
+                      amountCents,
+                      feeCents,
+                      netCents,
+                    ];
+                  });
                   const csv = [header, ...rows]
                     .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
                     .join('\n');
@@ -592,6 +615,71 @@ export default function StoresPage() {
                     render: (val: number) => WITHDRAW_STATUS_LABELS[val] ?? `状态${val}`,
                   },
                   { title: '备注', dataIndex: 'remark' },
+                  {
+                    title: '阶段',
+                    key: 'remark_phase',
+                    width: 100,
+                    render: (_, record) => {
+                      try {
+                        const obj = record.remark ? JSON.parse(record.remark) : null;
+                        return obj?.phase ?? '-';
+                      } catch {
+                        return '-';
+                      }
+                    },
+                  },
+                  {
+                    title: '币种',
+                    key: 'remark_currency',
+                    width: 80,
+                    render: (_, record) => {
+                      try {
+                        const obj = record.remark ? JSON.parse(record.remark) : null;
+                        return obj?.currency ?? '-';
+                      } catch {
+                        return '-';
+                      }
+                    },
+                  },
+                  {
+                    title: '金额(分)',
+                    key: 'remark_amount_cents',
+                    width: 120,
+                    render: (_, record) => {
+                      try {
+                        const obj = record.remark ? JSON.parse(record.remark) : null;
+                        return obj?.amount_cents ?? '-';
+                      } catch {
+                        return '-';
+                      }
+                    },
+                  },
+                  {
+                    title: '手续费(分)',
+                    key: 'remark_fee_cents',
+                    width: 120,
+                    render: (_, record) => {
+                      try {
+                        const obj = record.remark ? JSON.parse(record.remark) : null;
+                        return obj?.fee_cents ?? '-';
+                      } catch {
+                        return '-';
+                      }
+                    },
+                  },
+                  {
+                    title: '实付(分)',
+                    key: 'remark_net_cents',
+                    width: 120,
+                    render: (_, record) => {
+                      try {
+                        const obj = record.remark ? JSON.parse(record.remark) : null;
+                        return obj?.net_cents ?? '-';
+                      } catch {
+                        return '-';
+                      }
+                    },
+                  },
                 ]}
               />
             )}

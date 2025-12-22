@@ -1,0 +1,57 @@
+name: Attach Review Checklist
+
+on:
+  pull_request_target:
+    types: [ready_for_review, labeled]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  attach:
+    if: github.event.action == 'ready_for_review' || (github.event.action == 'labeled' && github.event.label.name == 'Ready for review')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+
+      - name: Prepare checklist content
+        id: prep
+        shell: bash
+        run: |
+          set -e
+          if [ -f "docs/ci/pr-review-checklist.md" ]; then
+            CHECKLIST_CONTENT=$(cat docs/ci/pr-review-checklist.md)
+          else
+            CHECKLIST_CONTENT=$'评审速览 Checklist\n- 变更范围: 以“Files changed”页面为准，关注受影响模块。\n- 风险点: 文档链接有效性、CI 工作流执行与潜在回归。\n- 验证步骤:\n  - 本地拉取分支并按最小集成说明启动\n  - 点击 PR 尾注中的 CI 文档确认可用\n  - 合并后确认尾注链接已自动转换为 master 相对路径且仍可用\n- 状态: Ready for review'
+          fi
+          {
+            echo "CHECKLIST<<EOF"
+            echo "$CHECKLIST_CONTENT"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Post checklist comment if missing
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = context.issue.number;
+
+            // Fetch existing comments
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number, per_page: 100 });
+            const hasChecklist = comments.some(c => (c.body || '').includes('评审速览 Checklist'));
+
+            if (hasChecklist) {
+              core.info('Checklist already present, skipping.');
+              return;
+            }
+
+            const body = process.env.CHECKLIST;
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            core.info('Checklist comment posted.');

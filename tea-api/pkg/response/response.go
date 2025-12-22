@@ -19,6 +19,7 @@ type PaginationResponse struct {
 	Total   int64       `json:"total"`
 	Page    int         `json:"page"`
 	Limit   int         `json:"limit"`
+	Size    int         `json:"size"`
 }
 
 // Success 成功响应
@@ -53,6 +54,7 @@ func SuccessWithPagination(c *gin.Context, data interface{}, total int64, page, 
 		Total:   total,
 		Page:    page,
 		Limit:   limit,
+		Size:    limit,
 	})
 }
 

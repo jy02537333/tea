@@ -147,7 +147,16 @@ TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
   - `doc/db_schema.md` / `db/schema.sql`：数据库设计与建表脚本的索引位置，便于在评审进度时快速定位数据层的完成度与变更。
   - Git 分支快照规则：当需要为「某一天的项目整体进度」打快照时，从主开发分支当前提交创建只读分支，命名为 `YYYYMMDD`（例如 `20251209`），该分支仅用于归档当天进度，不在其上继续开发。
 
+#### 评审清单自动化标记
+
+- 评审清单工作流：自动在 PR 切为可评审或添加 “Ready for review” 标签时发布“评审速览 Checklist”评论；若已存在则不重复发布。
+- 标准提示模板：见 [docs/ci/pr-review-checklist.md](../docs/ci/pr-review-checklist.md) 的“自动化说明”段落（包含运行链接模板）。
+
 - **关键成功路径自动化与证据文件**：
+  - 最小集成执行说明与入口：
+    - 文档：`docs/ci/minimal-integration.md`
+    - 本地一键：`make run-min-integration`
+    - CI 工作流：`.github/workflows/minimal-integration.yml`（运行并上传 `build-ci-logs/**` 为 Artifacts）
   - Sprint A（下单与抵扣验证）：
     - 核心脚本与入口：
       - `scripts/local_api_check.sh`：在本地/CI 中执行状态化下单路径（购物车→下单→订单详情），生成订单金额证据与人类可读摘要。
@@ -183,6 +192,30 @@ TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
 > 说明：
 > 1）本 PRD 主要聚焦业务与交互层面的「做什么」和「大致怎么做」，具体字段、接口入参与状态流转细节，请以上述技术文档为准，并保持两侧同步维护。
 > 2）后续新增任意与本项目相关的设计/运维/协作文档，建议在创建后同步在本节按类别添加一行说明，保持「文档地图」完整，方便新成员快速上手。
+
+    ### 主分支保护与 CI 门禁（master）
+
+    为确保主线稳定性与可回溯性，`master` 分支已启用如下保护与门禁策略（以 GitHub Branch Protection 为准）：
+
+    - 必需状态检查：`API Validation`（strict=true）。
+    - 管理员强制（enforce_admins）：启用。
+    - 线性历史（required_linear_history）：启用。
+    - 会话解析必需（required_conversation_resolution）：启用。
+
+    合并策略与建议：
+
+    - 一律通过 Pull Request 合并至 `master`，在 CI 通过后方可合并。
+    - 审核人数：目前未强制要求最少审批数；如需更严格控制，建议开启「至少 1 个批准」并启用「驳回过期审批」。
+
+    门禁规则（A-first 策略）：
+
+    - Sprint A 为阻塞项：必须通过订单金额等式校验证据（`build-ci-logs/order_amounts_summary.json` 或 `order_detail_*_checked.json`），否则禁止合并。
+    - Sprint B 为非阻塞项：会员购买成功路径的证据会被归档与展示，但不阻塞合并，可在后续迭代提升为阻塞。
+
+    变更与维护：
+
+    - 分支保护规则通过 GitHub 设置或 API（Branch Protection）维护；`API Validation` 的工作流定义位于 `.github/workflows/api-validation.yml`。
+    - 若新增/调整必需检查项，请同步更新本节与工作流名称，保持文档与系统配置一致。
 
 ## 五、系统流程（文字版）
 
@@ -663,6 +696,11 @@ TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
   - 后端生成带签名的 OSS Policy/STS 临时凭证，返回给前端。
   - 前端使用该凭证直接向 OSS 进行表单直传或 SDK 上传，上传成功后拿到文件 URL/key。
   - 前端将图片 URL/key 回填到商品/品牌表单并提交保存；后端只存储 OSS 对象 key 与访问 URL，不处理二次上传。
+
+  联调提示（当前实现）
+  - 已开放公开端点（无需鉴权/权限）：`GET /api/v1/storage/oss/policy`、`POST /api/v1/uploads`。
+  - 当前为“无限制”对外开放，仅用于联调/演示；生产需恢复鉴权/权限或启用严格限速、类型/大小白名单与对象前缀校验。
+  - 本条为进度标记，无需再次确认。
 
 - 基本约束
   - 图片格式限制：`jpg/jpeg/png/webp`，单张大小上限（如 2MB，可配置）。

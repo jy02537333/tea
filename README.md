@@ -1,6 +1,18 @@
 # API Validation CI Templates
 
+> 主线门禁：`master` 分支已启用分支保护，合并必须通过 “API Validation” 工作流（Sprint A 阻塞、Sprint B 非阻塞）。详见 `doc/prd.md` 与 `doc/prd_sprints.md`。
+
+> 快速提示：已添加 PR 模板与评审清单自动化。新建或切为可评审的 PR 将默认包含“评审速览 Checklist”与固定尾注；模板见 `.github/PULL_REQUEST_TEMPLATE.md`；更多说明见 `docs/ci/pr-review-checklist.md` 与 `CONTRIBUTING.md`。
+
+[![API Validation](https://github.com/jy02537333/tea/actions/workflows/api-validation.yml/badge.svg?branch=master)](https://github.com/jy02537333/tea/actions/workflows/api-validation.yml)
+
 This folder contains CI job templates to run the repository's `scripts/run_api_validation.sh` in CI and collect artifacts.
+
+## 版本标签（Releases / Tags）
+
+- `v0.1-a-first`：启用“主线门禁（A-first）”，将 Sprint A 作为阻断检查（严格断言：订单金额校验 + 回调签名），Sprint B 为非阻断，仅归档证据。此标签定位于 `master` 当前稳定点，便于回溯证据文件（位于 `build-ci-logs/`，由 CI 工件归档）。
+  - 查看代码：`https://github.com/jy02537333/tea/tree/v0.1-a-first`
+  - 查看工作流运行与工件：`https://github.com/jy02537333/tea/actions/workflows/api-validation.yml`
 
 Provided files:
 
@@ -15,12 +27,31 @@ How it works (summary):
 3. Run seeder steps (example SKU creation) so validation has minimal data.
 4. Run `sh scripts/run_api_validation.sh` which performs HTTP requests and writes responses under `build-ci-logs/api_validation/` and `build-ci-logs/admin_login_response.json`.
 5. Upload `build-ci-logs` as CI artifacts for QA review.
+6. Evidence artifacts: key verification files are saved under `build-ci-logs/` (e.g., `order_amounts_summary.json`, `order_detail_*_checked.json`, and stateful bodies under `api_validation_stateful/`) and are uploaded for easy triage. See generation and assertions in `scripts/local_api_check.sh` (evidence creation) and `scripts/assert_api_validation.sh` (strict checks).
 
 Notes & tips:
 
 - If your CI runner doesn't support Docker services, use a self-hosted runner with Docker and run `docker-compose up -d` instead.
 - Adjust seeder steps in the workflow to match your required test data.
 - Consider adding a short smoke test assertion that checks `build-ci-logs/api_validation/summary.txt` for expected 200 responses to fail the job when regressions occur.
+
+## 快速联调（Minimal Integration）
+
+- 文档说明：见 [docs/ci/minimal-integration.md](docs/ci/minimal-integration.md)
+- 本地一键执行：
+
+```bash
+make run-min-integration
+```
+
+- 严格模式示例（可选，默认关闭）：
+
+```bash
+STRICT_MIN=1 make run-min-integration
+```
+
+- CI 自动执行：工作流 [minimal-integration.yml](.github/workflows/minimal-integration.yml) 会在 push/PR 时运行并将 `build-ci-logs/**` 上传为 Artifacts。
+ - 贡献者说明：更多 CI 与联调指南见 [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## 移除 Git 历史中的大文件（推送被 100MB 限制阻断时）
 

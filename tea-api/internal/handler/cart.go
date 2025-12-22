@@ -28,7 +28,8 @@ type addCartItemReq struct {
 func (h *CartHandler) AddItem(c *gin.Context) {
 	var req addCartItemReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "参数错误")
+		// 提供更详细的错误信息，便于定位绑定失败的具体原因
+		response.Error(c, http.StatusBadRequest, "参数错误", err.Error())
 		return
 	}
 	uidVal, _ := c.Get("user_id")

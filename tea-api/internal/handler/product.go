@@ -5,12 +5,14 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
 
 	"tea-api/internal/model"
 	"tea-api/internal/service"
+	"tea-api/internal/view"
 	"tea-api/pkg/response"
 )
 
@@ -242,6 +244,23 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		isRecommend = b
 	}
 
+	// 可选品牌ID（支持数字或字符串）
+	var brandIDPtr *uint
+	switch v := raw["brand_id"].(type) {
+	case float64:
+		if v > 0 {
+			tmp := uint(v)
+			brandIDPtr = &tmp
+		}
+	case string:
+		if v != "" {
+			if id64, err := strconv.ParseUint(v, 10, 32); err == nil && id64 > 0 {
+				tmp := uint(id64)
+				brandIDPtr = &tmp
+			}
+		}
+	}
+
 	product := &model.Product{
 		Name:          name,
 		Description:   description,
@@ -256,6 +275,7 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		IsHot:         isHot,
 		IsNew:         isNew,
 		IsRecommend:   isRecommend,
+		BrandID:       brandIDPtr,
 	}
 
 	if err := h.productService.CreateProduct(product); err != nil {
@@ -273,6 +293,7 @@ func (h *ProductHandler) GetProducts(c *gin.Context) {
 	categoryID := c.Query("category_id")
 	status := c.Query("status")
 	keyword := c.Query("keyword")
+	brandIDStr := c.Query("brand_id")
 	storeIDStr := c.Query("store_id")
 
 	var categoryIDPtr *uint
@@ -283,12 +304,47 @@ func (h *ProductHandler) GetProducts(c *gin.Context) {
 		}
 	}
 
+	var brandIDPtr *uint
+	if brandIDStr != "" {
+		if id, err := strconv.ParseUint(brandIDStr, 10, 32); err == nil {
+			bid := uint(id)
+			brandIDPtr = &bid
+		}
+	}
+
 	// 如传入 store_id，则返回包含门店库存与覆盖价的商品列表
 	if storeIDStr != "" {
 		if sid, err := strconv.ParseUint(storeIDStr, 10, 32); err == nil && sid > 0 {
-			products, total, err := h.productService.GetProductsForStore(page, limit, categoryIDPtr, status, keyword, uint(sid))
+			products, total, err := h.productService.GetProductsForStore(page, limit, categoryIDPtr, status, keyword, brandIDPtr, uint(sid))
 			if err != nil {
 				response.Error(c, http.StatusInternalServerError, "获取商品失败", err.Error())
+				return
+			}
+			// Admin 列表统一视图模型：映射为 AdminProductListItem，并统一 brand_name 字段
+			if strings.HasPrefix(c.FullPath(), "/api/v1/admin/") {
+				items := make([]*view.AdminProductListItem, 0, len(products))
+				for _, p := range products {
+					var brandName *string = p.BrandName
+					item := &view.AdminProductListItem{
+						ID:                 p.ID,
+						Name:               p.Name,
+						CategoryID:         p.CategoryID,
+						Price:              p.Price,
+						Status:             p.Status,
+						Stock:              p.Stock,
+						UpdatedAt:          p.UpdatedAt.Format(time.RFC3339),
+						BrandID:            p.BrandID,
+						BrandName:          brandName,
+						StoreStock:         p.StoreStock,
+						StorePriceOverride: p.StorePriceOverride,
+					}
+					// 轻量分类名称
+					if p.Category.Name != "" {
+						item.Category = &view.CategoryLite{Name: p.Category.Name}
+					}
+					items = append(items, item)
+				}
+				response.SuccessWithPagination(c, items, total, page, limit)
 				return
 			}
 			response.SuccessWithPagination(c, products, total, page, limit)
@@ -297,9 +353,38 @@ func (h *ProductHandler) GetProducts(c *gin.Context) {
 	}
 
 	// 默认返回普通商品列表
-	products, total, err := h.productService.GetProducts(page, limit, categoryIDPtr, status, keyword)
+	products, total, err := h.productService.GetProducts(page, limit, categoryIDPtr, status, keyword, brandIDPtr)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "获取商品失败", err.Error())
+		return
+	}
+	// Admin 列表统一视图模型：映射为 AdminProductListItem，并统一 brand_name 字段
+	if strings.HasPrefix(c.FullPath(), "/api/v1/admin/") {
+		items := make([]*view.AdminProductListItem, 0, len(products))
+		for _, p := range products {
+			var brandName *string
+			if p.Brand != nil && p.Brand.Name != "" {
+				name := p.Brand.Name
+				brandName = &name
+			}
+			item := &view.AdminProductListItem{
+				ID:        p.ID,
+				Name:      p.Name,
+				CategoryID: p.CategoryID,
+				Price:     p.Price,
+				Status:    p.Status,
+				Stock:     p.Stock,
+				UpdatedAt: p.UpdatedAt.Format(time.RFC3339),
+				BrandID:   p.BrandID,
+				BrandName: brandName,
+			}
+			// 轻量分类名称
+			if p.Category.Name != "" {
+				item.Category = &view.CategoryLite{Name: p.Category.Name}
+			}
+			items = append(items, item)
+		}
+		response.SuccessWithPagination(c, items, total, page, limit)
 		return
 	}
 
@@ -363,6 +448,7 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		IsHot         bool    `json:"is_hot"`
 		IsNew         bool    `json:"is_new"`
 		IsRecommend   bool    `json:"is_recommend"`
+		BrandID       *uint   `json:"brand_id"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -384,6 +470,10 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		"is_new":         req.IsNew,
 		"is_recommend":   req.IsRecommend,
 		"updated_at":     time.Now(),
+	}
+
+	if req.BrandID != nil {
+		updates["brand_id"] = req.BrandID
 	}
 
 	if err := h.productService.UpdateProduct(uint(id), updates); err != nil {
