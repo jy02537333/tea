@@ -1,10 +1,6 @@
 name: API Validation
 
 on:
-  push:
-    branches: [ chore/hygiene-guards ]
-  pull_request:
-    branches: [ master ]
   workflow_dispatch:
 
 jobs:
