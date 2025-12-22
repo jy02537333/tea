@@ -1,4 +1,5 @@
 name: API Validation
+# trivial: trigger PR checks; no behavior change
 
 on:
   push:
