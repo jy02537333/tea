@@ -4,6 +4,17 @@
 - Redis: `127.0.0.1:6379` 密码 `123456`
 - RabbitMQ: `amqp://guest:guest@127.0.0.1:5672/`
 
+## 重要说明（方向调整，2025-12-22）
+
+- 后续阶段以“完成开发任务”为主，CI 优化工作收束为日常维护，不再投入重型改造。
+- 分支保护：继续保留“API Validation”为唯一必需状态检查，门禁以 Sprint A 严格断言为准；Sprint B 检查作为非阻断，仅归档证据用于观察与回归。
+- 参考与入口：
+  - 工作流与门禁策略：`.github/workflows/api-validation.yml`
+  - 一键本地/CI 验证：`make verify-sprint-a-e2e`（先生成证据，再执行严格断言）
+  - 任务拆解与接口草案：`doc/prd_sprints.md`
+
+如无异议，本调整自即日起生效。
+
 ## Git 推送方式约定（统一使用 Token）
 
 - 推荐：所有开发者统一使用 HTTPS+GitHub Personal Access Token（PAT）进行推送，避免 SSH key 配置差异导致 push 失败。
