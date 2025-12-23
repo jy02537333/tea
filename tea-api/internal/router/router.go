@@ -120,6 +120,8 @@ func SetupRouter() *gin.Engine {
 		adminGroup.PUT("/users/:id", userHandler.AdminUpdateUser)
 		adminGroup.POST("/users/:id/reset-password", userHandler.AdminResetPassword)
 		adminGroup.POST("/uploads", uploadHandler.UploadMedia)
+		// OSS 直传策略（管理端）
+		adminGroup.POST("/storage/oss/policy", uploadHandler.AdminGetOSSPolicy)
 		// 门店订单统计
 		adminGroup.GET("/stores/:id/orders/stats", storeHandler.OrderStats)
 		// 门店订单列表（按门店维度查看订单）
