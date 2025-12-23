@@ -1,14 +1,14 @@
 package handler
 
 import (
-    "net/http"
-    "strconv"
+	"net/http"
+	"strconv"
 
-    "github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin"
 
-    "tea-api/internal/model"
-    "tea-api/pkg/database"
-    "tea-api/pkg/utils"
+	"tea-api/internal/model"
+	"tea-api/pkg/database"
+	"tea-api/pkg/utils"
 )
 
 // SC2: 用户侧推荐/被推荐接口（最小联通）
@@ -30,8 +30,26 @@ func (h *ReferralHandler) Record(c *gin.Context) {
         utils.Error(c, utils.CodeInvalidParam, "参数错误")
         return
     }
+    // 仅允许本人作为被推荐人，防止伪造
+    current, _ := c.Get("user_id")
+    cu, ok := current.(uint)
+    if !ok || cu == 0 || cu != req.ReferredUserID {
+        c.JSON(http.StatusForbidden, gin.H{"code": 4031, "message": "只能以当前用户作为被推荐人"})
+        return
+    }
+    // 不允许自我推荐
+    if req.ReferrerID == req.ReferredUserID {
+        utils.Error(c, utils.CodeInvalidParam, "referrer_id 不可等于 referred_user_id")
+        return
+    }
 
     db := database.GetDB()
+    // 若该用户已绑定过推荐人，则视为已存在，不允许覆盖
+    var bound model.ReferralClosure
+    if err := db.Where("descendant_user_id = ?", req.ReferredUserID).First(&bound).Error; err == nil {
+        utils.Success(c, gin.H{"created": false, "note": "already_bound"})
+        return
+    }
     var existing model.ReferralClosure
     if err := db.Where("ancestor_user_id = ? AND descendant_user_id = ?", req.ReferrerID, req.ReferredUserID).First(&existing).Error; err == nil {
         utils.Success(c, gin.H{"created": false, "note": "exists"})
