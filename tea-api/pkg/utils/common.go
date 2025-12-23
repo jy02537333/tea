@@ -4,7 +4,9 @@ import (
 	"crypto/hmac"
 	"crypto/md5"
 	"crypto/rand"
+	"crypto/sha1"
 	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"math/big"
@@ -52,6 +54,18 @@ func HMACSHA256Hex(key, message string) string {
 	mac := hmac.New(sha256.New, []byte(key))
 	mac.Write([]byte(message))
 	return fmt.Sprintf("%x", mac.Sum(nil))
+}
+
+// HMACSHA1Base64 计算 HMAC-SHA1 并以 Base64 编码返回（Aliyun OSS policy 签名常用）
+func HMACSHA1Base64(key, message string) string {
+	mac := hmac.New(sha1.New, []byte(key))
+	mac.Write([]byte(message))
+	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
+}
+
+// Base64Encode 对原始字节数组进行标准 Base64 编码
+func Base64Encode(b []byte) string {
+	return base64.StdEncoding.EncodeToString(b)
 }
 
 // StringInSlice 检查字符串是否在切片中
