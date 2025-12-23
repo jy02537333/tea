@@ -263,6 +263,213 @@
   - 分销佣金计算场景、提现阈值与提现流程测试
   - 门店接单并打印流程测试（本地或模拟打印机服务）
 
+#### Sprint C — 进度映射（master / 待合并 / 新增）
+
+- 已在 master：
+  - 管理端会员套餐与合伙人等级管理（tea-api/internal/handler/membership_admin.go，路由已注册）
+  - 管理端佣金运维（释放/反冲）（tea-api/internal/handler/commission_admin.go，路由 /api/v1/admin/finance/commission/...）
+  - 上传服务基础（已有上传接口，未包含 OSS 直传策略）
+  - 钱包/提现基础能力（用户与管理员端）
+- 待合并（源自 PR #44）：
+  - 推荐关系（Referral）用户侧接口与闭包表（handler/referral.go + model.Referral/ReferralClosure + 路由）
+  - 佣金用户侧接口（预览/创建/列表/汇总）（handler/commission.go + 路由）
+  - 会员/合伙人礼包购买与升级（用户侧）（handler/partner.go + 路由）
+  - 门店后台接单/拒单/打印任务（PrintHandler + 路由），引入 OrderLog 模型
+  - 管理端 OSS 直传策略（POST /api/v1/admin/storage/oss/policy）
+  - `User` 模型扩展字段与迁移（membership_package_id、partner_level_id）
+  - Sprint C 说明文档（tea-api/docs/SPRINT_C_README.md）
+  - 路由补充与对齐（与 master 的 finance/commission 路由保持一致）
+- 新增（按拆分序列提交）：
+  - PR-SC1：OSS 直传策略（管理端）—— upload.go:GetOSSPolicy、service/upload.go:GenerateOSSPolicy、pkg/utils/common.go（Base64/HMAC-SHA1）
+  - PR-SC2：推荐关系与闭包表（用户侧）—— referral 接口与数据模型、路由与（必要）迁移
+  - PR-SC3：用户模型扩展字段与迁移—— membership_package_id / partner_level_id 字段与索引
+  - PR-SC4：佣金（用户侧）接口—— 预览/创建/列表/汇总，复用 master 管理端释放/反冲，不新增重复路由
+  - PR-SC5：会员/合伙人购买与升级（用户侧）—— 购买/升级成功路径打通，去除与 master 重叠的管理端实现
+  - PR-SC6：门店后台接单/拒单/打印任务 + 订单日志—— 事务一致性与退款占位/队列
+  - PR-SC7：Sprint C 文档与路由统一对齐—— 路由清理为 master 风格，文档同步
+
+说明：完整重叠矩阵与拆分合并计划见 [doc/sprint_c_overlap_matrix.md](doc/sprint_c_overlap_matrix.md)。合并顺序建议：先 #51 与 #50，随后按 PR-SC1→SC2→SC3→SC4→SC5→SC6→SC7 推进；Sprint A 仍为阻断门禁，Sprint C 最小联调证据暂为非阻断归档。
+
+#### Sprint C — 最小联调与证据（PR-SC 子项）
+
+- 登录令牌准备（本地/CI 通用）
+  - 说明：以下最小联调命令需要 `ADMIN_TOKEN` 与 `USER_TOKEN`。执行一次准备脚本自动生成并导出这两个令牌；可通过环境变量注入手机号验证码或直接提供现成 Token。
+  - 使用方式：
+    ```bash
+    export API_BASE="${API_BASE:-http://127.0.0.1:9292}"
+    mkdir -p build-ci-logs
+    # 可选：提供登录凭据（若无则脚本会尝试复用已有证据或 devlogin_resp.json）
+    # export ADMIN_PHONE=13800138000 ADMIN_CODE=246810
+    # export USER_PHONE=13900139000 USER_CODE=135790
+    # 或直接提供现成 Token（CI 场景下推荐用 Secrets 注入）：
+    # export ADMIN_TOKEN="<admin.jwt>" USER_TOKEN="<user.jwt>"
+    bash ./scripts/prepare_tokens.sh
+    # 加载导出的环境变量（可选）
+    source build-ci-logs/tokens.env
+    ```
+  - 输出：
+    - `build-ci-logs/admin_login_response.json`、`build-ci-logs/user_login_response.json`
+    - `build-ci-logs/tokens.env`（包含 `export ADMIN_TOKEN=...`、`export USER_TOKEN=...`）
+
+  - 一键执行（本地/CI）
+    ```bash
+    # 生成令牌 + 运行最小联调（产物统一在 build-ci-logs/**）
+    make prepare-tokens
+    make run-min-integration
+    # 可选：查看产物
+    ls -1 build-ci-logs | sed -n '1,100p'
+    ```
+
+  - 自动校验与 CI 开关（补充）
+    - 本地轻量校验：`make verify-sprint-c`（非阻断）。输出汇总 `build-ci-logs/sprint_c_check_summary.json`，检查关键证据是否产出及基础字段是否存在。
+    - CI 开关：通过 `RUN_MIN_INTEGRATION=0|1` 控制是否执行最小联调与校验（已在 `.github/workflows/api-validation.yml` 接入，默认开启）。
+    - PR 注释：CI 将在 Pull Request 下方追加 Sprint C 校验摘要（非阻断，仅用于快速可视化）。
+
+- PR-SC1：OSS 直传策略（管理端）
+  - 命令：
+    ```bash
+    export API_BASE="http://127.0.0.1:9292"
+    export ADMIN_TOKEN="$(cat build-ci-logs/admin_login_response.json 2>/dev/null | jq -r '.token // empty')"
+    curl -sS -X POST "$API_BASE/api/v1/admin/storage/oss/policy" \
+      -H "Authorization: Bearer $ADMIN_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"business":"product_image"}' \
+      > build-ci-logs/get_oss_policy.json
+    ```
+  - 产物：`build-ci-logs/get_oss_policy.json`（包含 `policy/signature/accessKeyId/expire_at/object_key_template`）
+
+- PR-SC2：推荐关系与闭包表（用户侧）
+  - 命令：
+    ```bash
+    export API_BASE="http://127.0.0.1:9292"
+    export USER_TOKEN="${USER_TOKEN:-""}"
+    # 记录一次直推关系
+    curl -sS -X POST "$API_BASE/api/v1/referral/record" \
+      -H "Authorization: Bearer $USER_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"referrer_id":1001, "referred_user_id":1002, "source":"qr"}' \
+      > build-ci-logs/referral_record.json
+    # 统计与直推列表
+    curl -sS -H "Authorization: Bearer $USER_TOKEN" "$API_BASE/api/v1/users/1001/referral-stats" \
+      > build-ci-logs/referral_stats.json
+    curl -sS -H "Authorization: Bearer $USER_TOKEN" "$API_BASE/api/v1/users/1001/referred-users?page=1&size=20" \
+      > build-ci-logs/referred_users.json
+    ```
+  - 产物：`build-ci-logs/referral_record.json`、`build-ci-logs/referral_stats.json`、`build-ci-logs/referred_users.json`
+
+- PR-SC3：用户模型扩展字段与迁移（独立）
+  - 命令（本地）：
+    ```bash
+    # 启动并自动迁移（如服务支持自动迁移）
+    TEA_AUTO_MIGRATE=1 TEA_JWT_SECRET=dev_secret_change_me bash ./run-tea-api.sh &
+    sleep 10
+    # 健康检查
+    curl -sS "$API_BASE/api/v1/health" > build-ci-logs/health_check.json
+    ```
+  - 产物：`logs/tea-api.log`（含迁移日志，如有）、`build-ci-logs/health_check.json`
+  - 备注：DB 校验可选（在测试库执行 `DESCRIBE users;` 确认 `membership_package_id/partner_level_id` 字段与索引）。
+
+- PR-SC4：佣金（用户侧）接口
+  - 命令：
+    ```bash
+    export API_BASE="http://127.0.0.1:9292"
+    export USER_TOKEN="${USER_TOKEN:-""}"
+    export ADMIN_TOKEN="$(cat build-ci-logs/admin_login_response.json 2>/dev/null | jq -r '.token // empty')"
+    # 预览计算
+    curl -sS -X POST "$API_BASE/api/v1/commissions/calculate" \
+      -H "Authorization: Bearer $USER_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"payer_user_id":1002,"referrer_user_id":1001,"items":[{"sku_id":1,"unit_price_cents":9800,"quantity":2,"discount_cents":0}],"shipping_cents":0,"coupon_cents":0,"order_level_discount_cents":0}' \
+      > build-ci-logs/commission_preview.json
+    # 持久化记录（示例）
+    curl -sS -X POST "$API_BASE/api/v1/commissions" \
+      -H "Authorization: Bearer $USER_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"order_id":156,"breakdown":[]}' \
+      > build-ci-logs/commission_create_resp.json
+    # 用户佣金列表与汇总
+    curl -sS -H "Authorization: Bearer $USER_TOKEN" "$API_BASE/api/v1/users/1001/commissions?page=1&size=20" \
+      > build-ci-logs/commissions_list.json
+    curl -sS -H "Authorization: Bearer $USER_TOKEN" "$API_BASE/api/v1/users/1001/commissions/summary" \
+      > build-ci-logs/commissions_summary.json
+    # （可选）管理端手动释放（沿用 master 路由风格）
+    curl -sS -X POST -H "Authorization: Bearer $ADMIN_TOKEN" \
+      "$API_BASE/api/v1/admin/finance/commission/release" \
+      > build-ci-logs/commission_release_resp.json
+    # 财务摘要（可选）
+    curl -sS -H "Authorization: Bearer $ADMIN_TOKEN" "$API_BASE/api/v1/admin/finance/summary" \
+      > build-ci-logs/finance_summary_after_release.json
+    ```
+  - 产物：`build-ci-logs/commission_preview.json`、`build-ci-logs/commission_create_resp.json`、`build-ci-logs/commissions_list.json`、`build-ci-logs/commissions_summary.json`、`build-ci-logs/finance_summary_after_release.json`
+
+- PR-SC5：会员/合伙人购买与升级（用户侧）
+  - 命令：
+    ```bash
+    export API_BASE="http://127.0.0.1:9292"
+    export USER_TOKEN="${USER_TOKEN:-""}"
+    # 套餐列表
+    curl -sS -H "Authorization: Bearer $USER_TOKEN" "$API_BASE/api/v1/partner/packages" \
+      > build-ci-logs/partner_packages.json
+    # 购买/升级（示例）
+    curl -sS -X POST "$API_BASE/api/v1/partner/purchase" \
+      -H "Authorization: Bearer $USER_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"package_id":1,"pay_method":"wechat"}' \
+      > build-ci-logs/partner_purchase_resp.json
+    curl -sS -X POST "$API_BASE/api/v1/partner/upgrade" \
+      -H "Authorization: Bearer $USER_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"package_id":2}' \
+      > build-ci-logs/partner_upgrade_resp.json
+    # 聚合视图核验
+    curl -sS -H "Authorization: Bearer $USER_TOKEN" "$API_BASE/api/v1/users/me/summary" \
+      > build-ci-logs/membership_upgrade_summary.json
+    ```
+  - 产物：`build-ci-logs/partner_packages.json`、`build-ci-logs/partner_purchase_resp.json`、`build-ci-logs/partner_upgrade_resp.json`、`build-ci-logs/membership_upgrade_summary.json`
+
+- PR-SC6：门店后台接单/拒单/打印 + 订单日志
+  - 命令：
+    ```bash
+    export API_BASE="http://127.0.0.1:9292"
+    export ADMIN_TOKEN="$(cat build-ci-logs/admin_login_response.json 2>/dev/null | jq -r '.token // empty')"
+    # 列表
+    curl -sS -H "Authorization: Bearer $ADMIN_TOKEN" "$API_BASE/api/v1/stores/1/orders?page=1&size=20" \
+      > build-ci-logs/store_orders_list.json
+    # 接单/拒单（示例）
+    curl -sS -X POST -H "Authorization: Bearer $ADMIN_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"store_id":1,"order_id":156}' \
+      "$API_BASE/api/v1/stores/1/orders/156/accept" \
+      > build-ci-logs/store_order_accept_resp.json
+    curl -sS -X POST -H "Authorization: Bearer $ADMIN_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"store_id":1,"order_id":209,"reason":"out_of_stock"}' \
+      "$API_BASE/api/v1/stores/1/orders/209/reject" \
+      > build-ci-logs/store_order_reject_resp.json
+    # 打印任务
+    curl -sS -X POST -H "Authorization: Bearer $ADMIN_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"store_id":1,"order_id":156,"template_type":"receipt","copies":1}' \
+      "$API_BASE/api/v1/stores/1/print/jobs" \
+      > build-ci-logs/print_job_resp.json
+    ```
+  - 产物：`build-ci-logs/store_orders_list.json`、`build-ci-logs/store_order_accept_resp.json`、`build-ci-logs/store_order_reject_resp.json`、`build-ci-logs/print_job_resp.json`、（可选）`build-ci-logs/order_log_extract.json`
+
+- PR-SC7：Sprint C 文档与路由统一对齐（验证）
+  - 命令：
+    ```bash
+    export API_BASE="http://127.0.0.1:9292"
+    export ADMIN_TOKEN="$(cat build-ci-logs/admin_login_response.json 2>/dev/null | jq -r '.token // empty')"
+    # 路由存在性校验（示例，仅校验 200/401/403 即可）
+    curl -sS -o /dev/null -w "%{http_code}\n" -H "Authorization: Bearer $ADMIN_TOKEN" "$API_BASE/api/v1/admin/partner-levels" \
+      > build-ci-logs/router_check_partner_levels.txt
+    curl -sS -o /dev/null -w "%{http_code}\n" -H "Authorization: Bearer $ADMIN_TOKEN" "$API_BASE/api/v1/admin/finance/commission/release" \
+      > build-ci-logs/router_check_commission_release.txt
+    ```
+  - 产物：`build-ci-logs/router_check_partner_levels.txt`、`build-ci-logs/router_check_commission_release.txt`
+
+备注：以上命令为最小可验证路径，IDs 以实际数据为准。若 CI 环境需要，请在 `make run-min-integration` 后执行，并统一归档 `build-ci-logs/**` 产物以便审计与回归。
+
 ### Sprint C — 关键 API（草案）
 
 - POST /api/v1/admin/products

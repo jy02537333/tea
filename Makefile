@@ -12,7 +12,7 @@ monitor-pr52-ci:
 # Optional extra args, e.g. make package PACKAGE_ARGS="--os linux --arch amd64"
 PACKAGE_ARGS ?=
 
-.PHONY: up package test test-api test-admin-fe test-wx-fe verify-sprint-a verify-sprint-a-strict verify-sprint-b verify-sprint-b-strict verify-sprint-a-e2e
+.PHONY: up package test test-api test-admin-fe test-wx-fe verify-sprint-a verify-sprint-a-strict verify-sprint-b verify-sprint-b-strict verify-sprint-a-e2e prepare-tokens run-min-integration verify-sprint-c
 
 up:
 	@echo "[make up] starting tea-api via run-tea-api.sh"
@@ -58,3 +58,17 @@ verify-sprint-a-e2e:
 	@echo "[make verify-sprint-a-e2e] running stateful checks + strict Sprint A assertions"
 	bash scripts/local_api_check.sh
 	REQUIRE_ORDER_CHECK=1 bash scripts/assert_api_validation.sh
+
+prepare-tokens:
+	@echo "[make prepare-tokens] preparing ADMIN_TOKEN and USER_TOKEN"
+	mkdir -p build-ci-logs
+	API_BASE=$${API_BASE:-http://127.0.0.1:9292} bash ./scripts/prepare_tokens.sh
+
+run-min-integration:
+	@echo "[make run-min-integration] running minimal integration to generate Sprint C evidence"
+	mkdir -p build-ci-logs
+	API_BASE=$${API_BASE:-http://127.0.0.1:9292} bash ./scripts/run_min_integration.sh
+
+verify-sprint-c:
+	@echo "[make verify-sprint-c] verifying Sprint C evidence under build-ci-logs (non-blocking in CI)"
+	bash ./scripts/verify_sprint_c.sh

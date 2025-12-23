@@ -11,6 +11,7 @@ jobs:
   stateful-api-check:
     env:
       CI_SEED: "1"
+      RUN_MIN_INTEGRATION: "1"
     runs-on: ubuntu-latest
     services:
       mysql:
@@ -143,6 +144,71 @@ jobs:
         run: |
           go run ./scripts/seed_admin.go
 
+      - name: Prepare tokens (admin/user)
+        if: steps.branchguard.outputs.disabled != 'true' && env.RUN_MIN_INTEGRATION == '1'
+        env:
+          API_BASE: http://127.0.0.1:9292
+          ADMIN_USERNAME: admin
+          ADMIN_PASSWORD: pass
+        run: |
+          make prepare-tokens
+          echo "---- tokens.env ----"
+          cat build-ci-logs/tokens.env || true
+
+      - name: Run minimal integration (Sprint C evidence)
+        if: steps.branchguard.outputs.disabled != 'true' && env.RUN_MIN_INTEGRATION == '1'
+        env:
+          API_BASE: http://127.0.0.1:9292
+        continue-on-error: true
+        run: |
+          make run-min-integration | tee build-ci-logs/min-integration-$(date +%Y%m%d%H%M%S).log
+
+      - name: Sprint C verification (non-blocking)
+        if: steps.branchguard.outputs.disabled != 'true' && env.RUN_MIN_INTEGRATION == '1'
+        continue-on-error: true
+        run: |
+          make verify-sprint-c | tee build-ci-logs/verify-sprint-c-$(date +%Y%m%d%H%M%S).log
+
+      - name: Comment Sprint C summary to PR (non-blocking)
+        if: steps.branchguard.outputs.disabled != 'true' && env.RUN_MIN_INTEGRATION == '1' && github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'build-ci-logs/sprint_c_check_summary.json';
+            let body = 'Sprint C: 未找到校验摘要（可能未执行或产物缺失）。';
+            try {
+              const raw = fs.readFileSync(path, 'utf8');
+              const j = JSON.parse(raw);
+              const ok = j.ok ? '✅ 通过' : '⚠️ 存在缺失';
+              const errors = j.errors ?? 0;
+              const total = j.total ?? (j.items ? j.items.length : undefined);
+              const lines = [];
+              lines.push(`Sprint C 校验摘要：${ok}`);
+              lines.push(`- errors: ${errors}`);
+              if (typeof total !== 'undefined') lines.push(`- checks: ${total}`);
+              // 仅列出前 6 项，避免过长
+              if (Array.isArray(j.items)) {
+                const head = j.items.slice(0, 6);
+                lines.push('\n明细（前 6 项）：');
+                head.forEach((it) => {
+                  lines.push(`- ${it.ok ? '✅' : '❌'} ${it.name} → ${it.file} ${it.note ? `(${it.note})` : ''}`);
+                });
+                if (j.items.length > 6) lines.push(`... 共 ${j.items.length} 项`);
+              }
+              lines.push('\n产物：build-ci-logs/sprint_c_check_summary.json');
+              body = lines.join('\n');
+            } catch (e) {
+              body = `${body}\n错误：${e.message}`;
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+
       - name: Run public API validation
         if: steps.branchguard.outputs.disabled != 'true'
         run: |
@@ -219,6 +285,11 @@ jobs:
           name: api-validation-logs
           retention-days: 7
           path: |
+            build-ci-logs/tokens.env
+            build-ci-logs/admin_login_response.json
+            build-ci-logs/user_login_response.json
+            build-ci-logs/admin_token.txt
+            build-ci-logs/user_token.txt
             build-ci-logs/api_validation/**
             build-ci-logs/api_validation_stateful/**
             build-ci-logs/api-validation-*.log
@@ -231,6 +302,7 @@ jobs:
             build-ci-logs/membership_summary_after_purchase.json
             build-ci-logs/membership_b_flow_checked.json
             build-ci-logs/membership-flow-*.log
+            build-ci-logs/**
 
       - name: Collect diagnostics on failure
         if: steps.branchguard.outputs.disabled != 'true' && failure()

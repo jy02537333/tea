@@ -4,6 +4,8 @@
 
 [![API Validation](https://github.com/jy02537333/tea/actions/workflows/api-validation.yml/badge.svg?branch=master)](https://github.com/jy02537333/tea/actions/workflows/api-validation.yml)
 
+前端联调快捷入口： [admin-fe/README.md](admin-fe/README.md) · [wx-fe/README.md](wx-fe/README.md)
+
 This folder contains CI job templates to run the repository's `scripts/run_api_validation.sh` in CI and collect artifacts.
 
 Provided files:
