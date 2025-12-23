@@ -27,6 +27,7 @@ func SetupRouter() *gin.Engine {
 	financeReportHandler := handler.NewFinanceReportHandler()
 	commissionAdminHandler := handler.NewCommissionAdminHandler()
 	commissionUserHandler := handler.NewCommissionUserHandler()
+	referralHandler := handler.NewReferralHandler()
 	membershipAdminHandler := handler.NewMembershipAdminHandler()
 	membershipHandler := handler.NewMembershipHandler()
 	dashboardHandler := handler.NewDashboardHandler()
@@ -73,6 +74,11 @@ func SetupRouter() *gin.Engine {
 	api.POST("/commissions", middleware.AuthJWT(), commissionUserHandler.Create)
 	api.GET("/users/:id/commissions", middleware.AuthJWT(), commissionUserHandler.ListUserCommissions)
 	api.GET("/users/:id/commissions/summary", middleware.AuthJWT(), commissionUserHandler.UserCommissionSummary)
+
+	// Sprint C: 推荐/被推荐（用户侧）
+	api.POST("/referral/record", middleware.AuthJWT(), referralHandler.Record)
+	api.GET("/users/:id/referral-stats", middleware.AuthJWT(), referralHandler.Stats)
+	api.GET("/users/:id/referred-users", middleware.AuthJWT(), referralHandler.ListReferredUsers)
 
 	// Sprint B: 积分查询与流水
 	api.GET("/points", middleware.AuthJWT(), handler.GetMyPoints)
