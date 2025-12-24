@@ -129,6 +129,7 @@ func autoMigrate() error {
 		&model.MembershipPackage{},
 		&model.PartnerLevel{},
 		&model.UserBankAccount{},
+		&model.Referral{},
 		&model.ReferralClosure{},
 
 		// 提现管理
@@ -191,6 +192,14 @@ func InitDatabase() {
 	// Allow tests to skip DB initialization to avoid requiring external DB or cgo.
 	if env.Get("TEA_SKIP_DB_INIT", "") == "1" {
 		fmt.Println("Skipping DB init because TEA_SKIP_DB_INIT=1")
+		// 测试兜底：若当前未初始化 DB，则以“无迁移模式”建立连接
+		if DB == nil {
+			if _, err := InitWithoutMigrate(); err != nil {
+				log.Printf("InitWithoutMigrate failed under TEA_SKIP_DB_INIT: %v\n", err)
+			}
+		}
+		// 无论当前 DB 来源为何，尽力确保关键表存在
+		ensureEssentialTables()
 		return
 	}
 	// 根据环境变量选择是否执行自动迁移
@@ -209,4 +218,34 @@ func InitDatabase() {
 	fmt.Println("[InitDatabase] Using InitMySQL with auto migration (default)")
 	// 默认走 MySQL 初始化（执行自动迁移）
 	InitMySQL()
+
+	// 额外保障（测试/本地）：确保关键表存在，避免集成测试因缺表失败
+	// 在某些环境下（例如跳过迁移或部分模型未注册），为常用路由的核心表做一次兜底检查。
+	ensureEssentialTables()
+}
+
+// ensureEssentialTables 尝试为常用的集成测试场景创建关键表，避免“no such table”错误。
+// 该函数仅在 InitDatabase 之后调用，且仅对不存在的表执行 AutoMigrate，不会影响已存在的表结构。
+func ensureEssentialTables() {
+	if DB == nil {
+		return
+	}
+	migrator := DB.Migrator()
+	// 常见路由涉及的核心表（访问日志、商品/分类、购物车、订单等）
+	essential := []any{
+		&model.AccessLog{},
+		&model.Category{},
+		&model.Product{},
+		&model.Cart{},
+		&model.CartItem{},
+		&model.Order{},
+		&model.OrderItem{},
+		&model.Payment{},
+		&model.Refund{},
+	}
+	for _, m := range essential {
+		if !migrator.HasTable(m) {
+			_ = migrator.AutoMigrate(m)
+		}
+	}
 }

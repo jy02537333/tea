@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -102,8 +103,17 @@ func DetailedAccessLogMiddleware() gin.HandlerFunc {
 			}
 
 			db := database.GetDB()
-			if err := db.Create(accessLog).Error; err != nil {
-				zap.L().Error("Failed to create detailed access log", zap.Error(err))
+			if db != nil {
+				if err := db.Create(accessLog).Error; err != nil {
+					// 若因缺表失败，尝试迁移并重试一次
+					msg := err.Error()
+					if msg == "no such table: access_logs" || contains(msg, "Error 1146") {
+						_ = db.Migrator().AutoMigrate(&model.AccessLog{})
+						_ = db.Create(accessLog).Error
+					} else {
+						zap.L().Error("Failed to create detailed access log", zap.Error(err))
+					}
+				}
 			}
 			// 结构化日志输出到 Zap
 			logUserID := uint(0)
@@ -132,4 +142,17 @@ func makeUintPtr(val uint) *uint {
 	}
 	copy := val
 	return &copy
+}
+
+// contains reports whether substr is within s.
+func contains(s, substr string) bool {
+	return len(substr) == 0 || (len(s) >= len(substr) && (indexOf(s, substr) >= 0))
+}
+
+// indexOf returns the index of substr in s, or -1 if not found.
+func indexOf(s, substr string) int {
+	// 简化实现：使用标准库 strings（避免引入依赖）
+	// 保持文件内自足性
+	// 注意：Go 编译器内联优化足够，这里直接调用 strings.Index
+	return strings.Index(s, substr)
 }
