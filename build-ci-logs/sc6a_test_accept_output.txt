@@ -1,4 +1,4 @@
-# tea-api/internal/service
-internal/service/user_summary_test.go:2:1: expected declaration, found 'package'
-FAIL	tea-api/internal/service [setup failed]
-FAIL
+=== RUN   TestAdminAcceptOrder_Status2To3
+--- PASS: TestAdminAcceptOrder_Status2To3 (0.00s)
+PASS
+ok  	tea-api/internal/service	(cached)

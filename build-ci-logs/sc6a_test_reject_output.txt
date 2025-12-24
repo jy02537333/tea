@@ -1,4 +1,9 @@
-# tea-api/internal/service
-internal/service/user_summary_test.go:2:1: expected declaration, found 'package'
-FAIL	tea-api/internal/service [setup failed]
+=== RUN   TestAdminRejectOrder_StatusToCancelledRefunded
+
+2025/12/24 15:15:23 [31;1m/home/frederic/project/tea/tea-api/internal/service/order.go:590 [35;1mno such table: order_items
+[0m[33m[0.471ms] [34;1m[rows:0][0m SELECT * FROM `order_items` WHERE order_id = 1 AND `order_items`.`deleted_at` IS NULL
+    order_accept_reject_test.go:62: AdminRejectOrder err: no such table: order_items
+--- FAIL: TestAdminRejectOrder_StatusToCancelledRefunded (0.00s)
+FAIL
+FAIL	tea-api/internal/service	0.010s
 FAIL
