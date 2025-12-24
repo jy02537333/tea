@@ -67,6 +67,24 @@ export async function postOrderAction(id: number, action: string, body?: Record<
   return unwrap(res);
 }
 
+// 管理端：接受订单（占位通路）
+export async function acceptAdminOrder(id: number, body?: { note?: string }) {
+  const res = await api.post(`/api/v1/admin/orders/${id}/accept`, body ?? {});
+  return unwrap(res);
+}
+
+// 管理端：拒绝订单（占位通路）
+export async function rejectAdminOrder(id: number, body?: { reason?: string; note?: string }) {
+  const res = await api.post(`/api/v1/admin/orders/${id}/reject`, body ?? {});
+  return unwrap(res);
+}
+
+// 管理端：创建打印任务（占位通路）
+export async function createPrintTask(payload: { order_id?: number; target?: string; payload?: string; priority?: number }) {
+  const res = await api.post('/api/v1/admin/print/tasks', payload ?? {});
+  return unwrap(res);
+}
+
 // 兼容旧版示例页面 `OrderDetail` 所使用的 getOrder，
 // 这里复用管理端订单详情接口并返回其中的 order 对象。
 export async function getOrder(id: number) {

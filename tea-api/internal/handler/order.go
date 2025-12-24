@@ -336,6 +336,48 @@ func (h *OrderHandler) AdminDetail(c *gin.Context) {
 	response.Success(c, gin.H{"order": order, "items": items})
 }
 
+// AdminAccept 门店/管理员接受订单（占位实现：记录操作日志并返回 ok，不更改订单状态）
+func (h *OrderHandler) AdminAccept(c *gin.Context) {
+	uidVal, _ := c.Get("user_id")
+	operatorID := uint(uidVal.(uint))
+	oid, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil || oid == 0 {
+		response.BadRequest(c, "非法的订单ID")
+		return
+	}
+	var req struct {
+		Note string `json:"note"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	_ = writeOpLog(c, operatorID, "order", "order.admin_accept", map[string]any{
+		"order_id": uint(oid),
+		"note":     req.Note,
+	})
+	response.Success(c, gin.H{"ok": true, "status": "accepted"})
+}
+
+// AdminReject 门店/管理员拒绝订单（占位实现：记录操作日志并返回 ok，不更改订单状态）
+func (h *OrderHandler) AdminReject(c *gin.Context) {
+	uidVal, _ := c.Get("user_id")
+	operatorID := uint(uidVal.(uint))
+	oid, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil || oid == 0 {
+		response.BadRequest(c, "非法的订单ID")
+		return
+	}
+	var req struct {
+		Reason string `json:"reason"`
+		Note   string `json:"note"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	_ = writeOpLog(c, operatorID, "order", "order.admin_reject", map[string]any{
+		"order_id": uint(oid),
+		"reason":   req.Reason,
+		"note":     req.Note,
+	})
+	response.Success(c, gin.H{"ok": true, "status": "rejected"})
+}
+
 // Cancel 取消
 func (h *OrderHandler) Cancel(c *gin.Context) {
 	uidVal, _ := c.Get("user_id")

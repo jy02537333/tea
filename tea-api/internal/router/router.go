@@ -46,6 +46,7 @@ func SetupRouter() *gin.Engine {
 	uploadHandler := handler.NewUploadHandler()
 	activityHandler := handler.NewActivityHandler()
 	ticketHandler := handler.NewTicketHandler()
+	printHandler := handler.NewPrintAdminHandler()
 
 	// API路由组
 	api := r.Group("/api/v1")
@@ -150,10 +151,16 @@ func SetupRouter() *gin.Engine {
 		adminGroup.POST("/tickets", ticketHandler.Create)
 		adminGroup.PUT("/tickets/:id", ticketHandler.Update)
 
+		// 打印任务（占位实现）
+		adminGroup.POST("/print/tasks", printHandler.CreateTask)
+
 		// 管理端订单接口（列表 / 导出 / 详情）
 		adminGroup.GET("/orders", orderHandler.AdminList)
 		adminGroup.GET("/orders/export", orderHandler.AdminExport)
 		adminGroup.GET("/orders/:id", orderHandler.AdminDetail)
+		// 门店后台基础操作：接受/拒绝（占位实现）
+		adminGroup.POST("/orders/:id/accept", orderHandler.AdminAccept)
+		adminGroup.POST("/orders/:id/reject", orderHandler.AdminReject)
 
 		// 会员与合伙人配置
 		adminGroup.GET("/membership-packages", membershipAdminHandler.ListPackages)
