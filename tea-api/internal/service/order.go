@@ -730,6 +730,35 @@ func (s *OrderService) AdminRefundConfirm(orderID uint, reason string) error {
 	return nil
 }
 
+// AdminAcceptOrder 门店/管理员接受订单：
+// 规则：
+// - 仅当订单状态为 已付款(2) 时允许接受
+// - 将订单状态置为 处理中(3)
+// - 不更改支付状态
+func (s *OrderService) AdminAcceptOrder(orderID uint) error {
+	var order model.Order
+	if err := s.db.First(&order, orderID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("订单不存在")
+		}
+		return err
+	}
+	if order.Status != 2 {
+		return errors.New("当前状态不可接受")
+	}
+	order.Status = 3
+	return s.db.Save(&order).Error
+}
+
+// AdminRejectOrder 门店/管理员拒绝订单：
+// 规则：
+// - 仅在 已付款(2) 或 配送中(3) 时可拒绝/撤单
+// - 将订单标记为 已取消(5)，支付状态为 已退款(4)
+// - 未发货时回补库存，回滚优惠券使用
+func (s *OrderService) AdminRejectOrder(orderID uint, reason string) error {
+	return s.AdminRefundOrder(orderID, reason)
+}
+
 // StoreOrderStats 门店订单统计结果
 type StoreOrderStats struct {
 	StoreID         uint              `json:"store_id"`

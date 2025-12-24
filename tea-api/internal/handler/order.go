@@ -34,6 +34,8 @@ type orderService interface {
 	AdminRefundStart(orderID uint, reason string) error
 	AdminRefundConfirm(orderID uint, reason string) error
 	AdminListStoreOrders(storeID uint, status int, page, limit int, startTime, endTime *time.Time, orderID uint) ([]model.Order, int64, error)
+	AdminAcceptOrder(orderID uint) error
+	AdminRejectOrder(orderID uint, reason string) error
 }
 
 type OrderHandler struct {
@@ -334,6 +336,66 @@ func (h *OrderHandler) AdminDetail(c *gin.Context) {
 		return
 	}
 	response.Success(c, gin.H{"order": order, "items": items})
+}
+
+// AdminAccept 门店/管理员接受订单（真实状态迁移：2->3）
+func (h *OrderHandler) AdminAccept(c *gin.Context) {
+	uidVal, _ := c.Get("user_id")
+	operatorID := uint(uidVal.(uint))
+	oid, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil || oid == 0 {
+		response.BadRequest(c, "非法的订单ID")
+		return
+	}
+	var req struct{ Note string `json:"note"` }
+	_ = c.ShouldBindJSON(&req)
+	var before model.Order
+	_ = database.GetDB().First(&before, uint(oid)).Error
+	if err := h.svc.AdminAcceptOrder(uint(oid)); err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	var after model.Order
+	_ = database.GetDB().First(&after, uint(oid)).Error
+	_ = writeOpLog(c, operatorID, "order", "order.admin_accept", map[string]any{
+		"order_id": uint(oid),
+		"note":     req.Note,
+		"before":   map[string]any{"status": before.Status, "pay_status": before.PayStatus},
+		"after":    map[string]any{"status": after.Status, "pay_status": after.PayStatus},
+	})
+	response.Success(c, gin.H{"ok": true, "status": "accepted"})
+}
+
+// AdminReject 门店/管理员拒绝订单（真实状态迁移：退款+取消）
+func (h *OrderHandler) AdminReject(c *gin.Context) {
+	uidVal, _ := c.Get("user_id")
+	operatorID := uint(uidVal.(uint))
+	oid, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil || oid == 0 {
+		response.BadRequest(c, "非法的订单ID")
+		return
+	}
+	var req struct {
+		Reason string `json:"reason"`
+		Note   string `json:"note"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	var before model.Order
+	_ = database.GetDB().First(&before, uint(oid)).Error
+	if err := h.svc.AdminRejectOrder(uint(oid), req.Reason); err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	var after model.Order
+	_ = database.GetDB().First(&after, uint(oid)).Error
+	_ = writeOpLog(c, operatorID, "order", "order.admin_reject", map[string]any{
+		"order_id": uint(oid),
+		"reason":   req.Reason,
+		"note":     req.Note,
+		"before":   map[string]any{"status": before.Status, "pay_status": before.PayStatus},
+		"after":    map[string]any{"status": after.Status, "pay_status": after.PayStatus},
+	})
+	response.Success(c, gin.H{"ok": true, "status": "rejected"})
 }
 
 // Cancel 取消
