@@ -1,3 +1,6 @@
+//go:build scripts_hash_password
+// +build scripts_hash_password
+
 package main
 
 import (
