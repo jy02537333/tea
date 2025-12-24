@@ -1,0 +1,16 @@
+=== RUN   TestAdminAcceptOrder_Status2To3
+--- PASS: TestAdminAcceptOrder_Status2To3 (0.01s)
+=== RUN   TestAdminRejectOrder_StatusToCancelledRefunded
+
+2025/12/24 15:51:41 [31;1m/home/frederic/project/tea/tea-api/internal/service/order.go:628 [35;1mrecord not found
+[0m[33m[0.046ms] [34;1m[rows:0][0m SELECT * FROM `user_coupons` WHERE (order_id = 2 AND status = 2) AND `user_coupons`.`deleted_at` IS NULL ORDER BY `user_coupons`.`id` LIMIT 1
+--- PASS: TestAdminRejectOrder_StatusToCancelledRefunded (0.01s)
+=== RUN   TestAdminAcceptOrder_InvalidStatuses_ShouldError
+--- PASS: TestAdminAcceptOrder_InvalidStatuses_ShouldError (0.01s)
+=== RUN   TestAdminRejectOrder_OnlyStatus3Allowed
+
+2025/12/24 15:51:41 [31;1m/home/frederic/project/tea/tea-api/internal/service/order.go:628 [35;1mrecord not found
+[0m[33m[0.062ms] [34;1m[rows:0][0m SELECT * FROM `user_coupons` WHERE (order_id = 11 AND status = 2) AND `user_coupons`.`deleted_at` IS NULL ORDER BY `user_coupons`.`id` LIMIT 1
+--- PASS: TestAdminRejectOrder_OnlyStatus3Allowed (0.01s)
+PASS
+ok  	tea-api/internal/service	(cached)
