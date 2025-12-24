@@ -1,3 +1,4 @@
-== TEST TestAdminRejectOrder ==
+# tea-api/internal/service
+internal/service/user_summary_test.go:2:1: expected declaration, found 'package'
 FAIL	tea-api/internal/service [setup failed]
 FAIL
