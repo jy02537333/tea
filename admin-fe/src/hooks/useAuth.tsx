@@ -1,5 +1,5 @@
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { devLogin as apiDevLogin, getUserInfo, login as apiLogin, PasswordLoginPayload } from '../services/auth';
+import { devLogin as apiDevLogin, getUserSummary, login as apiLogin, PasswordLoginPayload } from '../services/auth';
 import { User } from '../types/user';
 import { setToken } from '../services/api';
 import { getUserPermissions } from '../services/users';
@@ -42,7 +42,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         return;
       }
       try {
-        const me = await getUserInfo();
+        const me = await getUserSummary();
         setUser(me);
         if (me?.id) {
           await fetchPermissions(me.id);
@@ -72,7 +72,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (res.token) {
       setToken(res.token);
       setTokenState(res.token);
-      const me = await getUserInfo();
+      const me = await getUserSummary();
       setUser(me);
       if (me?.id) {
         await fetchPermissions(me.id);
@@ -85,7 +85,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (res.token) {
       setToken(res.token);
       setTokenState(res.token);
-      const me = await getUserInfo();
+      const me = await getUserSummary();
       setUser(me);
       if (me?.id) {
         await fetchPermissions(me.id);

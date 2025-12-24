@@ -1,3 +1,43 @@
+# 前端示例变更记录
+
+## 用户信息与概要字段对齐（统一来源：users/me/summary）
+- 目的：统一前端消费来源，减少多接口拼装与契约分裂。
+- 推荐做法：优先使用 `GET /api/v1/users/me/summary` 获取用户等级与权益等聚合字段；`GET /api/v1/user/info` 仍可用，但其字段已与概要对齐。
+
+### 字段清单（两接口对齐）
+- 基本：`id`、`uid`、`open_id`、`nickname`、`avatar`、`phone`、`gender`、`balance`、`points`
+- 会员/等级：`membership_package_id`、`partner_level_id`、`membership_level_name`
+- 权益：`discount_rate`、`purchase_discount_rate`、`direct_commission_rate`、`team_commission_rate`、`upgrade_reward_rate`
+
+### 前端契约建议
+- 在类型定义中加入上述字段，并在调用层统一从 `users/me/summary` 读取，用于“我的”页或用户卡片展示。
+- 如需兼容 `user/info` 的既有逻辑，可复用同一类型（字段一致）。
+
+示例（TypeScript 类型片段）：
+
+```ts
+export interface UserProfile {
+	id: number;
+	uid?: string;
+	open_id?: string;
+	nickname?: string;
+	avatar?: string;
+	phone?: string;
+	gender?: number;
+	balance?: number;
+	points?: number;
+	membership_package_id?: number | null;
+	partner_level_id?: number | null;
+	membership_level_name?: string;
+	discount_rate?: number;
+	purchase_discount_rate?: number;
+	direct_commission_rate?: number;
+	team_commission_rate?: number;
+	upgrade_reward_rate?: number;
+}
+```
+
+> 注：当不存在会员或等级时，`membership_level_name` 返回 `visitor`，折扣默认 `1.0`，返利默认 `0`。
 CHANGES: Frontend examples scaffold and typing improvements
 
 Summary:

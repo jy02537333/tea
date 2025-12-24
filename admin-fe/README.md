@@ -57,3 +57,16 @@ npm run dev
 ```bash
 VITE_API_BASE="http://127.0.0.1:9393" npm run dev
 ```
+
+## 贡献指南（前端）
+
+为提升一致性与可维护性，请在提交 PR 前自检以下要点：
+
+- 使用统一的用户聚合接口：登录后从 `GET /api/v1/users/me/summary` 获取聚合信息，避免直接依赖历史接口（`/api/v1/user/info`）。
+- 提现 remark 解析与导出统一使用工具：复用 [src/utils/withdraw.ts](./src/utils/withdraw.ts) 的方法：
+	- 页面展示：`getRemarkField(remark, key)`；表格列：`...buildWithdrawRemarkColumns()`。
+	- 导出 CSV：`getRemarkFieldsForCsv(remark)`。
+	- 不要在页面中直接 `JSON.parse(record.remark)` 分散实现，避免重复与异常处理遗漏。
+- 基本检查：在 `admin-fe` 目录下执行 `pnpm run typecheck` 与 `pnpm run build` 保证通过。
+
+如涉及接口或字段调整，请同步更新 `doc/prd.md` 与 `doc/prd_sprints.md` 的约定说明。

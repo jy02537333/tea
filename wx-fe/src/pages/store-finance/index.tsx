@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, Button, Picker } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import { listStoreFinanceTransactions, type StoreFinanceTransaction, type StoreFinanceQuery } from '../../services/stores';
+import { parseWithdrawRemark } from '../../utils/withdraw';
 
 export default function StoreFinancePage() {
   const [storeId, setStoreId] = useState<number | undefined>(undefined);
@@ -188,39 +189,28 @@ export default function StoreFinancePage() {
                 <Text>备注：{rec.remark}</Text>
               </View>
             )}
-            {/* 解析 JSON remark 并展示标准化字段 */}
+            {/* 解析 JSON remark 并展示标准化字段（统一复用工具） */}
             {(() => {
-              try {
-                const obj = rec.remark ? JSON.parse(rec.remark) : null;
-                if (!obj || typeof obj !== 'object') return null;
-                const phase = obj.phase;
-                const currency = obj.currency;
-                const amountCents = obj.amount_cents;
-                const feeCents = obj.fee_cents;
-                const netCents = obj.net_cents;
-                const withdrawNo = obj.withdraw_no || rec.related_no;
-                const rows: Array<{ label: string; value: any }> = [];
-                if (phase != null) rows.push({ label: '阶段', value: phase });
-                if (withdrawNo != null) rows.push({ label: '提现单号', value: withdrawNo });
-                if (currency != null) rows.push({ label: '币种', value: currency });
-                if (amountCents != null) rows.push({ label: '金额(分)', value: amountCents });
-                if (feeCents != null) rows.push({ label: '手续费(分)', value: feeCents });
-                if (netCents != null) rows.push({ label: '实付(分)', value: netCents });
-                if (!rows.length) return null;
-                return (
-                  <View style={{ marginTop: 2, marginBottom: 2 }}>
-                    {rows.map((r) => (
-                      <View key={String(r.label)} style={{ marginBottom: 2 }}>
-                        <Text>
-                          {r.label}：{String(r.value)}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                );
-              } catch {
-                return null;
-              }
+              const obj = parseWithdrawRemark(rec.remark);
+              if (!obj) return null;
+              const rows: Array<{ label: string; value: any }> = [];
+              if (obj.phase != null) rows.push({ label: '阶段', value: obj.phase });
+              if (obj.currency != null) rows.push({ label: '币种', value: obj.currency });
+              if (obj.amount_cents != null) rows.push({ label: '金额(分)', value: obj.amount_cents });
+              if (obj.fee_cents != null) rows.push({ label: '手续费(分)', value: obj.fee_cents });
+              if (obj.net_cents != null) rows.push({ label: '实付(分)', value: obj.net_cents });
+              if (!rows.length) return null;
+              return (
+                <View style={{ marginTop: 2, marginBottom: 2 }}>
+                  {rows.map((r) => (
+                    <View key={String(r.label)} style={{ marginBottom: 2 }}>
+                      <Text>
+                        {r.label}：{String(r.value)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              );
             })()}
             {rec.created_at && (
               <View>
