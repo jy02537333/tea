@@ -1,0 +1,3 @@
+== TEST TestAdminAcceptOrder ==
+FAIL	tea-api/internal/service [setup failed]
+FAIL
