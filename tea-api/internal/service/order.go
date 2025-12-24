@@ -756,6 +756,18 @@ func (s *OrderService) AdminAcceptOrder(orderID uint) error {
 // - 将订单标记为 已取消(5)，支付状态为 已退款(4)
 // - 未发货时回补库存，回滚优惠券使用
 func (s *OrderService) AdminRejectOrder(orderID uint, reason string) error {
+	var order model.Order
+	if err := s.db.First(&order, orderID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("订单不存在")
+		}
+		return err
+	}
+	// 仅处理中(3)允许拒绝
+	if order.Status != 3 {
+		return errors.New("当前状态不可拒绝")
+	}
+	// 复用退款路径（会校验 PayStatus=2），状态将置为已取消(5)、支付已退款(4)
 	return s.AdminRefundOrder(orderID, reason)
 }
 
