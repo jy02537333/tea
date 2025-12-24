@@ -4,6 +4,10 @@ area: admin-fe:
 area: wx-fe:
   - wx-fe/**
 
+frontend:
+  - admin-fe/**
+  - wx-fe/**
+
 area: tea-api:
   - tea-api/**
 
