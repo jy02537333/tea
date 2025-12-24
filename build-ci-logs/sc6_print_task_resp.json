@@ -1,0 +1,10 @@
+{
+  "data": {
+    "id": "pt_20251224153000_ab12cd",
+    "status": "queued",
+    "created_at": "2025-12-24T15:30:00+08:00",
+    "order_id": 123,
+    "target": "receipt",
+    "priority": 1
+  }
+}

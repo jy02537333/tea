@@ -65,7 +65,20 @@ TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
 
 - 鉴权采用 JWT v5 标准，统一登录接口：`POST /api/v1/auth/login`（返回 `token`）。
 - 用户个人中心聚合接口：`GET /api/v1/users/me/summary`（需 `Authorization: Bearer <token>`）。
+  - 字段与 `GET /api/v1/user/info` 对齐：统一返回 `membership_package_id`、`partner_level_id`、`membership_level_name`、`discount_rate`、`purchase_discount_rate`、`direct_commission_rate`、`team_commission_rate`、`upgrade_reward_rate` 等；前端统一消费 `users/me/summary`，`user/info` 兼容复用同一契约。
 - 前后端联调、脚本与 E2E 测试一律以以上两条路径为准；历史实现（如 `/api/v1/user/login`、`/api/v1/user/info`）不再使用，避免 Token 实现不一致导致 401/403。
+
+**关键点（前端复用工具：提现 remark 解析与列封装）**
+
+- 目的：统一解析提现记录中的 `remark` JSON，减少重复解析与避免渲染/导出时的错误。
+- 工具位置：参见 [admin-fe/src/utils/withdraw.ts](admin-fe/src/utils/withdraw.ts)。
+- 能力与方法：
+  - `parseWithdrawRemark(remark)`：安全解析并抽取 `phase/currency/amount_cents/fee_cents/net_cents`。
+  - `getRemarkField(remark, key, fallback)`：表格渲染辅助，统一空值与异常兜底。
+  - `getRemarkFieldsForCsv(remark)`：导出 CSV 所需五字段的有序数组。
+  - `buildWithdrawRemarkColumns()`：封装表格列定义（阶段/币种/金额(分)/手续费(分)/实付(分)），用于在各页面复用。
+- 接入示例：页面使用见 [admin-fe/src/pages/StoreFinance.tsx](admin-fe/src/pages/StoreFinance.tsx)，以 `...buildWithdrawRemarkColumns()` 方式拼接列，并在导出逻辑中调用 `getRemarkFieldsForCsv()`。
+- 约定：如其他页面展示提现记录或类似 `remark` 字段的派生数据，优先复用该工具，确保展示与导出的一致性。
 
 #### 服务编译与启动（统一二进制名称）
 
@@ -698,9 +711,10 @@ TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
   - 后端生成带签名的 OSS Policy/STS 临时凭证，返回给前端。
   - 前端使用该凭证直接向 OSS 进行表单直传或 SDK 上传，上传成功后拿到文件 URL/key。
   - 前端将图片 URL/key 回填到商品/品牌表单并提交保存；后端只存储 OSS 对象 key 与访问 URL，不处理二次上传。
+  - **开放策略提示**：上传凭证接口当前不做额外安全限制，任何持有管理员 Token 的调用方都可生成凭证；OSS 端也未启用回调校验。默认允许开放使用，但需确保前端知悉仅可上传与业务相关的素材。
 
 - 基本约束
-  - 图片格式限制：`jpg/jpeg/png/webp`，单张大小上限（如 2MB，可配置）。
+  - 图片格式限制：`jpg/jpeg/png/webp`，单张大小上限 10MB（前后端统一校验，超过将直接拒绝上传）。
   - 主图建议比例统一（如 3:4 或 1:1），后台可在上传区域给出提示。
   - 支持设置主图与附图排序，前端按排序展示。
 
@@ -865,7 +879,7 @@ TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
 
 功能点：
 
-- 轮播图与广告位管理：上传/配置轮播图/广告，设置跳转目标、投放时段、投放门店/渠道范围。
+- 轮播图与广告位管理：上传/配置轮播图/广告，设置跳转目标、投放时段、投放门店/渠道范围（沿用 OSS 开放策略，上传不做额外安全限制，单个素材 ≤10MB）。
 - 优惠券管理：创建、发放、领券规则、有效期、使用范围（全平台/指定门店/指定商品）。
 - 积分规则配置：设置积分获取规则（消费/活动/签到）、积分抵扣规则、积分商品兑换规则。
 - 活动管理：创建活动页面、报名管理、报名用户导出、活动数据统计。
@@ -964,7 +978,7 @@ TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
 关键接口示例：
 
 - `GET /api/v1/admin/roles` — 角色列表
-- `POST /api/v1/admin/settings/protocols` — 上传/更新协议内容
+- `POST /api/v1/admin/settings/protocols` — 上传/更新协议内容（富文本/附件上传同样默认开放使用，单文件 ≤10MB）
 - `GET /api/v1/admin/logs` — 操作日志查询
 
 验收要点：权限体系可覆盖平台与门店场景，协议可在前端自动读取并展示，审计日志可用于安全合规检查。
@@ -1231,6 +1245,7 @@ TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
 - 用户分销：普通用户/会员可分享商品或门店服务，成交后按配置比例获得推广佣金；推广关系通过分享链接或二维码记录。
 - 合伙人分销：合伙人有等级划分（初级/中级/高级），不同等级享受不同的拿货折扣与直推佣金比例；合伙人晋级后可获得升级差价奖励。
 - 关系维护：使用 `referrals` 与 `referrals_closure` 表记录直接/间接关系，支持 N 层分佣查询与历史回溯。
+- 会员/合伙人标识：`users` 表新增 `membership_package_id`（指向 `membership_packages`）与 `partner_level_id`（指向 `partner_levels`），便于在用户聚合接口、佣金结算、门店/分销权限判定时直接读取当前礼包与等级，减少额外 JOIN；两个字段均建立索引。
 
 关键注意项：分销入口必须携带推荐人 ID（或推广码），下单时记录订单来源以便后续结算；禁止自我推荐与异常推广检测需列入风控策略。
 

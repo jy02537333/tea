@@ -166,11 +166,25 @@
   - 优惠券模块：待使用/已使用/已过期 Tab 切换与可用券高亮
 
 - 后端任务（账号与资产）
-  - `GET /api/v1/users/me/summary`：返回个人中心聚合数据（基本信息、会员等级、钱包/积分/优惠券数量汇总）
+  - `GET /api/v1/users/me/summary`：返回个人中心聚合数据（基本信息、会员等级、钱包/积分/优惠券数量汇总）；与 `GET /api/v1/user/info` 字段对齐，新增并统一 `membership_level_name` 与权益比率（discount/purchase_discount/direct_commission/team_commission/upgrade_reward），推荐前端统一消费 `users/me/summary`。
   - 钱包相关接口：`GET /api/v1/wallet`, `GET /api/v1/wallet/transactions`, `POST /api/v1/wallet/withdrawals`
   - 积分相关接口：`GET /api/v1/points`, `GET /api/v1/points/transactions`, `GET /api/v1/points/products`
   - 优惠券相关接口：`GET /api/v1/coupons`（按状态筛选）、在下单时注入可用优惠券列表
   - 银行卡/提现账户管理：`GET/POST/DELETE /api/v1/wallet/bank-accounts`
+
+#### 前端复用约定（提现 remark 解析与表格列封装）
+
+- 目的：统一解析钱包/门店提现记录中的 `remark`（JSON），避免在各页面重复解析与渲染逻辑分散，保障导出 CSV 与页面展示的一致性。
+- 工具位置：见 [admin-fe/src/utils/withdraw.ts](admin-fe/src/utils/withdraw.ts)。
+- 提供方法：
+  - `parseWithdrawRemark(remark)`：安全解析并抽取 `phase/currency/amount_cents/fee_cents/net_cents`。
+  - `getRemarkField(remark, key, fallback)`：用于表格渲染的统一取值与兜底。
+  - `getRemarkFieldsForCsv(remark)`：用于 CSV 导出的五字段数组（顺序固定）。
+  - `buildWithdrawRemarkColumns()`：封装「阶段/币种/金额(分)/手续费(分)/实付(分)」五列，直接在页面 `columns` 中展开复用。
+- 落地页面清单：
+  - 管理端门店财务提现页（已接入）：[admin-fe/src/pages/StoreFinance.tsx](admin-fe/src/pages/StoreFinance.tsx)
+  - 钱包提现列表（计划接入）：若存在钱包提现列表页面，统一使用 `buildWithdrawRemarkColumns()` 与 `getRemarkFieldsForCsv()`。
+  - 其他涉及 `remark` 的记录展示页面（计划接入）：若字段格式为 JSON 且包含上述键，统一复用该工具，保证导出与展示一致。
 
 - 测试任务
   - 校验个人中心聚合接口与各模块入口显示的数据一致（钱包/积分/券数量）
@@ -280,9 +294,12 @@
   - Sprint C 说明文档（tea-api/docs/SPRINT_C_README.md）
   - 路由补充与对齐（与 master 的 finance/commission 路由保持一致）
 - 新增（按拆分序列提交）：
-  - PR-SC1：OSS 直传策略（管理端）—— upload.go:GetOSSPolicy、service/upload.go:GenerateOSSPolicy、pkg/utils/common.go（Base64/HMAC-SHA1）
-  - PR-SC2：推荐关系与闭包表（用户侧）—— referral 接口与数据模型、路由与（必要）迁移
-  - PR-SC3：用户模型扩展字段与迁移—— membership_package_id / partner_level_id 字段与索引
+  - PR-SC1（✅ 已完成 2025-12-23）：OSS 直传策略（管理端）—— upload.go:GetOSSPolicy、service/upload.go:GenerateOSSPolicy、pkg/utils/common.go（Base64/HMAC-SHA1），最小证据：build-ci-logs/get_oss_policy.json
+  - PR-SC2（✅ 已完成 2025-12-23）：推荐关系与闭包表（用户侧）—— referral handler/service + model.Referral/ReferralClosure，证据：build-ci-logs/referral_record.json / referral_stats.json / referred_users.json
+  - PR-SC3（进行中）：用户模型扩展字段与迁移—— membership_package_id / partner_level_id 字段与索引
+    - TODO：更新 tea-api/internal/model/user.go 与相关迁移（db/migrations 或自动迁移），保证 `users` 表包含上述字段并建立索引
+    - TODO：在 pkg/database/mysql.go 注册新字段模型，并通过 `TEA_AUTO_MIGRATE=1 ./run-tea-api.sh` + 健康检查生成 `build-ci-logs/health_check.json`
+    - TODO：在 doc/db_schema.md 与 doc/prd.md 的用户/会员章节同步字段定义，确保 API 文档与脚本引用一致
   - PR-SC4：佣金（用户侧）接口—— 预览/创建/列表/汇总，复用 master 管理端释放/反冲，不新增重复路由
   - PR-SC5：会员/合伙人购买与升级（用户侧）—— 购买/升级成功路径打通，去除与 master 重叠的管理端实现
   - PR-SC6：门店后台接单/拒单/打印任务 + 订单日志—— 事务一致性与退款占位/队列

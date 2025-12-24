@@ -56,3 +56,16 @@ npm run dev
 ```bash
 WX_API_BASE_URL="http://127.0.0.1:9393" npm run dev
 ```
+
+## 贡献指南（小程序端前端）
+
+为保持与管理端一致的契约与工具复用，提交前请自检：
+
+- 统一聚合来源：登录后统一从 `GET /api/v1/users/me/summary` 获取用户聚合信息；避免直接依赖历史接口（`/api/v1/user/info`）。
+- 提现 remark 解析：统一使用工具文件（建议路径 `src/utils/withdraw.ts`）的方法：
+	- 展示：`getRemarkField(remark, key, fallback)`；
+	- CSV/导出：`getRemarkFieldsForCsv(remark)`；
+	- 约束：避免在页面中散落 `JSON.parse(record.remark)`；保持与管理端工具的签名一致，便于迁移与复用。
+- 基本检查：执行类型检查/构建任务（例如 `npm run build` 或项目约定的 `typecheck`）确保通过。
+
+如涉及接口或字段调整，请同步更新 `doc/prd.md` 与 `doc/prd_sprints.md` 的约定说明。

@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Alert, Button, Form, Input, Select, Space, Table, Tag, Typography } from 'antd';
+import { Alert, Button, Form, Input, Select, Space, Table, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useNavigate, useParams } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { AdminOrder, getAdminStoreOrders } from '../services/orders';
+import { AdminOrder, getAdminStoreOrders, acceptAdminOrder, rejectAdminOrder, createPrintTask } from '../services/orders';
 
 const { Title, Text } = Typography;
 
@@ -108,16 +108,57 @@ export default function StoreOrdersPage() {
     {
       title: '操作',
       key: 'actions',
-      width: 160,
+      width: 260,
       render: (_, record) => (
         <Space>
           <Button
             type="link"
-            onClick={() =>
-              navigate(`/orders?orderId=${record.id}&storeId=${storeId}`)
-            }
+            onClick={() => navigate(`/orders?orderId=${record.id}&storeId=${storeId}`)}
           >
             在订单操作区打开
+          </Button>
+          <Button
+            size="small"
+            onClick={async () => {
+              try {
+                await acceptAdminOrder(record.id, { note: 'store accept' });
+                message.success('已接受订单');
+                ordersQuery.refetch();
+              } catch (e: any) {
+                message.error(e?.message || '接受失败');
+              }
+            }}
+          >
+            接受
+          </Button>
+          <Button
+            size="small"
+            danger
+            onClick={async () => {
+              try {
+                await rejectAdminOrder(record.id, { reason: 'store reject' });
+                message.success('已拒绝订单');
+                ordersQuery.refetch();
+              } catch (e: any) {
+                message.error(e?.message || '拒绝失败');
+              }
+            }}
+          >
+            拒绝
+          </Button>
+          <Button
+            size="small"
+            onClick={async () => {
+              try {
+                const resp = await createPrintTask({ order_id: record.id, target: 'receipt', payload: JSON.stringify({ order_no: record.order_no }), priority: 1 });
+                const id = (resp as any)?.id ?? (resp as any)?.data?.id;
+                message.success(`已创建打印任务${id ? `：${id}` : ''}`);
+              } catch (e: any) {
+                message.error(e?.message || '打印任务创建失败');
+              }
+            }}
+          >
+            打印任务
           </Button>
         </Space>
       ),

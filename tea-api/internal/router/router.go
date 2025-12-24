@@ -26,6 +26,8 @@ func SetupRouter() *gin.Engine {
 	refundHandler := handler.NewRefundHandler()
 	financeReportHandler := handler.NewFinanceReportHandler()
 	commissionAdminHandler := handler.NewCommissionAdminHandler()
+	commissionUserHandler := handler.NewCommissionUserHandler()
+	referralHandler := handler.NewReferralHandler()
 	membershipAdminHandler := handler.NewMembershipAdminHandler()
 	membershipHandler := handler.NewMembershipHandler()
 	dashboardHandler := handler.NewDashboardHandler()
@@ -44,6 +46,7 @@ func SetupRouter() *gin.Engine {
 	uploadHandler := handler.NewUploadHandler()
 	activityHandler := handler.NewActivityHandler()
 	ticketHandler := handler.NewTicketHandler()
+	printHandler := handler.NewPrintAdminHandler()
 
 	// API路由组
 	api := r.Group("/api/v1")
@@ -66,6 +69,17 @@ func SetupRouter() *gin.Engine {
 	api.POST("/wallet/withdrawals", middleware.AuthJWT(), handler.CreateMyWithdrawal)
 	api.GET("/users/:id/withdrawals", middleware.AuthJWT(), handler.ListUserWithdrawals)
 	api.POST("/users/:id/withdrawals", middleware.AuthJWT(), handler.CreateUserWithdrawal)
+
+	// Sprint C: 佣金计算与记录（用户侧）
+	api.POST("/commissions/calculate", middleware.AuthJWT(), commissionUserHandler.Calculate)
+	api.POST("/commissions", middleware.AuthJWT(), commissionUserHandler.Create)
+	api.GET("/users/:id/commissions", middleware.AuthJWT(), commissionUserHandler.ListUserCommissions)
+	api.GET("/users/:id/commissions/summary", middleware.AuthJWT(), commissionUserHandler.UserCommissionSummary)
+
+	// Sprint C: 推荐/被推荐（用户侧）
+	api.POST("/referral/record", middleware.AuthJWT(), referralHandler.Record)
+	api.GET("/users/:id/referral-stats", middleware.AuthJWT(), referralHandler.Stats)
+	api.GET("/users/:id/referred-users", middleware.AuthJWT(), referralHandler.ListReferredUsers)
 
 	// Sprint B: 积分查询与流水
 	api.GET("/points", middleware.AuthJWT(), handler.GetMyPoints)
@@ -120,6 +134,8 @@ func SetupRouter() *gin.Engine {
 		adminGroup.PUT("/users/:id", userHandler.AdminUpdateUser)
 		adminGroup.POST("/users/:id/reset-password", userHandler.AdminResetPassword)
 		adminGroup.POST("/uploads", uploadHandler.UploadMedia)
+		// OSS 直传策略（管理端）
+		adminGroup.POST("/storage/oss/policy", uploadHandler.AdminGetOSSPolicy)
 		// 门店订单统计
 		adminGroup.GET("/stores/:id/orders/stats", storeHandler.OrderStats)
 		// 门店订单列表（按门店维度查看订单）
@@ -135,10 +151,16 @@ func SetupRouter() *gin.Engine {
 		adminGroup.POST("/tickets", ticketHandler.Create)
 		adminGroup.PUT("/tickets/:id", ticketHandler.Update)
 
+		// 打印任务（占位实现）
+		adminGroup.POST("/print/tasks", printHandler.CreateTask)
+
 		// 管理端订单接口（列表 / 导出 / 详情）
 		adminGroup.GET("/orders", orderHandler.AdminList)
 		adminGroup.GET("/orders/export", orderHandler.AdminExport)
 		adminGroup.GET("/orders/:id", orderHandler.AdminDetail)
+		// 门店后台基础操作：接受/拒绝（占位实现）
+		adminGroup.POST("/orders/:id/accept", orderHandler.AdminAccept)
+		adminGroup.POST("/orders/:id/reject", orderHandler.AdminReject)
 
 		// 会员与合伙人配置
 		adminGroup.GET("/membership-packages", membershipAdminHandler.ListPackages)

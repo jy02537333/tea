@@ -1,3 +1,6 @@
+//go:build scripts_seed_admin
+// +build scripts_seed_admin
+
 package main
 
 import (

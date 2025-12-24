@@ -8,6 +8,12 @@
 
 This folder contains CI job templates to run the repository's `scripts/run_api_validation.sh` in CI and collect artifacts.
 
+## 上传策略说明
+
+- 所有管理员端的文件/图片上传逻辑（商品素材、品牌 LOGO、轮播图、协议富文本附件等）均默认开放使用，当前版本不再额外加安全白名单。
+- OSS Policy 与前端直传遵循单文件 10MB 的硬限制；前端/脚本需在上传前自行校验体积，超出即被 OSS 拒绝。
+- 该策略与 `doc/prd.md`、`doc/prd_sprints.md` 中的上传章节保持一致，如需收紧权限请在后端新增校验再同步文档。
+
 Provided files:
 
 - `.github/workflows/api-validation.yml` — GitHub Actions workflow that: checks out the repo, starts MySQL/Redis/RabbitMQ as services, builds and runs `tea-api`, seeds example SKU, runs `scripts/run_api_validation.sh`, and uploads `build-ci-logs` as artifacts.
@@ -64,6 +70,14 @@ TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
 - 登录入口：`POST /api/v1/auth/login`（返回 `token` 与用户基础信息）。
 - 用户聚合信息：`GET /api/v1/users/me/summary`（需 `Authorization: Bearer <token>`）。
 - 所有脚本与联调请以以上两条路径为准，避免与历史实现（如 `/api/v1/user/login`、`/api/v1/user/info`）混用导致 Token 校验不一致。
+
+### 前端复用约定（提现 remark 解析 + 聚合接口）
+
+- 统一聚合来源：前端统一消费 `GET /api/v1/users/me/summary`；历史接口仅兼容不推荐直接依赖。
+- 提现 remark 解析：统一复用管理端工具 [admin-fe/src/utils/withdraw.ts](admin-fe/src/utils/withdraw.ts) 提供的方法：
+  - 页面展示：`getRemarkField(remark, key)`；表格列：`...buildWithdrawRemarkColumns()`。
+  - 导出 CSV：`getRemarkFieldsForCsv(remark)`。
+  - 约束：不要在页面中散落 `JSON.parse(record.remark)`；如小程序端（wx-fe）需要类似解析，建议新增同名工具并保持方法签名一致以便迁移与复用。
 
 ## 统一编译与启动名称（避免多二进制混用）
 

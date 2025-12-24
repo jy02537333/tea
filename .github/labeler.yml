@@ -1,0 +1,27 @@
+area: admin-fe:
+  - admin-fe/**
+
+area: wx-fe:
+  - wx-fe/**
+
+frontend:
+  - admin-fe/**
+  - wx-fe/**
+
+area: tea-api:
+  - tea-api/**
+
+area: docs:
+  - doc/**
+  - docs/**
+  - README.md
+  - admin-fe/README.md
+  - wx-fe/README.md
+  - CHANGES_FRONTEND_EXAMPLES.md
+  - .github/PULL_REQUEST_TEMPLATE.md
+
+area: scripts:
+  - scripts/**
+
+area: ci:
+  - .github/**

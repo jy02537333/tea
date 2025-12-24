@@ -1,3 +1,6 @@
+//go:build scripts_seed_demo_user
+// +build scripts_seed_demo_user
+
 package main
 
 import (

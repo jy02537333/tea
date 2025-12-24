@@ -37,6 +37,11 @@ export async function getUserInfo() {
   return unwrap<User>(res);
 }
 
+export async function getUserSummary() {
+  const res = await api.get('/api/v1/users/me/summary');
+  return unwrap<User>(res);
+}
+
 export async function fetchCaptcha() {
   const res = await api.get('/api/v1/auth/captcha');
   return unwrap<CaptchaResponse>(res);

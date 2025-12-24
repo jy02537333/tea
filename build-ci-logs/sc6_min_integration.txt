@@ -1,0 +1,18 @@
+Sprint C / SC6 最小联调证据（管理端占位通路）
+
+分支: feat/sprint-c-split-plan
+时间: 2025-12-24
+
+已新增后端占位接口：
+- POST /api/v1/admin/orders/:id/accept  → 返回 { ok: true, status: "accepted" }
+- POST /api/v1/admin/orders/:id/reject  → 返回 { ok: true, status: "rejected" }
+- POST /api/v1/admin/print/tasks       → 返回 { data: { id, status: "queued", created_at, order_id, target, priority } }
+
+前端门店订单页（admin-fe/src/pages/StoreOrders.tsx）已接入按钮：接受 / 拒绝 / 打印任务。
+
+示例响应见同目录：
+- sc6_accept_resp.json
+- sc6_reject_resp.json
+- sc6_print_task_resp.json
+
+备注：以上为占位通路，仅记录日志与返回状态，不更改订单状态机；用于 CI 非阻塞校验与联调证明。
