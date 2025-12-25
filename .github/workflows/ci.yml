@@ -17,13 +17,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'pnpm'
 
-      - name: Setup PNPM
-        uses: pnpm/action-setup@v2
-        with:
-          version: 9
-          run_install: false
+      - name: Enable pnpm via corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@9 --activate
+          pnpm --version
 
       - name: Install wx-fe deps
         working-directory: wx-fe

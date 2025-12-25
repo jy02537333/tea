@@ -163,11 +163,44 @@ if [[ -n "$AUTH_HEADER" ]]; then
   set +e
   log "Attempting minimal cart/order flow with existing catalog"
   # Fetch products to pick one
-  products_json=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/products?page=1&size=10" || true)
+  products_json=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/products?page=1&limit=10" || true)
   echo "$products_json" > "$OUT_DIR/GET__api_v1_products_page_1_size_10.json"
   prod_id=$(echo "$products_json" | jq -r '.data[0].id // empty' 2>/dev/null || echo "")
 
-  if [[ -n "$prod_id" ]]; then
+  ensure_product() {
+    # Creates a minimal category + product if catalog is empty.
+    # Uses the same auth token (dev-login) because these endpoints are accessible in tests.
+    local cat_resp cat_id prod_resp new_prod_id
+
+    cat_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} \
+      -d '{"name":"CI自动分类"}' "$BASE_URL/api/v1/categories" || true)
+    cat_id=$(echo "$cat_resp" | jq -r '.data.id // empty' 2>/dev/null || echo "")
+
+    if [[ ! "$cat_id" =~ ^[0-9]+$ ]]; then
+      log "WARN: failed to create category for CI flow; response: ${cat_resp:0:200}"
+      return 1
+    fi
+
+    prod_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} \
+      -d "{\"category_id\":$cat_id,\"name\":\"CI自动商品\",\"price\":9.9,\"stock\":5,\"status\":1}" \
+      "$BASE_URL/api/v1/products" || true)
+    new_prod_id=$(echo "$prod_resp" | jq -r '.data.id // empty' 2>/dev/null || echo "")
+
+    if [[ ! "$new_prod_id" =~ ^[0-9]+$ ]]; then
+      log "WARN: failed to create product for CI flow; response: ${prod_resp:0:200}"
+      return 1
+    fi
+
+    echo "$new_prod_id"
+    return 0
+  }
+
+  if [[ ! "$prod_id" =~ ^[0-9]+$ ]]; then
+    log "No usable product found from list; attempting to create minimal category+product"
+    prod_id=$(ensure_product || echo "")
+  fi
+
+  if [[ "$prod_id" =~ ^[0-9]+$ ]]; then
     # Try product detail to get sku_id if present
     detail_json=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/products/$prod_id" || true)
     echo "$detail_json" > "$OUT_DIR/GET__api_v1_products_${prod_id}.json"
@@ -187,15 +220,41 @@ PY
       ok_combined=false
       if [[ "$pstatus" == "200" && "$pok" == "true" ]]; then ok_combined=true; fi
       record "product_detail" "GET" "$BASE_URL/products/$prod_id" "$pstatus" "$ok_combined" "sku_list=$pok"
-    sku_id=$(echo "$detail_json" | jq -r '.sku[0].id // .sku[0].sku_id // empty' 2>/dev/null || echo "")
     qty=1
-    add_body=$(jq -n --argjson pid "$prod_id" --argjson qty "$qty" --arg sku "$sku_id" '
-      {product_id: ($pid|tonumber), quantity: ($qty|tonumber)}
-      + ( ($sku|tostring|length)>0 and {sku_id: ($sku|tonumber)} or {} )
-    ')
+    add_body=$(PROD_ID="$prod_id" QTY="$qty" python3 - <<'PY'
+import json, os, sys
+pid = os.environ.get('PROD_ID', '').strip()
+qty = os.environ.get('QTY', '1').strip()
+try:
+  pid_i = int(pid)
+except Exception:
+  pid_i = 0
+try:
+  qty_i = int(qty)
+except Exception:
+  qty_i = 1
+print(json.dumps({"product_id": pid_i, "quantity": qty_i}, ensure_ascii=False))
+PY
+    )
+    if [[ -z "$add_body" || "$add_body" == "{}" ]]; then
+      add_body="{\"product_id\":$prod_id,\"quantity\":$qty}"
+    fi
     # POST /cart/items（更稳妥，避免部分框架对 /cart 与 /cart/ 的差异）
     add_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$add_body" "$BASE_URL/api/v1/cart/items" || true)
     echo "$add_resp" > "$OUT_DIR/POST__api_v1_cart_items.json"
+
+    # If add-to-cart failed, try creating a fresh product and retry once
+    astatus=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$add_body" "$BASE_URL/api/v1/cart/items" || true)
+    if [[ "$astatus" != "200" ]]; then
+      log "Add-to-cart failed (status=$astatus); creating a fresh product and retrying once"
+      new_prod=$(ensure_product || echo "")
+      if [[ "$new_prod" =~ ^[0-9]+$ ]]; then
+        prod_id="$new_prod"
+        add_body="{\"product_id\":$prod_id,\"quantity\":$qty}"
+        add_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$add_body" "$BASE_URL/api/v1/cart/items" || true)
+        echo "$add_resp" > "$OUT_DIR/POST__api_v1_cart_items.json"
+      fi
+    fi
     # GET /cart
     cart_resp=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/cart" || true)
     echo "$cart_resp" > "$OUT_DIR/GET__api_v1_cart.json"
@@ -215,8 +274,8 @@ PY
       ok_combined=false
       if [[ "$cstatus" == "200" && "$cok" == "true" ]]; then ok_combined=true; fi
       record "cart_items" "GET" "$BASE_URL/cart" "$cstatus" "$ok_combined" "items_list=$cok"
-    # Create order from cart（最小必需字段）: delivery_type=1(自取), order_type=1(商城)
-    order_body=$(jq -n '{delivery_type: 1, order_type: 1}')
+    # Create order from cart（最小必需字段）: delivery_type=1(自取)
+    order_body=$(jq -n '{delivery_type: 1}')
     create_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$order_body" "$BASE_URL/api/v1/orders/from-cart" || true)
     echo "$create_resp" > "$OUT_DIR/POST__api_v1_orders_from-cart.json"
     # CSV: order create returns id and status 200
@@ -226,7 +285,7 @@ PY
       if [[ ("$ostatus" == "200" || "$ostatus" == "201") && -n "$oid" ]]; then ok_combined=true; fi
       record "order_create" "POST" "$BASE_URL/api/v1/orders/from-cart" "$ostatus" "$ok_combined" "order_id=${oid:-}"
     # Brief summary
-    log "Cart+Order minimal flow attempted (product=$prod_id, sku=${sku_id:-})"
+    log "Cart+Order minimal flow attempted (product=$prod_id)"
 
       # If order created, fetch order detail and generate evidence files under build-ci-logs/
       if [[ -n "$oid" ]]; then
