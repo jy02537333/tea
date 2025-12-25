@@ -214,6 +214,13 @@ jobs:
         run: |
           bash scripts/run_api_validation.sh | tee build-ci-logs/api-validation-$(date +%Y%m%d%H%M%S).log
 
+      - name: Ensure build-ci-logs writable
+        if: steps.branchguard.outputs.disabled != 'true'
+        run: |
+          mkdir -p build-ci-logs
+          sudo chown -R "$(id -u)":"$(id -g)" build-ci-logs || true
+          chmod -R u+rwX build-ci-logs || true
+
       - name: Run stateful API validation
         if: steps.branchguard.outputs.disabled != 'true'
         env:

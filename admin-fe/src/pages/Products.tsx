@@ -2,7 +2,6 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { Button, Drawer, Form, Input, InputNumber, Popconfirm, Select, Space, Switch, Table, Tag, Upload, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadProps } from 'antd';
-import type { UploadRequestOption } from 'rc-upload/lib/interface';
 import { UploadOutlined } from '@ant-design/icons';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import ReactQuill from 'react-quill';
@@ -82,7 +81,7 @@ export default function ProductsPage() {
 
   const uploadProps: UploadProps = {
     showUploadList: false,
-    customRequest: async (options: UploadRequestOption) => {
+    customRequest: async (options) => {
       const { file, onError, onSuccess } = options;
       try {
         setImageUploading(true);
