@@ -108,8 +108,8 @@ jobs:
           SELECT 1, 'store-seed-1', '测试门店', '上海某路1号', '12345678', 31.2304, 121.4737, '09:00-21:00', 1
           WHERE NOT EXISTS (SELECT 1 FROM stores WHERE id=1);
 
-          INSERT INTO products (id, uid, category_id, name, description, price, status)
-          SELECT 1001, 'prod-seed-1001', 1, '测试商品', '自动化测试用商品', 19.99, 1
+          INSERT INTO products (id, uid, category_id, name, description, price, stock, status)
+          SELECT 1001, 'prod-seed-1001', 1, '测试商品', '自动化测试用商品', 19.99, 100, 1
           WHERE NOT EXISTS (SELECT 1 FROM products WHERE id=1001);
 
           INSERT INTO product_skus (id, uid, product_id, sku_name, price, stock, status)

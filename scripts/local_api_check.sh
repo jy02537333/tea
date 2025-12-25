@@ -166,12 +166,6 @@ record "stores_list" "GET" "$BASE_URL/api/v1/stores" "$slist" "$([[ "$slist" == 
 # 5) Minimal success path assertions: cart add -> cart get -> order create (conditional)
 if [[ -n "$AUTH_HEADER" ]]; then
   set +e
-  log "Attempting minimal cart/order flow with existing catalog"
-  # Fetch products to pick one
-  products_json=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/products?page=1&limit=10" || true)
-  echo "$products_json" > "$OUT_DIR/GET__api_v1_products_page_1_size_10.json"
-  prod_id=$(echo "$products_json" | jq -r '.data[0].id // empty' 2>/dev/null || echo "")
-
   ensure_product() {
     # Creates a minimal category + product with stock, to ensure order can be created.
     local cat_resp cat_id prod_resp new_prod_id
@@ -196,18 +190,18 @@ if [[ -n "$AUTH_HEADER" ]]; then
     return 0
   }
 
-  if [[ ! "$prod_id" =~ ^[0-9]+$ ]]; then
-    log "No usable product found from list; creating one"
-    prod_id=$(ensure_product || echo "")
-  fi
-
+  log "Attempting minimal cart/order flow with a freshly created product"
+  prod_id=$(ensure_product || echo "")
   if [[ "$prod_id" =~ ^[0-9]+$ ]]; then
+    # Always start from a clean cart to avoid previous/seed items blocking order creation.
+    curl -sS -X DELETE ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/cart/clear" -o "$OUT_DIR/DELETE__api_v1_cart_clear.json" || true
+
     # Try product detail to get sku_id if present
     detail_json=$(curl -sS -X GET ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/products/$prod_id" || true)
     echo "$detail_json" > "$OUT_DIR/GET__api_v1_products_${prod_id}.json"
     # Record product detail CSV: status and sku list presence
       pstatus=$(curl -s -o /dev/null -w '%{http_code}' ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/products/$prod_id" || true)
-      pok=$(python3 - <<'PY'
+      pok=$(python3 - "$OUT_DIR/GET__api_v1_products_${prod_id}.json" <<'PY'
 import sys, json
 path=sys.argv[1]
 try:
@@ -217,7 +211,7 @@ try:
 except Exception:
   print('false')
 PY
-      "$OUT_DIR/GET__api_v1_products_${prod_id}.json")
+      )
       ok_combined=false
       if [[ "$pstatus" == "200" && "$pok" == "true" ]]; then ok_combined=true; fi
       record "product_detail" "GET" "$BASE_URL/products/$prod_id" "$pstatus" "$ok_combined" "sku_list=$pok"
@@ -248,7 +242,7 @@ PY
     echo "$cart_resp" > "$OUT_DIR/GET__api_v1_cart.json"
     # CSV: cart items is list and status 200
       cstatus=$(curl -s -o /dev/null -w '%{http_code}' ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/cart" || true)
-      cok=$(python3 - <<'PY'
+      cok=$(python3 - "$OUT_DIR/GET__api_v1_cart.json" <<'PY'
 import sys, json
 path=sys.argv[1]
 try:
@@ -258,7 +252,7 @@ try:
 except Exception:
   print('false')
 PY
-      "$OUT_DIR/GET__api_v1_cart.json")
+      )
       ok_combined=false
       if [[ "$cstatus" == "200" && "$cok" == "true" ]]; then ok_combined=true; fi
       record "cart_items" "GET" "$BASE_URL/cart" "$cstatus" "$ok_combined" "items_list=$cok"
@@ -276,6 +270,7 @@ PY
         new_prod=$(ensure_product || echo "")
         if [[ "$new_prod" =~ ^[0-9]+$ ]]; then
           prod_id="$new_prod"
+          curl -sS -X DELETE ${AUTH_HEADER:+-H "$AUTH_HEADER"} "$BASE_URL/api/v1/cart/clear" -o "$OUT_DIR/DELETE__api_v1_cart_clear_retry.json" || true
           add_body="{\"product_id\":$prod_id,\"quantity\":$qty}"
           add_resp=$(curl -sS -X POST -H 'Content-Type: application/json' ${AUTH_HEADER:+-H "$AUTH_HEADER"} -d "$add_body" "$BASE_URL/api/v1/cart/items" || true)
           echo "$add_resp" > "$OUT_DIR/POST__api_v1_cart_items_retry.json"
@@ -413,7 +408,7 @@ except Exception as e:
 PY
   "$OUT_DIR/GET__api_v1_stores_${store_id}.json"
   # Record into CSV: ok if status==200 and menus is list
-    ok=$(python3 - <<'PY'
+    ok=$(python3 - "$OUT_DIR/GET__api_v1_stores_${store_id}.json" <<'PY'
 import sys, json
 path=sys.argv[1]
 try:
@@ -423,7 +418,7 @@ try:
 except Exception:
   print('false')
 PY
-    "$OUT_DIR/GET__api_v1_stores_${store_id}.json")
+    )
     # ok requires both status 200 and menus list
     ok_combined=false
     if [[ "$status" == "200" && "$ok" == "true" ]]; then ok_combined=true; fi
