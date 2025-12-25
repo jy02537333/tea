@@ -42,7 +42,7 @@ func main() {
 
 	var existing model.User
 	if err := database.GetDB().Where("username = ? OR phone = ?", username, phone).First(&existing).Error; err == nil && existing.ID != 0 {
-		fmt.Printf("admin user already exists: id=%d username=%s phone=%s role=%s\n", existing.ID, existing.Username, existing.Phone, existing.Role)
+		fmt.Printf("admin user already exists: id=%d username=%s phone=%s role=%s\n", existing.ID, derefString(existing.Username), existing.Phone, existing.Role)
 		return
 	}
 
@@ -64,5 +64,12 @@ func main() {
 	if err := database.GetDB().Create(&user).Error; err != nil {
 		log.Fatalf("create admin user: %v", err)
 	}
-	fmt.Printf("created admin user id=%d username=%s phone=%s role=%s\n", user.ID, user.Username, user.Phone, user.Role)
+	fmt.Printf("created admin user id=%d username=%s phone=%s role=%s\n", user.ID, derefString(user.Username), user.Phone, user.Role)
+}
+
+func derefString(val *string) string {
+	if val == nil {
+		return ""
+	}
+	return *val
 }

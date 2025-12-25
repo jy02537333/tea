@@ -20,8 +20,16 @@ func TestGenerate_Forbidden(t *testing.T) {
 	// 确保环境为非启用
 	config.Config.AI.Enabled = false
 	_ = os.Unsetenv("MODEL_API_KEY")
-	// 跳过数据库初始化以便单元测试在无外部依赖下运行
+	// 跳过数据库初始化以便单元测试在无外部依赖下运行，并在测试结束后恢复
+	prevSkip := os.Getenv("TEA_SKIP_DB_INIT")
 	_ = os.Setenv("TEA_SKIP_DB_INIT", "1")
+	t.Cleanup(func() {
+		if prevSkip == "" {
+			_ = os.Unsetenv("TEA_SKIP_DB_INIT")
+			return
+		}
+		_ = os.Setenv("TEA_SKIP_DB_INIT", prevSkip)
+	})
 
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
