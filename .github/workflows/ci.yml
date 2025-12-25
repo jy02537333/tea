@@ -57,7 +57,11 @@ jobs:
 
       - name: tea-api build
         working-directory: tea-api
-        run: go build ./...
+        run: |
+          # Exclude helper dirs that are not meant to be built as packages in CI.
+          # - tea-api/scripts: multiple standalone mains
+          # - tea-api/test: local integration helpers
+          go list ./... | grep -vE '^tea-api/(scripts|test)(/|$)' | xargs -r go build
 
       # 可选：如果你希望在未来跑 go 测试，请取消下面注释；当前仓库有历史集成测试失败
       # - name: tea-api test

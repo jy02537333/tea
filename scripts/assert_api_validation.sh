@@ -78,12 +78,13 @@ elif [ -f "$ORDER_SUMMARY_JSON" ]; then
 elif [ -n "$ORDER_DETAIL_ANY" ] && [ -f "$ORDER_DETAIL_ANY" ]; then
   OID=$(basename "$ORDER_DETAIL_ANY" | sed -E 's/order_detail_([0-9]+)\.json/\1/')
   ORDER_CHECK_OUT="$LOG_DIR/order_detail_${OID}_checked.json"
-  tmp_compute=$(jq '{id: .data.id,
-                     store_id: .data.store_id,
-                     total_amount: (.data.total_amount|tonumber),
-                     discount_amount: (.data.discount_amount|tonumber),
-                     pay_amount: (.data.pay_amount|tonumber),
-                     check: ((.data.pay_amount|tonumber) == ((.data.total_amount|tonumber) - (.data.discount_amount|tonumber))) }' "$ORDER_DETAIL_ANY")
+  # Evidence JSON may have order fields under .data (older shape) or .data.order (newer shape).
+  tmp_compute=$(jq '{id: (.data.id // .data.order.id),
+                     store_id: (.data.store_id // .data.order.store_id),
+                     total_amount: ((.data.total_amount // .data.order.total_amount)|tonumber),
+                     discount_amount: ((.data.discount_amount // .data.order.discount_amount)|tonumber),
+                     pay_amount: ((.data.pay_amount // .data.order.pay_amount)|tonumber),
+                     check: (((.data.pay_amount // .data.order.pay_amount)|tonumber) == (((.data.total_amount // .data.order.total_amount)|tonumber) - ((.data.discount_amount // .data.order.discount_amount)|tonumber))) }' "$ORDER_DETAIL_ANY")
   echo "$tmp_compute" > "$ORDER_CHECK_OUT" || true
   if echo "$tmp_compute" | jq -e '.check==true' >/dev/null 2>&1; then
     echo "Amount check passed via $ORDER_DETAIL_ANY (computed -> $ORDER_CHECK_OUT)"
