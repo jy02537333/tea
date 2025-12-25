@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -171,24 +172,33 @@ func Test_PaymentCallback_Success(t *testing.T) {
 	resp6.Body.Close()
 
 	// 7) verify order status paid
-	resp7, err := http.Get(fmt.Sprintf(ts.URL+"/api/v1/orders/%d", orderResp.Data.ID))
+	req, _ = http.NewRequest("GET", fmt.Sprintf(ts.URL+"/api/v1/orders/%d", orderResp.Data.ID), nil)
+	req.Header.Set("Authorization", auth)
+	resp7, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("get order detail err: %v", err)
+	}
+	defer resp7.Body.Close()
+	if resp7.StatusCode != 200 {
+		t.Fatalf("order detail status: %d", resp7.StatusCode)
 	}
 	var od struct {
 		Code int
 		Data struct {
-			Status    int `json:"status"`
-			PayStatus int `json:"pay_status"`
-		}
+			Order struct {
+				Status    int `json:"status"`
+				PayStatus int `json:"pay_status"`
+			} `json:"order"`
+		} `json:"data"`
 	}
-	json.NewDecoder(resp7.Body).Decode(&od)
-	resp7.Body.Close()
+	if err := json.NewDecoder(resp7.Body).Decode(&od); err != nil {
+		t.Fatalf("decode order detail: %v", err)
+	}
 	if od.Code != 0 {
 		t.Fatalf("order detail code=%d", od.Code)
 	}
-	if !(od.Data.Status == 2 && od.Data.PayStatus == 2) {
-		t.Fatalf("order not marked paid: status=%d pay_status=%d", od.Data.Status, od.Data.PayStatus)
+	if !(od.Data.Order.Status == 2 && od.Data.Order.PayStatus == 2) {
+		t.Fatalf("order not marked paid: status=%d pay_status=%d", od.Data.Order.Status, od.Data.Order.PayStatus)
 	}
 }
 
@@ -288,10 +298,16 @@ func Test_PaymentCallback_SignatureFailure(t *testing.T) {
 	resp5, _ := http.DefaultClient.Do(req)
 	var uresp struct {
 		Code int
-		Data struct{ PaymentNo string }
+		Data struct {
+			PaymentNo string `json:"payment_no"`
+		}
+		Message string
 	}
 	json.NewDecoder(resp5.Body).Decode(&uresp)
 	resp5.Body.Close()
+	if uresp.Code != 0 || uresp.Data.PaymentNo == "" {
+		t.Fatalf("unified-order failed: code=%d msg=%s", uresp.Code, uresp.Message)
+	}
 	if uresp.Data.PaymentNo == "" {
 		t.Fatalf("unified-order failed")
 	}
@@ -315,17 +331,29 @@ func Test_PaymentCallback_SignatureFailure(t *testing.T) {
 	resp6.Body.Close()
 
 	// verify order remains unpaid
-	resp7, _ := http.Get(fmt.Sprintf(ts.URL+"/api/v1/orders/%d", orderResp.Data.ID))
+	req, _ = http.NewRequest("GET", fmt.Sprintf(ts.URL+"/api/v1/orders/%d", orderResp.Data.ID), nil)
+	req.Header.Set("Authorization", auth)
+	resp7, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("get order detail err: %v", err)
+	}
+	defer resp7.Body.Close()
+	if resp7.StatusCode != 200 {
+		t.Fatalf("order detail status: %d", resp7.StatusCode)
+	}
 	var od struct {
 		Code int
 		Data struct {
-			Status    int
-			PayStatus int
-		}
+			Order struct {
+				Status    int `json:"status"`
+				PayStatus int `json:"pay_status"`
+			} `json:"order"`
+		} `json:"data"`
 	}
-	json.NewDecoder(resp7.Body).Decode(&od)
-	resp7.Body.Close()
-	if od.Data.PayStatus == 2 {
+	if err := json.NewDecoder(resp7.Body).Decode(&od); err != nil {
+		t.Fatalf("decode order detail: %v", err)
+	}
+	if od.Data.Order.PayStatus == 2 {
 		t.Fatalf("order should remain unpaid when signature invalid")
 	}
 }
@@ -410,17 +438,28 @@ func Test_PaymentCallback_IdempotentSuccess(t *testing.T) {
 	resp5, _ := http.DefaultClient.Do(req)
 	var uresp struct {
 		Code int
-		Data struct{ PaymentNo string }
+		Data struct {
+			PaymentNo string `json:"payment_no"`
+		}
+		Message string
 	}
-	json.NewDecoder(resp5.Body).Decode(&uresp)
+	if err := json.NewDecoder(resp5.Body).Decode(&uresp); err != nil {
+		resp5.Body.Close()
+		t.Fatalf("decode unified-order resp: %v", err)
+	}
 	resp5.Body.Close()
+	if uresp.Code != 0 || uresp.Data.PaymentNo == "" {
+		t.Fatalf("unified-order failed: code=%d msg=%s", uresp.Code, uresp.Message)
+	}
 
 	// first SUCCESS callback in test_mode
 	cbReq := map[string]any{"payment_no": uresp.Data.PaymentNo, "transaction_id": "txn_idem_1", "trade_state": "SUCCESS", "sign": "", "test_mode": true}
 	cbb, _ := json.Marshal(cbReq)
 	resp6, _ := http.Post(ts.URL+"/api/v1/payments/callback", "application/json", bytes.NewReader(cbb))
 	if resp6.StatusCode != 200 {
-		t.Fatalf("first callback expected 200, got %d", resp6.StatusCode)
+		body, _ := io.ReadAll(resp6.Body)
+		resp6.Body.Close()
+		t.Fatalf("first callback expected 200, got %d body=%s", resp6.StatusCode, string(body))
 	}
 	resp6.Body.Close()
 
@@ -432,17 +471,32 @@ func Test_PaymentCallback_IdempotentSuccess(t *testing.T) {
 	resp7.Body.Close()
 
 	// verify order stays paid once
-	r2, _ := http.Get(fmt.Sprintf(ts.URL+"/api/v1/orders/%d", orderResp.Data.ID))
+	req, _ = http.NewRequest("GET", fmt.Sprintf(ts.URL+"/api/v1/orders/%d", orderResp.Data.ID), nil)
+	req.Header.Set("Authorization", auth)
+	r2, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("get order detail err: %v", err)
+	}
+	defer r2.Body.Close()
+	if r2.StatusCode != 200 {
+		t.Fatalf("order detail status: %d", r2.StatusCode)
+	}
 	var od struct {
 		Code int
 		Data struct {
-			Status    int
-			PayStatus int
-		}
+			Order struct {
+				Status    int `json:"status"`
+				PayStatus int `json:"pay_status"`
+			} `json:"order"`
+		} `json:"data"`
 	}
-	json.NewDecoder(r2.Body).Decode(&od)
-	r2.Body.Close()
-	if !(od.Data.Status == 2 && od.Data.PayStatus == 2) {
-		t.Fatalf("order not paid after idempotent callbacks: status=%d pay_status=%d", od.Data.Status, od.Data.PayStatus)
+	if err := json.NewDecoder(r2.Body).Decode(&od); err != nil {
+		t.Fatalf("decode order detail: %v", err)
+	}
+	if od.Code != 0 {
+		t.Fatalf("order detail code=%d", od.Code)
+	}
+	if !(od.Data.Order.Status == 2 && od.Data.Order.PayStatus == 2) {
+		t.Fatalf("order not paid after idempotent callbacks: status=%d pay_status=%d", od.Data.Order.Status, od.Data.Order.PayStatus)
 	}
 }
