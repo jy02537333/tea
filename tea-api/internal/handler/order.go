@@ -471,6 +471,20 @@ func (h *OrderHandler) AdminRefund(c *gin.Context) {
 		response.Error(c, http.StatusBadRequest, err.Error())
 		return
 	}
+
+	// 退款立即完成后，尝试按订单回滚未提现佣金（与 Confirm 路径保持一致）
+	var opIDPtr *uint
+	if operatorID != 0 {
+		opIDPtr = &operatorID
+	}
+	rollbackNote := fmt.Sprintf("order refund immediate: %s", req.Reason)
+	if _, err := commission.ReverseOrderCommissions(uint(oid), opIDPtr, rollbackNote); err != nil {
+		_ = writeOpLog(c, operatorID, "finance", "commission.rollback_failed", map[string]any{
+			"order_id": uint(oid),
+			"reason":   req.Reason,
+			"error":    err.Error(),
+		})
+	}
 	var after model.Order
 	_ = database.GetDB().First(&after, uint(oid)).Error
 	_ = writeOpLog(c, operatorID, "finance", "order.refund", map[string]any{

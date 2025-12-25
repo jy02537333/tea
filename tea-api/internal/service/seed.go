@@ -26,6 +26,9 @@ func SeedRBAC(db *gorm.DB, opts SeedOptions) error {
 		{BaseModel: model.BaseModel{UID: "perm-accrual-summary"}, Name: "accrual:summary", Module: "finance", Action: "summary", Resource: "accrual"},
 		{BaseModel: model.BaseModel{UID: "perm-rbac-view"}, Name: "rbac:view", Module: "rbac", Action: "view", Resource: "*"},
 		{BaseModel: model.BaseModel{UID: "perm-rbac-manage"}, Name: "rbac:manage", Module: "rbac", Action: "manage", Resource: "*"},
+		// Sprint C/SC6a: granular order permissions for admin routes
+		{BaseModel: model.BaseModel{UID: "perm-order-accept"}, Name: "order:accept", Module: "order", Action: "accept", Resource: "*"},
+		{BaseModel: model.BaseModel{UID: "perm-order-reject"}, Name: "order:reject", Module: "order", Action: "reject", Resource: "*"},
 	}
 	for i := range perms {
 		_ = db.Where("name = ?", perms[i].Name).FirstOrCreate(&perms[i]).Error
@@ -48,6 +51,22 @@ func SeedRBAC(db *gorm.DB, opts SeedOptions) error {
 	var rpSum model.RolePermission
 	_ = db.Where("role_id = ? AND permission_id = ?", role.ID, pSum.ID).
 		FirstOrCreate(&rpSum, &model.RolePermission{BaseModel: model.BaseModel{UID: "rp-auditor-accrual-summary"}, RoleID: role.ID, PermissionID: pSum.ID}).Error
+
+	// ensure admin role exists and grant order accept/reject
+	adminRole := model.Role{BaseModel: model.BaseModel{UID: "role-admin"}, Name: "admin", DisplayName: "管理员"}
+	_ = db.Where("name = ?", adminRole.Name).FirstOrCreate(&adminRole).Error
+	// grant order:accept
+	var pAccept model.Permission
+	_ = db.Where("name = ?", "order:accept").First(&pAccept).Error
+	var rpAccept model.RolePermission
+	_ = db.Where("role_id = ? AND permission_id = ?", adminRole.ID, pAccept.ID).
+		FirstOrCreate(&rpAccept, &model.RolePermission{BaseModel: model.BaseModel{UID: "rp-admin-order-accept"}, RoleID: adminRole.ID, PermissionID: pAccept.ID}).Error
+	// grant order:reject
+	var pReject model.Permission
+	_ = db.Where("name = ?", "order:reject").First(&pReject).Error
+	var rpReject model.RolePermission
+	_ = db.Where("role_id = ? AND permission_id = ?", adminRole.ID, pReject.ID).
+		FirstOrCreate(&rpReject, &model.RolePermission{BaseModel: model.BaseModel{UID: "rp-admin-order-reject"}, RoleID: adminRole.ID, PermissionID: pReject.ID}).Error
 
 	// optional: assign auditor to a user by openid
 	if opts.AssignOpenID != "" {

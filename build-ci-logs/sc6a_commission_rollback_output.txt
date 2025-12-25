@@ -1,0 +1,4 @@
+=== RUN   TestReverseOrderCommissions
+--- PASS: TestReverseOrderCommissions (0.00s)
+PASS
+ok  	tea-api/internal/service/commission	0.010s

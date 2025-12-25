@@ -34,7 +34,13 @@ func (f *fakeOrderService) ListOrders(userID uint, status int, page, limit int, 
 func (f *fakeOrderService) GetOrder(userID, orderID uint) (*model.Order, []model.OrderItem, error) {
 	return nil, nil, nil
 }
-func (f *fakeOrderService) AdminListOrders(status int, page, limit int, storeID uint) ([]model.Order, int64, error) {
+func (f *fakeOrderService) AdminListOrders(status int, page, limit int, storeID uint, startTime, endTime *time.Time) ([]model.Order, int64, error) {
+	f.lastStatus = status
+	f.lastPage = page
+	f.lastLimit = limit
+	f.lastStoreID = storeID
+	f.lastStart = startTime
+	f.lastEnd = endTime
 	return nil, 0, nil
 }
 func (f *fakeOrderService) GetOrderAdmin(orderID uint) (*model.Order, []model.OrderItem, error) {
