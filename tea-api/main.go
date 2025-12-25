@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	repo "tea-api/internal/repo"
 	svc "tea-api/internal/service"
 	"time"
@@ -37,6 +38,8 @@ func main() {
 	}
 	defer logx.Sync()
 
+	applyServerPortOverrideFromEnv()
+
 	// 在初始化数据库之前打印关键运行配置（JWT 与路由占位）
 	cfg := jwtcfg.Get()
 	secret := cfg.Secret
@@ -64,11 +67,22 @@ func main() {
 	// 启动佣金解冻调度（若启用）
 	scheduler.StartCommissionReleaseScheduler()
 
-	fmt.Println("茶心阁小程序API服务启动成功!")
-	fmt.Printf("服务运行在: %s\n", config.Config.Server.Port)
+	fmt.Println("茶心阁小程序API服务初始化完成")
+	fmt.Printf("服务准备监听: %s\n", config.Config.Server.Port)
 
 	// 启动HTTP服务器
 	startServer()
+}
+
+func applyServerPortOverrideFromEnv() {
+	// Convenience for local/dev/CI: allow overriding port without editing YAML.
+	// Accept values like "9292" or ":9292".
+	if raw := strings.TrimSpace(os.Getenv("TEA_SERVER_PORT")); raw != "" {
+		p := strings.TrimPrefix(raw, ":")
+		if p != "" {
+			config.Config.Server.Port = ":" + p
+		}
+	}
 }
 
 func startServer() {
@@ -98,6 +112,9 @@ func startServer() {
 	fmt.Printf("服务器启动在 %s\n", server.Addr)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		logx.Get().Error("服务器启动失败", zap.Error(err))
+		if strings.Contains(err.Error(), "address already in use") {
+			log.Fatalf("服务器启动失败: %v (提示: 端口被占用，可设置 TEA_SERVER_PORT=9393 或使用 ./run-tea-api.sh 自动释放端口)", err)
+		}
 		log.Fatalf("服务器启动失败: %v", err)
 	}
 }
