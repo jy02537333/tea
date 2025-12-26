@@ -81,6 +81,17 @@ func AuthMiddleware() gin.HandlerFunc {
 			}
 		}
 
+		// 黑/白名单与停用状态拦截（白名单可豁免）
+		if v, ok := c.Get("user_id"); ok {
+			if uid, ok2 := v.(uint); ok2 {
+				if blocked, msg := IsUserBlocked(uid); blocked {
+					utils.Forbidden(c, msg)
+					c.Abort()
+					return
+				}
+			}
+		}
+
 		c.Next()
 	}
 }

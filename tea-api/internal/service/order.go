@@ -462,6 +462,31 @@ func (s *OrderService) AdminCancelOrder(orderID uint, reason string) error {
 	return nil
 }
 
+// AdminAdjustPayAmount 管理端调价（需权限）
+// 规则：仅允许对待付款(Status=1)且未支付(PayStatus=1)的订单修改 PayAmount。
+func (s *OrderService) AdminAdjustPayAmount(orderID uint, newPayAmount decimal.Decimal, reason string) error {
+	_ = reason
+ 	if newPayAmount.LessThan(decimal.Zero) {
+		return errors.New("金额不能为负")
+	}
+
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var order model.Order
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&order, orderID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errors.New("订单不存在")
+			}
+			return err
+		}
+		if order.Status != 1 || order.PayStatus != 1 {
+			return errors.New("仅支持未支付的待付款订单调价")
+		}
+
+		order.PayAmount = newPayAmount
+		return tx.Save(&order).Error
+	})
+}
+
 func generateOrderNo(prefix string) string {
 	// 简单生成：前缀 + 时间戳 + 随机（取 UID 的前缀）
 	ts := time.Now().Format("20060102150405")

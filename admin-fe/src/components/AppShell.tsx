@@ -9,6 +9,7 @@ import {
   TeamOutlined,
   SafetyCertificateOutlined,
   ProfileOutlined,
+  SettingOutlined,
   AccountBookOutlined,
   GiftOutlined,
   FireOutlined,
@@ -48,6 +49,11 @@ export function AppShell({ children }: PropsWithChildren) {
   else if (location.pathname.startsWith('/finance-summary')) selectedKey = '/finance-summary';
   else if (location.pathname.startsWith('/finance-records')) selectedKey = '/finance-records';
   else if (location.pathname.startsWith('/membership-config')) selectedKey = '/membership-config';
+  else if (location.pathname.startsWith('/partners')) selectedKey = '/partners';
+  else if (location.pathname.startsWith('/banners')) selectedKey = '/banners';
+  else if (location.pathname.startsWith('/recharge')) selectedKey = '/recharge';
+  else if (location.pathname.startsWith('/logs')) selectedKey = '/logs';
+  else if (location.pathname.startsWith('/system-settings')) selectedKey = '/system-settings';
   else if (location.pathname === '/' || location.pathname === '') selectedKey = '/dashboard';
 
   return (
@@ -80,6 +86,12 @@ export function AppShell({ children }: PropsWithChildren) {
           <Menu.Item key="/rbac" icon={<SafetyCertificateOutlined />}>
             <Link to="/rbac">RBAC 权限</Link>
           </Menu.Item>
+          <Menu.Item key="/logs" icon={<ProfileOutlined />}>
+            <Link to="/logs">日志</Link>
+          </Menu.Item>
+          <Menu.Item key="/system-settings" icon={<SettingOutlined />}>
+            <Link to="/system-settings">系统设置</Link>
+          </Menu.Item>
           <Menu.Item key="/products" icon={<ShopOutlined />}>
             <Link to="/products">商品管理</Link>
           </Menu.Item>
@@ -101,8 +113,20 @@ export function AppShell({ children }: PropsWithChildren) {
           <Menu.Item key="/store-activities" icon={<FireOutlined />}>
             <Link to="/store-activities">门店活动</Link>
           </Menu.Item>
+          <Menu.Item key="/banners" icon={<TagsOutlined />}>
+            <Link to="/banners">广告管理</Link>
+          </Menu.Item>
+          <Menu.Item key="/recharge" icon={<AccountBookOutlined />}>
+            <Link to="/recharge">充值管理</Link>
+          </Menu.Item>
           <Menu.Item key="/membership-config" icon={<CustomerServiceOutlined />}>
             <Link to="/membership-config">会员配置</Link>
+          </Menu.Item>
+          <Menu.Item key="/partners" icon={<TeamOutlined />}>
+            <Link to="/partners">合伙人管理</Link>
+          </Menu.Item>
+          <Menu.Item key="/partner-withdrawals" icon={<AccountBookOutlined />}>
+            <Link to="/partner-withdrawals">合伙人提现</Link>
           </Menu.Item>
           <Menu.Item key="/tickets" icon={<CustomerServiceOutlined />}>
             <Link to="/tickets">客服工单</Link>
