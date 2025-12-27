@@ -106,6 +106,16 @@ func (s *UserService) Login(code string) (*LoginResponse, error) {
 		}
 	}
 
+	// 黑/白名单与停用状态拦截（白名单可豁免）
+	if !user.IsWhitelisted {
+		if user.Status == 2 {
+			return nil, errors.New("账号已停用")
+		}
+		if user.IsBlacklisted {
+			return nil, errors.New("账号已被加入黑名单")
+		}
+	}
+
 	// 更新最后登录时间
 	now := time.Now()
 	s.db.Model(&user).Updates(map[string]interface{}{
@@ -184,6 +194,16 @@ func (s *UserService) LoginByOpenID(openID string) (*LoginResponse, error) {
 		}
 	}
 
+	// 黑/白名单与停用状态拦截（白名单可豁免）
+	if !user.IsWhitelisted {
+		if user.Status == 2 {
+			return nil, errors.New("账号已停用")
+		}
+		if user.IsBlacklisted {
+			return nil, errors.New("账号已被加入黑名单")
+		}
+	}
+
 	// 更新时间
 	now := time.Now()
 	s.db.Model(&user).Updates(map[string]interface{}{"last_login_at": &now})
@@ -229,6 +249,16 @@ func (s *UserService) LoginByUsername(username, password string) (*LoginResponse
 		return nil, errors.New("invalid username or password")
 	}
 
+	// 黑/白名单与停用状态拦截（白名单可豁免）
+	if !user.IsWhitelisted {
+		if user.Status == 2 {
+			return nil, errors.New("账号已停用")
+		}
+		if user.IsBlacklisted {
+			return nil, errors.New("账号已被加入黑名单")
+		}
+	}
+
 	// 更新最后登录时间
 	now := time.Now()
 	s.db.Model(&user).Updates(map[string]interface{}{"last_login_at": &now})
@@ -239,19 +269,29 @@ func (s *UserService) LoginByUsername(username, password string) (*LoginResponse
 		return nil, err
 	}
 
-	userInfo := UserInfo{
-		ID:       user.ID,
-		UID:      user.UID,
-		OpenID:   user.OpenID,
-		Nickname: user.Nickname,
-		Avatar:   user.Avatar,
-		Phone:    user.Phone,
-		Gender:   user.Gender,
-		Balance:  toFloat(user.Balance),
-		Points:   user.Points,
-	}
+	return &LoginResponse{Token: token, UserInfo: UserInfo{
+		ID:                      user.ID,
+		UID:                     user.UID,
+		OpenID:                  user.OpenID,
+		Nickname:                user.Nickname,
+		Avatar:                  user.Avatar,
+		Phone:                   user.Phone,
+		Gender:                  user.Gender,
+		Balance:                 toFloat(user.Balance),
+		Points:                  user.Points,
+		DefaultAddress:          user.DefaultAddress,
+		DefaultAddressUpdatedAt: user.DefaultAddressUpdatedAt,
+	}}, nil
 
-	return &LoginResponse{Token: token, UserInfo: userInfo}, nil
+}
+
+// GetUserModel returns raw user model (admin use) for consistent JSON shape.
+func (s *UserService) GetUserModel(userID uint) (*model.User, error) {
+	var user model.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
 
 // GetUserInfo 获取用户信息

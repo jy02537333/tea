@@ -126,6 +126,8 @@ func autoMigrate() error {
 		// 佣金与提现相关
 		&model.Commission{},
 		&model.CommissionTransaction{},
+		&model.Wallet{},
+		&model.WalletTransaction{},
 		&model.MembershipPackage{},
 		&model.PartnerLevel{},
 		&model.UserBankAccount{},
@@ -133,6 +135,7 @@ func autoMigrate() error {
 
 		// 提现管理
 		&model.WithdrawRecord{},
+		&model.WithdrawalRequest{},
 		&model.WechatTransferRecord{},
 	)
 }

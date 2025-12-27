@@ -23,10 +23,15 @@ func SetupRouter() *gin.Engine {
 	accrualHandler := handler.NewAccrualHandler()
 	rbacHandler := handler.NewRBACHandler()
 	logsHandler := handler.NewLogsHandler()
+	systemConfigHandler := handler.NewSystemConfigHandler()
+	rechargeAdminHandler := handler.NewRechargeAdminHandler()
+	rechargeConfigHandler := handler.NewRechargeConfigHandler()
+	bannerHandler := handler.NewBannerHandler()
 	refundHandler := handler.NewRefundHandler()
 	financeReportHandler := handler.NewFinanceReportHandler()
 	commissionAdminHandler := handler.NewCommissionAdminHandler()
 	membershipAdminHandler := handler.NewMembershipAdminHandler()
+	partnerAdminHandler := handler.NewPartnerAdminHandler()
 	membershipHandler := handler.NewMembershipHandler()
 	dashboardHandler := handler.NewDashboardHandler()
 	productHandler := handler.NewProductHandler(
@@ -44,6 +49,7 @@ func SetupRouter() *gin.Engine {
 	uploadHandler := handler.NewUploadHandler()
 	activityHandler := handler.NewActivityHandler()
 	ticketHandler := handler.NewTicketHandler()
+	ticketUserHandler := handler.NewTicketUserHandler()
 
 	// API路由组
 	api := r.Group("/api/v1")
@@ -74,6 +80,9 @@ func SetupRouter() *gin.Engine {
 	// Sprint B: 优惠券模板与领取
 	api.GET("/coupons/templates", middleware.AuthJWT(), handler.ListCouponTemplates)
 	api.POST("/coupons/claim", middleware.AuthJWT(), handler.ClaimCouponFromTemplate)
+
+	// 用户侧工单（小程序意见反馈/订单投诉）
+	api.POST("/tickets", middleware.AuthMiddleware(), ticketUserHandler.Create)
 
 	// 会员相关（小程序/用户侧只读接口）
 	api.GET("/membership-packages", middleware.AuthMiddleware(), membershipHandler.ListPackages)
@@ -116,9 +125,11 @@ func SetupRouter() *gin.Engine {
 		})
 
 		adminGroup.GET("/users", userHandler.AdminListUsers)
-		adminGroup.POST("/users", userHandler.AdminCreateUser)
-		adminGroup.PUT("/users/:id", userHandler.AdminUpdateUser)
-		adminGroup.POST("/users/:id/reset-password", userHandler.AdminResetPassword)
+		adminGroup.POST("/users", middleware.OperationLogMiddleware(), userHandler.AdminCreateUser)
+		adminGroup.PUT("/users/:id", middleware.OperationLogMiddleware(), userHandler.AdminUpdateUser)
+		adminGroup.POST("/users/:id/reset-password", middleware.OperationLogMiddleware(), userHandler.AdminResetPassword)
+		adminGroup.POST("/users/:id/blacklist", middleware.OperationLogMiddleware(), userHandler.AdminSetBlacklist)
+		adminGroup.POST("/users/:id/whitelist", middleware.OperationLogMiddleware(), userHandler.AdminSetWhitelist)
 		adminGroup.POST("/uploads", uploadHandler.UploadMedia)
 		// 门店订单统计
 		adminGroup.GET("/stores/:id/orders/stats", storeHandler.OrderStats)
@@ -150,6 +161,10 @@ func SetupRouter() *gin.Engine {
 		adminGroup.POST("/partner-levels", membershipAdminHandler.CreatePartnerLevel)
 		adminGroup.PUT("/partner-levels/:id", membershipAdminHandler.UpdatePartnerLevel)
 		adminGroup.DELETE("/partner-levels/:id", membershipAdminHandler.DeletePartnerLevel)
+
+		// 合伙人管理（管理员视图）
+		adminGroup.GET("/partners", middleware.RequirePermission("user:partner:view"), partnerAdminHandler.ListPartners)
+		adminGroup.GET("/partners/:id/commissions", middleware.RequirePermission("user:partner:view"), partnerAdminHandler.ListCommissions)
 
 		// 提现申请审批（管理员）别名路径，复用 withdraws 处理器
 		adminGroup.GET("/withdrawals", withdrawAdminHandler.List)
@@ -218,6 +233,42 @@ func SetupRouter() *gin.Engine {
 		logsGroup.GET("/operations/export", middleware.RequirePermission("rbac:view"), logsHandler.ExportOperationLogs)
 		logsGroup.GET("/access", middleware.RequirePermission("rbac:view"), logsHandler.ListAccessLogs)
 		logsGroup.GET("/access/export", middleware.RequirePermission("rbac:view"), logsHandler.ExportAccessLogs)
+	}
+
+	// 系统配置（基础配置 / 内容管理）
+	systemGroup := api.Group("/admin/system")
+	systemGroup.Use(middleware.AuthMiddleware())
+	systemGroup.Use(middleware.OperationLogMiddleware())
+	{
+		systemGroup.GET("/configs", middleware.RequirePermission("system:config:view"), systemConfigHandler.List)
+		systemGroup.PUT("/configs", middleware.RequirePermission("system:config:manage"), systemConfigHandler.UpsertMany)
+	}
+
+	// 营销：广告/轮播图管理（Banner）
+	bannersGroup := api.Group("/admin/banners")
+	bannersGroup.Use(middleware.AuthMiddleware())
+	{
+		bannersGroup.GET("", middleware.RequirePermission("marketing:banner:view"), bannerHandler.AdminListBanners)
+		bannersGroup.Use(middleware.OperationLogMiddleware())
+		bannersGroup.POST("", middleware.RequirePermission("marketing:banner:manage"), bannerHandler.AdminCreateBanner)
+		bannersGroup.PUT("/:id", middleware.RequirePermission("marketing:banner:manage"), bannerHandler.AdminUpdateBanner)
+		bannersGroup.DELETE("/:id", middleware.RequirePermission("marketing:banner:manage"), bannerHandler.AdminDeleteBanner)
+	}
+
+	// 营销：充值管理与配置（钱包余额/冻结、人工加钱/扣钱、充值档位配置）
+	rechargeGroup := api.Group("/admin/recharge")
+	rechargeGroup.Use(middleware.AuthMiddleware())
+	{
+		rechargeGroup.GET("/configs", middleware.RequirePermission("marketing:recharge:view"), rechargeConfigHandler.List)
+		rechargeGroup.GET("/records", middleware.RequirePermission("marketing:recharge:view"), rechargeAdminHandler.ListRecords)
+		rechargeGroup.GET("/users/:id/wallet", middleware.RequirePermission("marketing:recharge:view"), rechargeAdminHandler.GetUserWallet)
+
+		rechargeGroup.Use(middleware.OperationLogMiddleware())
+		rechargeGroup.PUT("/configs", middleware.RequirePermission("marketing:recharge:manage"), rechargeConfigHandler.UpsertMany)
+		rechargeGroup.POST("/users/:id/freeze", middleware.RequirePermission("marketing:recharge:manage"), rechargeAdminHandler.Freeze)
+		rechargeGroup.POST("/users/:id/unfreeze", middleware.RequirePermission("marketing:recharge:manage"), rechargeAdminHandler.Unfreeze)
+		rechargeGroup.POST("/users/:id/credit", middleware.RequirePermission("marketing:recharge:manage"), rechargeAdminHandler.Credit)
+		rechargeGroup.POST("/users/:id/debit", middleware.RequirePermission("marketing:recharge:manage"), rechargeAdminHandler.Debit)
 	}
 
 	// 退款记录（只读列表与导出，按退款权限控制）
@@ -310,6 +361,7 @@ func SetupRouter() *gin.Engine {
 		orderGroup.POST("/:id/deliver", middleware.RequirePermission("order:deliver"), orderHandler.Deliver)
 		orderGroup.POST("/:id/complete", middleware.RequirePermission("order:complete"), orderHandler.Complete)
 		orderGroup.POST("/:id/admin-cancel", middleware.RequirePermission("order:cancel"), orderHandler.AdminCancel)
+		orderGroup.POST("/:id/adjust", middleware.RequirePermission("order:adjust"), orderHandler.AdminAdjustPayAmount)
 		orderGroup.POST("/:id/refund", middleware.RequirePermission("order:refund"), orderHandler.AdminRefund)
 		orderGroup.POST("/:id/refund/start", middleware.RequirePermission("order:refund"), orderHandler.AdminRefundStart)
 		orderGroup.POST("/:id/refund/confirm", middleware.RequirePermission("order:refund"), orderHandler.AdminRefundConfirm)

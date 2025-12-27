@@ -6,6 +6,8 @@ export interface AdminUser {
   phone?: string;
   role?: string;
   status?: number;
+  is_blacklisted?: boolean;
+  is_whitelisted?: boolean;
   created_at?: string;
 }
 
@@ -60,4 +62,20 @@ export async function resetAdminUserPassword(userId: number, newPassword: string
     new_password: newPassword,
   });
   return unwrap<{ message: string }>(res);
+}
+
+export async function setAdminUserBlacklist(userId: number, enabled: boolean, reason?: string) {
+  const res = await api.post(`/api/v1/admin/users/${userId}/blacklist`, {
+    enabled,
+    reason: reason ?? '',
+  });
+  return unwrap<AdminUser>(res);
+}
+
+export async function setAdminUserWhitelist(userId: number, enabled: boolean, reason?: string) {
+  const res = await api.post(`/api/v1/admin/users/${userId}/whitelist`, {
+    enabled,
+    reason: reason ?? '',
+  });
+  return unwrap<AdminUser>(res);
 }

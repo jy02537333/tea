@@ -33,6 +33,7 @@ type orderService interface {
 	AdminRefundOrder(orderID uint, reason string) error
 	AdminRefundStart(orderID uint, reason string) error
 	AdminRefundConfirm(orderID uint, reason string) error
+	AdminAdjustPayAmount(orderID uint, newPayAmount decimal.Decimal, reason string) error
 	AdminListStoreOrders(storeID uint, status int, page, limit int, startTime, endTime *time.Time, orderID uint) ([]model.Order, int64, error)
 }
 
@@ -553,6 +554,59 @@ func (h *OrderHandler) AdminRefundConfirm(c *gin.Context) {
 		"reason":   req.Reason,
 		"before":   map[string]any{"status": before.Status, "pay_status": before.PayStatus},
 		"after":    map[string]any{"status": after.Status, "pay_status": after.PayStatus},
+	})
+	response.Success(c, gin.H{"ok": true})
+}
+
+// AdminAdjustPayAmount 管理端调价（需权限）
+// POST /api/v1/orders/:id/adjust
+// 仅允许未支付待付款订单调价，避免影响已支付/退款对账逻辑。
+func (h *OrderHandler) AdminAdjustPayAmount(c *gin.Context) {
+	uidVal, _ := c.Get("user_id")
+	operatorID := uint(uidVal.(uint))
+
+	oid, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		response.BadRequest(c, "非法的订单ID")
+		return
+	}
+
+	var req struct {
+		NewPayAmount string `json:"new_pay_amount" binding:"required"`
+		Reason       string `json:"reason"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "参数错误")
+		return
+	}
+
+	newAmt, err := decimal.NewFromString(req.NewPayAmount)
+	if err != nil {
+		response.BadRequest(c, "金额格式错误")
+		return
+	}
+
+	var before model.Order
+	_ = database.GetDB().First(&before, uint(oid)).Error
+	if err := h.svc.AdminAdjustPayAmount(uint(oid), newAmt, req.Reason); err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	var after model.Order
+	_ = database.GetDB().First(&after, uint(oid)).Error
+	_ = writeOpLog(c, operatorID, "order", "order.adjust_pay_amount", map[string]any{
+		"order_id": uint(oid),
+		"reason":   req.Reason,
+		"before": map[string]any{
+			"pay_amount": before.PayAmount.String(),
+			"status":     before.Status,
+			"pay_status": before.PayStatus,
+		},
+		"after": map[string]any{
+			"pay_amount": after.PayAmount.String(),
+			"status":     after.Status,
+			"pay_status": after.PayStatus,
+		},
 	})
 	response.Success(c, gin.H{"ok": true})
 }

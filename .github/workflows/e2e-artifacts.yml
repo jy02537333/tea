@@ -1,0 +1,55 @@
+name: E2E Artifacts (Playwright)
+
+on:
+  workflow_dispatch:
+  # enable later:
+  # pull_request:
+  #   branches: [ master ]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install FE deps
+        run: pnpm -C admin-fe install --frozen-lockfile
+
+      # TODO: start backend tea-api for real E2E; for now, run build or a minimal test
+      - name: Playwright install browsers
+        run: pnpm -C admin-fe exec playwright install --with-deps
+
+      - name: Run Playwright (placeholder)
+        run: pnpm -C admin-fe exec playwright test --reporter=list || true
+
+      - name: Upload artifact (screenshots/traces)
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            build-ci-logs/playwright/**
+          if-no-files-found: warn
+
+      # Optional: Upload to OSS (needs secrets)
+      # - name: Upload to OSS
+      #   env:
+      #     ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+      #     API_BASE: ${{ secrets.API_BASE }}
+      #     BUSINESS: ci_artifact
+      #   run: |
+      #     bash scripts/upload_artifacts_to_oss.sh \
+      #       build-ci-logs/playwright/partner-withdrawal-before-click.png \
+      #       build-ci-logs/playwright/partner-withdrawal-modal.png \
+      #       build-ci-logs/playwright/partner-withdrawal-trace.zip \
+      #       build-ci-logs/playwright/partner-withdrawal-trace-report.html

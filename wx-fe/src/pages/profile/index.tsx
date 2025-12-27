@@ -68,6 +68,15 @@ export default function ProfilePage() {
     Taro.navigateTo({ url: '/pages/after-sale/index' }).catch(() => {});
   }
 
+  function handleFeedback() {
+    if (!ensureLoggedIn()) return;
+    Taro.navigateTo({ url: '/pages/feedback/index' }).catch(() => {});
+  }
+
+  function handleHelpDocs() {
+    Taro.navigateTo({ url: '/pages/help/index' }).catch(() => {});
+  }
+
   function handleViewMembership() {
     if (!ensureLoggedIn()) return;
     Taro.navigateTo({ url: '/pages/membership/index' }).catch(() => {});
@@ -101,8 +110,10 @@ export default function ProfilePage() {
         action: handleViewMembership,
       },
       { key: 'service', title: '售后服务', desc: '进度&售后操作', action: handleServiceTickets },
+      { key: 'feedback', title: '意见反馈', desc: '提交工单反馈', action: handleFeedback },
+      { key: 'help', title: '帮助文档', desc: '常见问题说明', action: handleHelpDocs },
     ],
-    [handleViewOrders, handleViewCoupons, handleManageAddresses, handleViewMembership, handleServiceTickets, user],
+    [handleViewOrders, handleViewCoupons, handleManageAddresses, handleViewMembership, handleServiceTickets, handleFeedback, handleHelpDocs, user],
   );
 
   return (

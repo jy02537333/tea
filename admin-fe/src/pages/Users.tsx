@@ -10,6 +10,8 @@ import {
   getAdminUsers,
   getUserPermissions,
   resetAdminUserPassword,
+  setAdminUserBlacklist,
+  setAdminUserWhitelist,
   updateAdminUser,
 } from '../services/users';
 
@@ -44,6 +46,12 @@ const statusTag = (status?: number) => {
   if (status === 1) return <Tag color="green">启用</Tag>;
   if (status === 2) return <Tag color="red">停用</Tag>;
   return <Tag>未知</Tag>;
+};
+
+const riskTags = (u: AdminUser) => {
+  if (u.is_whitelisted) return <Tag color="green">白名单</Tag>;
+  if (u.is_blacklisted) return <Tag color="red">黑名单</Tag>;
+  return <Tag>普通</Tag>;
 };
 
 interface FilterValues {
@@ -167,6 +175,34 @@ export default function UsersPage() {
 
   const togglingUserId = toggleStatusMutation.variables?.userId;
 
+  type ToggleRiskVariables = { userId: number; enabled: boolean };
+  const toggleBlacklistMutation = useMutation<AdminUser, any, ToggleRiskVariables>({
+    mutationFn: ({ userId, enabled }: ToggleRiskVariables) => setAdminUserBlacklist(userId, enabled),
+    onSuccess: (data: AdminUser) => {
+      message.success('黑名单状态已更新');
+      setDrawerUser((prev) => (prev && prev.id === data.id ? data : prev));
+      queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
+    },
+    onError: (error: any) => {
+      message.error(error?.message || '操作失败');
+    },
+  });
+
+  const toggleWhitelistMutation = useMutation<AdminUser, any, ToggleRiskVariables>({
+    mutationFn: ({ userId, enabled }: ToggleRiskVariables) => setAdminUserWhitelist(userId, enabled),
+    onSuccess: (data: AdminUser) => {
+      message.success('白名单状态已更新');
+      setDrawerUser((prev) => (prev && prev.id === data.id ? data : prev));
+      queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
+    },
+    onError: (error: any) => {
+      message.error(error?.message || '操作失败');
+    },
+  });
+
+  const togglingBlacklistUserId = toggleBlacklistMutation.variables?.userId;
+  const togglingWhitelistUserId = toggleWhitelistMutation.variables?.userId;
+
   const handleSubmitEdit = async (values: UpdateAdminUserPayload) => {
     if (!drawerUser) return;
     await updateMutation.mutateAsync(values);
@@ -217,6 +253,34 @@ export default function UsersPage() {
     toggleStatusMutation.mutate({ userId: user.id, status: nextStatus });
   };
 
+  const handleToggleBlacklist = (user: AdminUser) => {
+    if (toggleBlacklistMutation.isPending && togglingBlacklistUserId === user.id) return;
+    const nextEnabled = !user.is_blacklisted;
+    Modal.confirm({
+      title: nextEnabled ? '确认加入黑名单？' : '确认移出黑名单？',
+      content: nextEnabled ? '加入黑名单后，将禁止该用户登录/使用关键功能（白名单可豁免）。' : undefined,
+      okText: '确认',
+      cancelText: '取消',
+      onOk: async () => {
+        await toggleBlacklistMutation.mutateAsync({ userId: user.id, enabled: nextEnabled });
+      },
+    });
+  };
+
+  const handleToggleWhitelist = (user: AdminUser) => {
+    if (toggleWhitelistMutation.isPending && togglingWhitelistUserId === user.id) return;
+    const nextEnabled = !user.is_whitelisted;
+    Modal.confirm({
+      title: nextEnabled ? '确认加入白名单？' : '确认移出白名单？',
+      content: nextEnabled ? '加入白名单后，将在风控规则下豁免（如黑名单拦截会被自动清除）。' : undefined,
+      okText: '确认',
+      cancelText: '取消',
+      onOk: async () => {
+        await toggleWhitelistMutation.mutateAsync({ userId: user.id, enabled: nextEnabled });
+      },
+    });
+  };
+
   const columns: ColumnsType<AdminUser> = [
     { title: 'ID', dataIndex: 'id', width: 80 },
     { title: '昵称', dataIndex: 'nickname' },
@@ -234,6 +298,12 @@ export default function UsersPage() {
       render: (status?: number) => statusTag(status),
     },
     {
+      title: '黑/白名单',
+      key: 'risk',
+      width: 120,
+      render: (_, record) => riskTags(record),
+    },
+    {
       title: '创建时间',
       dataIndex: 'created_at',
       width: 200,
@@ -242,7 +312,7 @@ export default function UsersPage() {
     {
       title: '操作',
       key: 'actions',
-      width: 160,
+      width: 280,
       render: (_, record) => (
         <Space size={8}>
           <Button type="link" onClick={() => openDrawer(record)}>
@@ -255,6 +325,21 @@ export default function UsersPage() {
             loading={toggleStatusMutation.isPending && togglingUserId === record.id}
           >
             {record.status === 1 ? '禁用' : '启用'}
+          </Button>
+          <Button
+            type="link"
+            danger={!record.is_blacklisted}
+            onClick={() => handleToggleBlacklist(record)}
+            loading={toggleBlacklistMutation.isPending && togglingBlacklistUserId === record.id}
+          >
+            {record.is_blacklisted ? '移出黑' : '拉黑'}
+          </Button>
+          <Button
+            type="link"
+            onClick={() => handleToggleWhitelist(record)}
+            loading={toggleWhitelistMutation.isPending && togglingWhitelistUserId === record.id}
+          >
+            {record.is_whitelisted ? '移出白' : '加白'}
           </Button>
         </Space>
       ),
@@ -340,6 +425,7 @@ export default function UsersPage() {
               <Descriptions.Item label="手机号">{drawerUser.phone || '-'}</Descriptions.Item>
               <Descriptions.Item label="角色">{drawerUser.role || '-'}</Descriptions.Item>
               <Descriptions.Item label="状态">{statusTag(drawerUser.status)}</Descriptions.Item>
+              <Descriptions.Item label="黑/白名单">{riskTags(drawerUser)}</Descriptions.Item>
               <Descriptions.Item label="创建时间">
                 {drawerUser.created_at ? new Date(drawerUser.created_at).toLocaleString() : '-'}
               </Descriptions.Item>

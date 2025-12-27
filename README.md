@@ -58,6 +58,15 @@ TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
 
 注意：不要切到 8080（常被其他服务占用）。统一坚持 9292，减少环境不一致带来的问题。
  
+## E2E 验证工件（合伙人提现审核）
+
+- 申请前截图（页面）: https://zdw-img.oss-cn-beijing.aliyuncs.com/admin/products/2025/12/27/5d538f24eb228fd2ecd6ec9cb2ab5a46.png
+- 审核弹窗截图: https://zdw-img.oss-cn-beijing.aliyuncs.com/admin/products/2025/12/27/6650427afa3e07d007817395305ffd69.png
+- Playwright Trace 压缩包: https://zdw-img.oss-cn-beijing.aliyuncs.com/admin/products/2025/12/27/fa4559084262918a38f5e3987a7b9f8d.zip
+- Trace Report HTML: https://zdw-img.oss-cn-beijing.aliyuncs.com/admin/products/2025/12/27/d05192e12c8b42935145689ff8b0ac01.html
+
+说明：当前后端未实现 `POST /api/v1/admin/storage/oss/policy`，工件上传通过管理端直传端点完成；后续补齐 Policy 路由后将切换至表单直传策略以统一治理生命周期与前缀（建议 `ci_artifact/`）。
+
 ## 统一登录与用户聚合接口（JWT v5）
 
 - 统一采用 JWT v5 登录与鉴权，后端基础地址：`http://localhost:9292/api/v1`。
