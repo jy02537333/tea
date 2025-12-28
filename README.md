@@ -65,7 +65,7 @@ TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
 - Playwright Trace 压缩包: https://zdw-img.oss-cn-beijing.aliyuncs.com/admin/products/2025/12/27/fa4559084262918a38f5e3987a7b9f8d.zip
 - Trace Report HTML: https://zdw-img.oss-cn-beijing.aliyuncs.com/admin/products/2025/12/27/d05192e12c8b42935145689ff8b0ac01.html
 
-说明：当前后端未实现 `POST /api/v1/admin/storage/oss/policy`，工件上传通过管理端直传端点完成；后续补齐 Policy 路由后将切换至表单直传策略以统一治理生命周期与前缀（建议 `ci_artifact/`）。
+说明：后端已实现 `POST /api/v1/admin/storage/oss/policy`，上传脚本默认使用表单直传策略以统一治理生命周期与前缀（建议 `ci_artifact/`）。示例直传外链（文本演示）：https://zdw-img.oss-cn-beijing.aliyuncs.com/ci_artifact/2025/12/28/oss_demo.txt。
 
 提示：当后端补齐 `POST /api/v1/admin/storage/oss/policy` 路由后，CI 会自动将 PR 顶部提示块中的该未完成项勾选为完成（见 `.github/workflows/update-pr-checklist.yml`）。
 
