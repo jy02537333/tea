@@ -110,3 +110,32 @@ jobs:
           set -e
           chmod +x scripts/auto_fallback_zip.sh || true
           bash scripts/auto_fallback_zip.sh || true
+
+      - name: Re-check evidence links health (strict)
+        if: steps.detect.outputs.implemented == 'true'
+        id: recheck
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set +e
+          mkdir -p build-ci-logs || true
+          python3 scripts/check_evidence_links.py --owner "$OWNER" --repo "$REPO_NAME" --pr "$PR_NUMBER" --strict > build-ci-logs/evidence_health.txt
+          ec=$?
+          echo "recheck_exit=$ec" >> "$GITHUB_OUTPUT"
+          exit $ec
+
+      - name: Comment PR on evidence health failure
+        if: steps.recheck.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -e
+          python3 scripts/post_pr_comment.py --owner "$OWNER" --repo "$REPO_NAME" --pr "$PR_NUMBER" \
+            --body-file build-ci-logs/evidence_health.txt \
+            --prefix "⚠️ 证据链接健康检查失败（自动回退已尝试）。请检查 OSS/CDN 可达性或重新上传制品。"
