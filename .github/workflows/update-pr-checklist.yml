@@ -1,0 +1,54 @@
+name: Update PR Checklist
+
+on:
+  pull_request:
+    types: [opened, synchronize, edited]
+
+jobs:
+  mark-checklist:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect OSS Policy route implemented
+        id: detect
+        run: |
+          set -e
+          # Detect if admin OSS policy route exists in router or handlers
+          if grep -RqE "/api/v1/admin/storage/oss/policy" tea-api/internal/router || \
+             grep -Rqi "oss" tea-api/internal/handler || \
+             grep -Rqi "storage" tea-api/internal/handler; then
+            echo "implemented=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "implemented=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update PR body checklist (mark policy implemented)
+        if: steps.detect.outputs.implemented == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -e
+          # Fetch current PR body via issues API
+          body_json=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/issues/$PR_NUMBER")
+          body=$(echo "$body_json" | jq -r '.body // ""')
+          if [ -z "$body" ]; then
+            echo "No PR body found; skipping update."
+            exit 0
+          fi
+          # Replace unchecked task to checked
+          # Note: escape slashes and full-width parentheses to match exact line
+          new_body=$(printf '%s' "$body" | sed -E 's/- \[ \] 后端实现 POST \/api\/v1\/admin\/storage\/oss\/policy（后续切换直传策略）/- [x] 后端实现 POST \/api\/v1\/admin\/storage\/oss\/policy（后续切换直传策略）/g')
+          if [ "$new_body" = "$body" ]; then
+            echo "Checklist already updated or line not found; skipping."
+            exit 0
+          fi
+          # Patch PR body
+          payload=$(jq -n --arg body "$new_body" '{body: $body}')
+          curl -sS -X PATCH -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            -d "$payload" "https://api.github.com/repos/$REPO/issues/$PR_NUMBER" | jq -r '.url // .message'
+          echo "Checklist item marked as completed."
