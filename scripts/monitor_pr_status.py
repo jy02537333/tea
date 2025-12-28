@@ -58,6 +58,36 @@ def summarize_status(status_json: dict) -> tuple[str, list[tuple[str, str]]]:
     return state, contexts
 
 
+def read_token():
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if not token and os.path.exists(".github_token"):
+        try:
+            token = open(".github_token", "r", encoding="utf-8").read().strip()
+        except Exception:
+            token = None
+    return token
+
+
+def post_pr_comment(owner: str, repo: str, pr: int, body: str, token: str | None):
+    if not token:
+        return False, "no-token"
+    url = f"https://api.github.com/repos/{owner}/{repo}/issues/{pr}/comments"
+    payload = json.dumps({"body": body}).encode("utf-8")
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "tea-monitor/1.0",
+        "Content-Type": "application/json",
+    }
+    try:
+        req = Request(url, data=payload, headers=headers, method="POST")
+        with urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return True, data.get("html_url", "commented")
+    except Exception as e:
+        return False, str(e)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Monitor PR commit statuses and log failures")
     parser.add_argument("--owner", required=True)
@@ -80,6 +110,14 @@ def main():
 
         last_state = None
         last_sha = None
+        state_path = os.path.join(os.path.dirname(args.log) or ".", "monitor_pr65.state.json")
+        # Load prior alert state to avoid spamming
+        prior = {}
+        if os.path.exists(state_path):
+            try:
+                prior = json.load(open(state_path, "r", encoding="utf-8"))
+            except Exception:
+                prior = {}
         while True:
             sha = get_pr_head_sha(args.owner, args.repo, args.pr, token)
             if not sha:
@@ -115,6 +153,20 @@ def main():
                 alert = f"[{ts()}] ALERT: failure detected combined_state={state} contexts=[{ctx_str}]"
                 print(alert)
                 log_line(fp, alert)
+                # Post PR comment once per sha
+                last_alert_sha = prior.get("last_alert_sha")
+                if last_alert_sha != sha:
+                    tok = read_token()
+                    heading = "⚠️ CI 检测到失败："
+                    body = f"{heading}\n\n- head: {sha}\n- state: {state}\n- contexts: {ctx_str}"
+                    ok, info = post_pr_comment(args.owner, args.repo, args.pr, body, tok)
+                    log_line(fp, f"[{ts()}] comment_posted={ok} info={info}")
+                    if ok:
+                        prior["last_alert_sha"] = sha
+                        try:
+                            json.dump(prior, open(state_path, "w", encoding="utf-8"))
+                        except Exception:
+                            pass
 
             if args.once:
                 return 0
