@@ -1,5 +1,9 @@
 name: Update PR Checklist
 
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}-update-pr-checklist
+  cancel-in-progress: true
+
 on:
   pull_request:
     types: [opened, synchronize, edited]
@@ -52,3 +56,57 @@ jobs:
           curl -sS -X PATCH -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
             -d "$payload" "https://api.github.com/repos/$REPO/issues/$PR_NUMBER" | jq -r '.url // .message'
           echo "Checklist item marked as completed."
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Rewrite PR evidence block (grouped + checkboxes)
+        if: steps.detect.outputs.implemented == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -e
+          python3 scripts/rewrite_evidence_block.py --owner "$OWNER" --repo "$REPO_NAME" --pr "$PR_NUMBER" --checkbox checked || true
+
+      - name: Fetch latest Playwright artifact (non-blocking)
+        if: steps.detect.outputs.implemented == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -e
+          python3 scripts/fetch_playwright_artifact.py --owner "$OWNER" --repo "$REPO_NAME" --pr "$PR_NUMBER" --name playwright-artifacts --out build-ci-logs/playwright || true
+
+      - name: Check evidence links health (non-blocking)
+        if: steps.detect.outputs.implemented == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -e
+          python3 scripts/check_evidence_links.py --owner "$OWNER" --repo "$REPO_NAME" --pr "$PR_NUMBER" || true
+
+      - name: Auto fallback reupload ZIP (if local file available)
+        if: steps.detect.outputs.implemented == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          set -e
+          chmod +x scripts/auto_fallback_zip.sh || true
+          bash scripts/auto_fallback_zip.sh || true
