@@ -67,6 +67,8 @@ TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
 
 说明：当前后端未实现 `POST /api/v1/admin/storage/oss/policy`，工件上传通过管理端直传端点完成；后续补齐 Policy 路由后将切换至表单直传策略以统一治理生命周期与前缀（建议 `ci_artifact/`）。
 
+提示：当后端补齐 `POST /api/v1/admin/storage/oss/policy` 路由后，CI 会自动将 PR 顶部提示块中的该未完成项勾选为完成（见 `.github/workflows/update-pr-checklist.yml`）。
+
 ## 统一登录与用户聚合接口（JWT v5）
 
 - 统一采用 JWT v5 登录与鉴权，后端基础地址：`http://localhost:9292/api/v1`。
