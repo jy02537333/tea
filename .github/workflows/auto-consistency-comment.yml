@@ -32,6 +32,7 @@ jobs:
           echo "readme_diff_lines=$DIFF_LINES" >> "$GITHUB_OUTPUT"
 
       - name: Post consistency summary to PR
+        if: ${{ steps.diff.outputs.readme_diff_lines != '0' || github.event_name == 'workflow_dispatch' }}
         uses: actions/github-script@v7
         with:
           script: |
@@ -39,6 +40,7 @@ jobs:
             const repo = context.repo.repo;
             const branch = context.ref.replace('refs/heads/', '');
             const sha = context.sha;
+            const before = (context.payload && context.payload.before) ? context.payload.before : null;
             const readmeDiffLines = Number('${{ steps.diff.outputs.readme_diff_lines }}') || 0;
 
             // Find the open PR for this head branch
@@ -50,13 +52,23 @@ jobs:
             }
 
             const bodyLen = (pr.body || '').length;
+            const compareUrl = before ? `https://github.com/${owner}/${repo}/compare/${before}...${sha}` : `https://github.com/${owner}/${repo}/commit/${sha}`;
             const comment = [
               '一致性确认：',
-              `- 提交：当前分支 head（${sha}）`,
-              `- README：本次推送差异行数 ${readmeDiffLines}`,
-              `- PR 正文：当前长度 ${bodyLen}`,
-              '备注：自动生成于 push 事件（分支 feat/withdrawal-e2e）。'
+              `- 分支：${branch}`,
+              `- 提交：${sha}`,
+              `- README 差异行数：${readmeDiffLines}`,
+              `- PR 正文长度：${bodyLen}`,
+              `- Compare：${compareUrl}`,
+              '备注：仅在 README 有变更时发布（或手动触发）。'
             ].join('\n');
 
             const resp = await github.rest.issues.createComment({ owner, repo, issue_number: pr.number, body: comment });
             core.info(`Comment posted: ${resp.data.html_url}`);
+
+      - name: Skip notice (no README changes)
+        if: ${{ steps.diff.outputs.readme_diff_lines == '0' && github.event_name != 'workflow_dispatch' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.notice('No README changes detected on push; skipping auto consistency comment.');
