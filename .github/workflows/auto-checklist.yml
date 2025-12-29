@@ -1,0 +1,49 @@
+name: Auto Checklist Tick
+
+on:
+  push:
+    branches:
+      - feat/withdrawal-e2e
+  workflow_dispatch:
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Tick checklist item if policy route present
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const branch = context.ref.replace('refs/heads/', '');
+            const { data: prs } = await github.rest.pulls.list({ owner, repo, state: 'open', head: `${owner}:${branch}` });
+            const pr = prs[0];
+            if (!pr) {
+              core.notice(`No open PR found for ${owner}:${branch}. Skipping.`);
+              return;
+            }
+            const body = pr.body || '';
+
+            // Tick any unchecked checklist line that mentions the admin OSS policy route
+            const routeHint = '/api/v1/admin/storage/oss/policy';
+            const lines = body.split('\n');
+            let changed = false;
+            for (let i = 0; i < lines.length; i++) {
+              const line = lines[i];
+              if (/^- \[ \] /.test(line) && line.includes(routeHint)) {
+                lines[i] = line.replace(/^(- )\[ \]( )(.*)$/, '$1[x] $3');
+                changed = true;
+              }
+            }
+            if (!changed) {
+              core.notice('No matching unchecked checklist item found for policy route; nothing to update.');
+              return;
+            }
+            const newBody = lines.join('\n');
+            await github.rest.pulls.update({ owner, repo, pull_number: pr.number, body: newBody });
+            core.info(`Checklist updated for PR #${pr.number}.`);
