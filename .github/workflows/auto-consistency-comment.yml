@@ -19,20 +19,23 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Compute README diff lines
+      - name: Compute README and docs diff lines
         id: diff
         shell: bash
         run: |
           set -e
           if git rev-parse HEAD^ >/dev/null 2>&1; then
-            DIFF_LINES=$(git diff --no-color HEAD^ HEAD -- README.md | wc -l || echo 0)
+            README_DIFF_LINES=$(git diff --no-color HEAD^ HEAD -- README.md | wc -l || echo 0)
+            DOCS_DIFF_LINES=$(git diff --no-color HEAD^ HEAD -- 'docs/**' | wc -l || echo 0)
           else
-            DIFF_LINES=0
+            README_DIFF_LINES=0
+            DOCS_DIFF_LINES=0
           fi
-          echo "readme_diff_lines=$DIFF_LINES" >> "$GITHUB_OUTPUT"
+          echo "readme_diff_lines=$README_DIFF_LINES" >> "$GITHUB_OUTPUT"
+          echo "docs_diff_lines=$DOCS_DIFF_LINES" >> "$GITHUB_OUTPUT"
 
       - name: Post consistency summary to PR
-        if: ${{ steps.diff.outputs.readme_diff_lines != '0' || github.event_name == 'workflow_dispatch' }}
+        if: ${{ steps.diff.outputs.readme_diff_lines != '0' || steps.diff.outputs.docs_diff_lines != '0' || github.event_name == 'workflow_dispatch' }}
         uses: actions/github-script@v7
         with:
           script: |
@@ -42,6 +45,7 @@ jobs:
             const sha = context.sha;
             const before = (context.payload && context.payload.before) ? context.payload.before : null;
             const readmeDiffLines = Number('${{ steps.diff.outputs.readme_diff_lines }}') || 0;
+            const docsDiffLines = Number('${{ steps.diff.outputs.docs_diff_lines }}') || 0;
 
             // Find the open PR for this head branch
             const { data: prs } = await github.rest.pulls.list({ owner, repo, state: 'open', head: `${owner}:${branch}` });
@@ -58,17 +62,18 @@ jobs:
               `- 分支：${branch}`,
               `- 提交：${sha}`,
               `- README 差异行数：${readmeDiffLines}`,
+              `- docs 差异行数：${docsDiffLines}`,
               `- PR 正文长度：${bodyLen}`,
               `- Compare：${compareUrl}`,
-              '备注：仅在 README 有变更时发布（或手动触发）。'
+              '备注：仅在 README 或 docs 下文档变更时发布（或手动触发）。'
             ].join('\n');
 
             const resp = await github.rest.issues.createComment({ owner, repo, issue_number: pr.number, body: comment });
             core.info(`Comment posted: ${resp.data.html_url}`);
 
-      - name: Skip notice (no README changes)
-        if: ${{ steps.diff.outputs.readme_diff_lines == '0' && github.event_name != 'workflow_dispatch' }}
+      - name: Skip notice (no README/docs changes)
+        if: ${{ steps.diff.outputs.readme_diff_lines == '0' && steps.diff.outputs.docs_diff_lines == '0' && github.event_name != 'workflow_dispatch' }}
         uses: actions/github-script@v7
         with:
           script: |
-            core.notice('No README changes detected on push; skipping auto consistency comment.');
+            core.notice('No README or docs changes detected on push; skipping auto consistency comment.');
