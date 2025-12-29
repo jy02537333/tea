@@ -23,6 +23,12 @@ import Users from './pages/Users';
 import Rbac from './pages/Rbac';
 import Orders from './pages/Orders';
 import MembershipConfigPage from './pages/MembershipConfig';
+import PartnersPage from './pages/Partners';
+import PartnerWithdrawalsPage from './pages/PartnerWithdrawals';
+import LogsPage from './pages/Logs';
+import SystemSettingsPage from './pages/SystemSettings';
+import BannersPage from './pages/Banners';
+import RechargePage from './pages/Recharge';
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
   const { token, loading, logout } = useAuthContext();
@@ -72,6 +78,12 @@ export default function App() {
                   <Route path="finance-summary" element={<FinanceSummary />} />
                   <Route path="finance-records" element={<FinanceRecords />} />
                   <Route path="membership-config" element={<MembershipConfigPage />} />
+                  <Route path="partners" element={<PartnersPage />} />
+                  <Route path="partner-withdrawals" element={<PartnerWithdrawalsPage />} />
+                  <Route path="logs" element={<LogsPage />} />
+                  <Route path="system-settings" element={<SystemSettingsPage />} />
+                  <Route path="banners" element={<BannersPage />} />
+                  <Route path="recharge" element={<RechargePage />} />
                   <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
               </AppShell>

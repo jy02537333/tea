@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Descriptions, Divider, Drawer, Form, Input, Popconfirm, Select, Space, Table, Tag, Typography, message, DatePicker } from 'antd';
+import { Button, Descriptions, Divider, Drawer, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag, Typography, message, DatePicker } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -47,6 +47,13 @@ type OrderActionMeta = {
 };
 
 const ORDER_ACTIONS: OrderActionMeta[] = [
+  {
+    key: 'adjust',
+    label: '调价',
+    confirm: '',
+    shouldShow: (order) => order.status === 1 && order.pay_status === 1,
+    permission: 'order:adjust',
+  },
   {
     key: 'deliver',
     label: '发货',
@@ -214,6 +221,36 @@ export default function OrdersPage() {
   const allowAction = useCallback((meta: OrderActionMeta) => !meta.permission || hasPermission(meta.permission), [hasPermission]);
   const detailActions = detailOrder ? ORDER_ACTIONS.filter((meta) => meta.shouldShow(detailOrder) && allowAction(meta)) : [];
 
+  const [adjustModalOpen, setAdjustModalOpen] = useState(false);
+  const [adjustTargetId, setAdjustTargetId] = useState<number | null>(null);
+  const [adjustForm] = Form.useForm<{ new_pay_amount: number; reason?: string }>();
+
+  const adjustMutation = useMutation({
+    mutationFn: async (payload: { id: number; new_pay_amount: number; reason?: string }) => {
+      await postOrderAction(payload.id, 'adjust', {
+        new_pay_amount: Number(payload.new_pay_amount).toFixed(2),
+        reason: payload.reason?.trim() || undefined,
+      });
+    },
+    onSuccess: async () => {
+      message.success('调价成功');
+      setAdjustModalOpen(false);
+      setAdjustTargetId(null);
+      adjustForm.resetFields();
+      await queryClient.invalidateQueries({ queryKey: ['adminOrders'] });
+      if (detailId) queryClient.invalidateQueries({ queryKey: ['adminOrderDetail', detailId] });
+    },
+    onError: (error: any) => {
+      message.error(error?.message || '调价失败');
+    },
+  });
+
+  const openAdjustModal = (order: AdminOrder) => {
+    setAdjustTargetId(order.id);
+    adjustForm.setFieldsValue({ new_pay_amount: Number(order.pay_amount ?? 0), reason: '' });
+    setAdjustModalOpen(true);
+  };
+
   const exportMutation = useMutation({
     mutationFn: async () => {
       const blob = await exportAdminOrders({
@@ -330,18 +367,32 @@ export default function OrdersPage() {
           <Button type="link" onClick={() => handleOpenDrawer(record.id)}>
             查看详情
           </Button>
-          {ORDER_ACTIONS.filter((meta) => meta.shouldShow(record) && allowAction(meta)).map((meta) => (
-            <Popconfirm key={meta.key} title={meta.confirm} onConfirm={() => actionMutation.mutate({ id: record.id, action: meta.key })}>
-              <Button
-                type="link"
-                danger={meta.danger}
-                disabled={actionMutation.isPending}
-                style={meta.type === 'primary' ? { fontWeight: 600 } : undefined}
-              >
-                {meta.label}
-              </Button>
-            </Popconfirm>
-          ))}
+          {ORDER_ACTIONS.filter((meta) => meta.shouldShow(record) && allowAction(meta)).map((meta) => {
+            if (meta.key === 'adjust') {
+              return (
+                <Button
+                  key={meta.key}
+                  type="link"
+                  disabled={actionMutation.isPending || adjustMutation.isPending}
+                  onClick={() => openAdjustModal(record)}
+                >
+                  {meta.label}
+                </Button>
+              );
+            }
+            return (
+              <Popconfirm key={meta.key} title={meta.confirm} onConfirm={() => actionMutation.mutate({ id: record.id, action: meta.key })}>
+                <Button
+                  type="link"
+                  danger={meta.danger}
+                  disabled={actionMutation.isPending}
+                  style={meta.type === 'primary' ? { fontWeight: 600 } : undefined}
+                >
+                  {meta.label}
+                </Button>
+              </Popconfirm>
+            );
+          })}
         </Space>
       ),
     },
@@ -463,17 +514,30 @@ export default function OrdersPage() {
             <Title level={5}>可执行操作</Title>
             <Space wrap>
               {detailActions.length === 0 && <span style={{ color: '#888' }}>暂无可执行操作</span>}
-              {detailActions.map((meta) => (
-                <Popconfirm key={meta.key} title={meta.confirm} onConfirm={() => actionMutation.mutate({ id: detailOrder.id, action: meta.key })}>
-                  <Button
-                    type={meta.type === 'primary' ? 'primary' : 'default'}
-                    danger={meta.danger}
-                    loading={actionMutation.isPending}
-                  >
-                    {meta.label}
-                  </Button>
-                </Popconfirm>
-              ))}
+              {detailActions.map((meta) => {
+                if (meta.key === 'adjust') {
+                  return (
+                    <Button
+                      key={meta.key}
+                      onClick={() => openAdjustModal(detailOrder)}
+                      disabled={actionMutation.isPending || adjustMutation.isPending}
+                    >
+                      {meta.label}
+                    </Button>
+                  );
+                }
+                return (
+                  <Popconfirm key={meta.key} title={meta.confirm} onConfirm={() => actionMutation.mutate({ id: detailOrder.id, action: meta.key })}>
+                    <Button
+                      type={meta.type === 'primary' ? 'primary' : 'default'}
+                      danger={meta.danger}
+                      loading={actionMutation.isPending}
+                    >
+                      {meta.label}
+                    </Button>
+                  </Popconfirm>
+                );
+              })}
             </Space>
             {detailItems.length ? (
               <>
@@ -491,6 +555,41 @@ export default function OrdersPage() {
           </>
         )}
       </Drawer>
+
+      <Modal
+        title={adjustTargetId ? `订单调价 · #${adjustTargetId}` : '订单调价'}
+        open={adjustModalOpen}
+        okText="确认调价"
+        cancelText="取消"
+        confirmLoading={adjustMutation.isPending}
+        onCancel={() => {
+          setAdjustModalOpen(false);
+          setAdjustTargetId(null);
+        }}
+        onOk={async () => {
+          const values = await adjustForm.validateFields();
+          if (!adjustTargetId) return;
+          await adjustMutation.mutateAsync({
+            id: adjustTargetId,
+            new_pay_amount: values.new_pay_amount,
+            reason: values.reason,
+          });
+        }}
+        destroyOnClose
+      >
+        <Form form={adjustForm} layout="vertical">
+          <Form.Item
+            label="新支付金额"
+            name="new_pay_amount"
+            rules={[{ required: true, message: '请输入新支付金额' }]}
+          >
+            <InputNumber min={0} precision={2} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item label="调价原因" name="reason">
+            <Input.TextArea rows={3} placeholder="可选：记录本次调价原因" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </Space>
   );
 }

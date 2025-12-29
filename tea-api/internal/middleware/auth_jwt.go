@@ -65,6 +65,16 @@ func AuthJWT() gin.HandlerFunc {
 				c.Set("role", role)
 			}
 		}
+
+		// 黑/白名单与停用状态拦截（白名单可豁免）
+		if v, ok := c.Get("user_id"); ok {
+			if uid, ok2 := v.(uint); ok2 {
+				if blocked, msg := IsUserBlocked(uid); blocked {
+					c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"code": 4031, "message": msg})
+					return
+				}
+			}
+		}
 	NEXT:
 		c.Next()
 	}

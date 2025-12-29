@@ -1,0 +1,133 @@
+server:
+  port: ":9293"
+  mode: "debug" # debug, release, test
+  read_timeout: 60
+  write_timeout: 60
+
+database:
+  host: "127.0.0.1"
+  port: 3308
+  username: "root"
+  password: "gs963852"
+  dbname: "tea_shop"
+  charset: "utf8mb4"
+  parse_time: true
+  loc: "Local"
+  max_idle_conns: 10
+  max_open_conns: 100
+  conn_max_lifetime: 300
+
+redis:
+  host: "127.0.0.1"
+  port: 6379
+  password: "123456"
+  db: 0
+  pool_size: 100
+  min_idle_conns: 10
+
+rabbitmq:
+  host: "127.0.0.1"
+  port: 5672
+  username: "guest"
+  password: "guest"
+  vhost: "/"
+  connection_timeout: 30
+  heartbeat: 30
+  exchange:
+    tea_shop: "tea_shop_exchange"
+  queues:
+    order: "tea_shop_order_queue"
+    payment: "tea_shop_payment_queue"
+    notification: "tea_shop_notification_queue"
+    external_order: "tea_shop_external_order_queue"
+
+jwt:
+  secret: "dev_secret_change_me"
+  expiryMinutes: 120
+  issuer: "tea-shop"
+
+log:
+  level: "info"
+  filename: "logs/tea-shop.log"
+  max_size: 100
+  max_age: 30
+  max_backups: 5
+  compress: true
+
+wechat:
+  app_id: "your_wechat_app_id"
+  app_secret: "your_wechat_app_secret"
+  mch_id: "your_mch_id"
+  api_key: "your_wechat_api_key"
+  cert_path: "certs/apiclient_cert.pem"
+  key_path: "certs/apiclient_key.pem"
+  notify_url: "https://yourdomain.com/api/v1/payment/wechat/notify"
+
+alipay:
+  app_id: "your_alipay_app_id"
+  private_key: "your_alipay_private_key"
+  public_key: "your_alipay_public_key"
+  notify_url: "https://yourdomain.com/api/v1/payment/alipay/notify"
+
+delivery:
+  meituan:
+    app_key: "your_meituan_app_key"
+    app_secret: "your_meituan_app_secret"
+    base_url: "https://waimaiopen.meituan.com"
+  
+  eleme:
+    app_key: "your_eleme_app_key"
+    app_secret: "your_eleme_app_secret"
+    base_url: "https://open-api.shop.ele.me"
+  
+  baidu:
+    app_key: "your_baidu_app_key"
+    app_secret: "your_baidu_app_secret"
+    base_url: "https://waimai.baidu.com"
+
+upload:
+  local:
+    path: "uploads"
+  oss:
+    endpoint: "oss-cn-beijing.aliyuncs.com"
+    access_key_id: "LTAI5tHCHCCYN4Fda2y19mmc"
+    access_key_secret: "I174tiyXYjOskbxfpSyKx63IGIDVK4"
+    bucket_name: "zdw-img"
+
+system:
+  env: "local" # local, dev, test, prod
+  addr: "localhost:9293"
+  db_type: "mysql"
+  use_multipoint: false
+  use_redis: true
+  iplimit_count: 15000
+  iplimit_time: 3600
+
+finance:
+  accrual:
+    enabled: false          # 是否启用每日自动计息
+    time: "02:00"           # 每日执行时间（24小时制）
+    rate: 0.001             # 默认日利率（万分之一）
+    use_redis_lock: true    # 是否使用Redis分布式锁
+    lock_ttl_second: 3600   # 锁TTL，秒
+    allowed_roles: ["admin"] # 具备计息权限的角色（除 admin 默认外）
+    timezone: "Asia/Shanghai" # 计时所用时区
+    skip_weekends: true       # 是否跳过周末执行
+    holidays: []              # 节假日白名单（YYYY-MM-DD）
+
+observability:
+  operationlog:
+    enabled: true
+    include_prefixes: ["/api/v1/admin/rbac", "/api/v1/admin/accrual"]
+    exclude_prefixes: ["/api/v1/admin/logs"]
+
+# AI / LLM runtime configuration (optional)
+# Enables routing model calls to Claude Sonnet 4.5 by default when `enabled` is true.
+ai:
+  enabled: false                # global switch: set to true to enable model routing
+  provider: "anthropic"        # provider id (e.g. anthropic, openai, local)
+  default_model: "claude-sonnet-4.5" # model name to use when enabled
+  api_key_env: "MODEL_API_KEY" # environment variable name that stores the API key
+  api_url: ""                  # override endpoint if needed (leave empty for provider default)
+  timeout_seconds: 20           # request timeout in seconds
+  max_concurrency: 10           # optional client-side concurrency limit

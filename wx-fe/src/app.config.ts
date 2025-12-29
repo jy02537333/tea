@@ -17,6 +17,8 @@ export default {
     'pages/membership/index',
     'pages/membership-orders/index',
     'pages/after-sale/index',
+    'pages/feedback/index',
+    'pages/help/index',
     'pages/profile/index',
     // add other pages here as needed
   ],

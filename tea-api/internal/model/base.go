@@ -57,6 +57,8 @@ type User struct {
 	Country                 string          `gorm:"type:varchar(50)" json:"country"`
 	DefaultAddress          string          `gorm:"type:json" json:"default_address"`
 	DefaultAddressUpdatedAt *time.Time      `json:"default_address_updated_at"`
+	IsBlacklisted           bool            `gorm:"type:tinyint;default:0;index" json:"is_blacklisted"`
+	IsWhitelisted           bool            `gorm:"type:tinyint;default:0;index" json:"is_whitelisted"`
 	Status                  int             `gorm:"type:tinyint;default:1" json:"status"` // 1:正常 2:禁用
 	LastLoginAt             *time.Time      `json:"last_login_at"`
 	Balance                 decimal.Decimal `gorm:"type:decimal(12,2);default:0" json:"balance"`

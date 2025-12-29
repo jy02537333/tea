@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
 
 	"tea-api/internal/model"
 )
@@ -34,7 +35,7 @@ func (f *fakeOrderService) ListOrders(userID uint, status int, page, limit int, 
 func (f *fakeOrderService) GetOrder(userID, orderID uint) (*model.Order, []model.OrderItem, error) {
 	return nil, nil, nil
 }
-func (f *fakeOrderService) AdminListOrders(status int, page, limit int, storeID uint) ([]model.Order, int64, error) {
+func (f *fakeOrderService) AdminListOrders(status int, page, limit int, storeID uint, startTime, endTime *time.Time) ([]model.Order, int64, error) {
 	return nil, 0, nil
 }
 func (f *fakeOrderService) GetOrderAdmin(orderID uint) (*model.Order, []model.OrderItem, error) {
@@ -49,6 +50,9 @@ func (f *fakeOrderService) AdminCancelOrder(orderID uint, reason string) error  
 func (f *fakeOrderService) AdminRefundOrder(orderID uint, reason string) error    { return nil }
 func (f *fakeOrderService) AdminRefundStart(orderID uint, reason string) error    { return nil }
 func (f *fakeOrderService) AdminRefundConfirm(orderID uint, reason string) error  { return nil }
+func (f *fakeOrderService) AdminAdjustPayAmount(orderID uint, newPayAmount decimal.Decimal, reason string) error {
+	return nil
+}
 
 func (f *fakeOrderService) AdminListStoreOrders(storeID uint, status int, page, limit int, startTime, endTime *time.Time, orderID uint) ([]model.Order, int64, error) {
 	f.lastStoreID = storeID

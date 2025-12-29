@@ -282,7 +282,7 @@ func (h *UserHandler) AdminListUsers(c *gin.Context) {
 			utils.InvalidParam(c, "user_id 格式错误")
 			return
 		}
-		userInfo, err := h.userService.GetUserInfo(uint(id))
+		userInfo, err := h.userService.GetUserModel(uint(id))
 		if err != nil {
 			// 若未找到或其他错误，统一按空数组响应，方便前端回退到本地过滤
 			// 这里不区分 ErrRecordNotFound，保持接口简单
@@ -390,12 +390,92 @@ func (h *UserHandler) AdminUpdateUser(c *gin.Context) {
 		return
 	}
 
-	userInfo, err := h.userService.GetUserInfo(uint(userID))
+	userInfo, err := h.userService.GetUserModel(uint(userID))
 	if err != nil {
 		utils.Error(c, utils.CodeError, "读取用户信息失败: "+err.Error())
 		return
 	}
 
+	utils.Success(c, userInfo)
+}
+
+// AdminSetBlacklist 管理端设置用户黑名单状态（白名单会被自动清除）
+func (h *UserHandler) AdminSetBlacklist(c *gin.Context) {
+	userIDStr := c.Param("id")
+	userID, err := strconv.ParseUint(userIDStr, 10, 32)
+	if err != nil || userID == 0 {
+		utils.InvalidParam(c, "用户ID格式错误")
+		return
+	}
+
+	var req struct {
+		Enabled bool   `json:"enabled"`
+		Reason  string `json:"reason"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.InvalidParam(c, err.Error())
+		return
+	}
+	_ = strings.TrimSpace(req.Reason)
+
+	updates := map[string]interface{}{}
+	if req.Enabled {
+		updates["is_blacklisted"] = true
+		updates["is_whitelisted"] = false
+	} else {
+		updates["is_blacklisted"] = false
+	}
+
+	if err := h.userService.UpdateUserInfo(uint(userID), updates); err != nil {
+		utils.Error(c, utils.CodeError, "更新黑名单状态失败: "+err.Error())
+		return
+	}
+
+	userInfo, err := h.userService.GetUserModel(uint(userID))
+	if err != nil {
+		utils.Error(c, utils.CodeError, "读取用户信息失败: "+err.Error())
+		return
+	}
+	utils.Success(c, userInfo)
+}
+
+// AdminSetWhitelist 管理端设置用户白名单状态（黑名单会被自动清除）
+func (h *UserHandler) AdminSetWhitelist(c *gin.Context) {
+	userIDStr := c.Param("id")
+	userID, err := strconv.ParseUint(userIDStr, 10, 32)
+	if err != nil || userID == 0 {
+		utils.InvalidParam(c, "用户ID格式错误")
+		return
+	}
+
+	var req struct {
+		Enabled bool   `json:"enabled"`
+		Reason  string `json:"reason"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.InvalidParam(c, err.Error())
+		return
+	}
+	_ = strings.TrimSpace(req.Reason)
+
+	updates := map[string]interface{}{}
+	if req.Enabled {
+		updates["is_whitelisted"] = true
+		updates["is_blacklisted"] = false
+	} else {
+		updates["is_whitelisted"] = false
+	}
+
+	if err := h.userService.UpdateUserInfo(uint(userID), updates); err != nil {
+		utils.Error(c, utils.CodeError, "更新白名单状态失败: "+err.Error())
+		return
+	}
+
+	userInfo, err := h.userService.GetUserModel(uint(userID))
+	if err != nil {
+		utils.Error(c, utils.CodeError, "读取用户信息失败: "+err.Error())
+		return
+	}
 	utils.Success(c, userInfo)
 }
 
