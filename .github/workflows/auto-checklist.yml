@@ -14,7 +14,7 @@ jobs:
       pull-requests: write
       issues: write
     steps:
-      - name: Tick checklist item if policy route present
+      - name: Tick checklist items by keywords
         uses: actions/github-script@v7
         with:
           script: |
@@ -28,20 +28,31 @@ jobs:
               return;
             }
             const body = pr.body || '';
-
-            // Tick any unchecked checklist line that mentions the admin OSS policy route
-            const routeHint = '/api/v1/admin/storage/oss/policy';
+            // Keywords to tick when matching and unchecked
+            const hints = [
+              '/api/v1/admin/storage/oss/policy',
+              '直传示例',
+              'oss_demo',
+              'Admin OSS Policy 响应',
+              'Get OSS Policy 响应',
+              'Trace 压缩包',
+              'Trace Report',
+              '截图与 trace 已上传',
+              'E2E 通过',
+              '申请前截图',
+              '审核弹窗截图'
+            ];
             const lines = body.split('\n');
             let changed = false;
             for (let i = 0; i < lines.length; i++) {
               const line = lines[i];
-              if (/^- \[ \] /.test(line) && line.includes(routeHint)) {
+              if (/^- \[ \] /.test(line) && hints.some(h => line.includes(h))) {
                 lines[i] = line.replace(/^(- )\[ \]( )(.*)$/, '$1[x] $3');
                 changed = true;
               }
             }
             if (!changed) {
-              core.notice('No matching unchecked checklist item found for policy route; nothing to update.');
+              core.notice('No matching unchecked checklist items found for defined keywords; nothing to update.');
               return;
             }
             const newBody = lines.join('\n');
