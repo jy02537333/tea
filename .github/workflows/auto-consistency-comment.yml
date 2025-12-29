@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feat/withdrawal-e2e
+  workflow_dispatch:
 
 jobs:
   post-comment:
