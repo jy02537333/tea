@@ -1,10 +1,7 @@
-name: Auto Merge on Checklist
+name: Auto Merge on Checklist (disabled)
 
 on:
-  pull_request:
-    types: [opened, edited, synchronize, labeled, unlabeled, ready_for_review]
-    branches:
-      - master
+  # Disabled: only allow manual dispatch; no automatic triggers
   workflow_dispatch:
 
 permissions:
@@ -17,7 +14,8 @@ concurrency:
 
 jobs:
   auto-merge:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.base.ref == 'master' }}
+    # Fully disabled guard; prevents execution even on manual dispatch
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - name: Check checklist and merge if eligible
