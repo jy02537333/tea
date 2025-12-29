@@ -1,0 +1,127 @@
+name: Auto Merge on Checklist
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, labeled, unlabeled, ready_for_review]
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}-auto-merge-on-checklist
+  cancel-in-progress: false
+
+jobs:
+  auto-merge:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.base.ref == 'master' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check checklist and merge if eligible
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Determine PR number and fetch PR
+            const prNumber = context.eventName === 'workflow_dispatch'
+              ? (process.env.PR_NUMBER ? Number(process.env.PR_NUMBER) : null)
+              : context.payload.pull_request?.number;
+
+            if (!prNumber) {
+              core.notice('No PR number detected for this run. Skipping.');
+              return;
+            }
+
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+
+            // Gate: only target master
+            if (pr.base.ref !== 'master') {
+              core.notice(`PR base is ${pr.base.ref}, not master. Skipping.`);
+              return;
+            }
+
+            // Optional: blocking label
+            const hasDoNotMerge = (pr.labels || []).some(l => (l.name || '').toLowerCase() === 'do-not-merge');
+            if (hasDoNotMerge) {
+              core.notice('Found label do-not-merge. Skipping.');
+              return;
+            }
+
+            // Parse checklist under a section titled "任务清单"
+            const body = pr.body || '';
+            const lines = body.split('\n');
+            let inTasks = false;
+            let totalTasks = 0;
+            let unchecked = 0;
+            for (let i = 0; i < lines.length; i++) {
+              const raw = lines[i];
+              const line = raw.trim();
+              if (/^#{1,6}\s*任务清单/.test(line) || /^任务清单[:：]?$/.test(line)) {
+                inTasks = true;
+                continue;
+              }
+              if (inTasks) {
+                if (!/^[-*]\s*\[[ xX]\]/.test(line)) {
+                  // stop when leaving the checklist block (empty line allowed to continue)
+                  if (line !== '') inTasks = false;
+                } else {
+                  totalTasks++;
+                  if (/^[-*]\s*\[ \]/.test(line)) unchecked++;
+                }
+              }
+            }
+
+            if (totalTasks === 0) {
+              core.notice('No checklist items found under 任务清单; skipping auto-merge.');
+              return;
+            }
+            if (unchecked > 0) {
+              core.notice(`Checklist not complete (${totalTasks - unchecked}/${totalTasks}); skipping.`);
+              return;
+            }
+
+            // Ensure mergeable
+            // Refresh mergeability by re-fetching
+            const { data: pr2 } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            if (pr2.mergeable !== true || pr2.mergeable_state !== 'clean') {
+              core.notice(`PR not mergeable (mergeable=${pr2.mergeable}, state=${pr2.mergeable_state}).`);
+              return;
+            }
+
+            // Optional: ensure latest head sha still same when merging
+            const sha = pr2.head.sha;
+            const title = pr2.title || `PR #${pr2.number}`;
+
+            try {
+              const mergeResp = await github.rest.pulls.merge({
+                owner,
+                repo,
+                pull_number: pr2.number,
+                merge_method: 'squash',
+                commit_title: title,
+                commit_message: 'Auto-merge: checklist completed',
+                sha,
+              });
+              core.info(`Merged: sha=${mergeResp.data.sha}`);
+              // Comment result
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pr2.number,
+                body: `✅ 自动合并完成（基于任务清单全部勾选）\n\n- merge_method: squash\n- commit: ${mergeResp.data.sha}`,
+              });
+            } catch (e) {
+              core.warning(`Merge attempt failed: ${e?.message || e}`);
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pr2.number,
+                body: `⚠️ 自动合并失败：${e?.message || e}`,
+              });
+              throw e;
+            }
