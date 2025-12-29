@@ -52,6 +52,16 @@ jobs:
               return;
             }
 
+            // Require explicit ready-to-merge label
+            const hasReady = (pr.labels || []).some(l => {
+              const n = (l.name || '').toLowerCase();
+              return n === 'ready-to-merge' || n === 'ready to merge';
+            });
+            if (!hasReady) {
+              core.notice('Missing label ready-to-merge. Skipping auto-merge.');
+              return;
+            }
+
             // Parse checklist under a section titled "任务清单"
             const body = pr.body || '';
             const lines = body.split('\n');
