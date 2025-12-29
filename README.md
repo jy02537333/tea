@@ -67,6 +67,9 @@ TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
 
 说明：后端已实现 `POST /api/v1/admin/storage/oss/policy`，上传脚本默认使用表单直传策略以统一治理生命周期与前缀（建议 `ci_artifact/`）。示例直传外链（文本演示）：https://zdw-img.oss-cn-beijing.aliyuncs.com/ci_artifact/2025/12/28/oss_demo.txt。
 
+- Admin OSS Policy 响应（脱敏）: https://zdw-img.oss-cn-beijing.aliyuncs.com/ci_artifact/2025/12/29/admin_oss_policy_redacted.json
+- Get OSS Policy 响应（脱敏）: https://zdw-img.oss-cn-beijing.aliyuncs.com/ci_artifact/2025/12/29/get_oss_policy_redacted.json
+
 提示：该路由已实现，CI 已自动将 PR 顶部提示块中的该项勾选为完成（见 `.github/workflows/update-pr-checklist.yml`）。
 
 ## 统一登录与用户聚合接口（JWT v5）
