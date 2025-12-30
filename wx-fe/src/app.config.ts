@@ -6,6 +6,8 @@ export default {
     'pages/category/index',
     'pages/product-list/index',
     'pages/product-detail/index',
+    'pages/store-detail/index',
+    'pages/stores/index',
     'pages/order-detail/index',
     'pages/cart/index',
     'pages/checkout/index',

@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, Button, Image, Textarea } from '@tarojs/components';
 import Taro, { useRouter } from '@tarojs/taro';
 import { cancelOrder, confirmReceive, getOrder, payOrder } from '../../services/orders';
-import { Order, OrderItem } from '../../services/types';
+import { Order, OrderItem, Store } from '../../services/types';
+import { getStore } from '../../services/stores';
 import { createTicket } from '../../services/tickets';
 
 type ActionKey = 'cancel' | 'pay' | 'confirm' | null;
@@ -57,6 +58,10 @@ export default function OrderDetail({ id }: { id?: number }) {
   const [address, setAddress] = useState<Record<string, any> | null>(null);
   const [complaintContent, setComplaintContent] = useState('');
   const [complaintLoading, setComplaintLoading] = useState(false);
+  const [polling, setPolling] = useState(true);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
+  const POLL_MS = 3000;
+  const [currentStore, setCurrentStore] = useState<Store | null>(null);
 
   const loadOrder = useCallback(async () => {
     if (!orderId) return;
@@ -66,6 +71,7 @@ export default function OrderDetail({ id }: { id?: number }) {
       setOrder(data.order);
       setItems(Array.isArray(data.items) ? data.items : []);
       setAddress(parseAddress(data.order?.address_info));
+      setLastRefreshedAt(Date.now());
     } catch (err: any) {
       console.error('load order failed', err);
       Taro.showToast({ title: err?.message || '加载订单失败', icon: 'none' });
@@ -77,6 +83,22 @@ export default function OrderDetail({ id }: { id?: number }) {
   useEffect(() => {
     if (orderId) void loadOrder();
   }, [orderId, loadOrder]);
+
+  // 加载门店信息：优先使用订单的 store_id，其次尝试路由参数
+  useEffect(() => {
+    const fromOrder = toNumber(order?.store_id);
+    const fromRouter = router?.params?.store_id ? Number(router.params.store_id) : undefined;
+    const sid = fromOrder || (fromRouter && Number.isFinite(fromRouter) && fromRouter > 0 ? fromRouter : undefined);
+    if (!sid || (currentStore && currentStore.id === sid)) return;
+    (async () => {
+      try {
+        const s = await getStore(sid);
+        setCurrentStore(s as Store);
+      } catch (_) {
+        // ignore store load error
+      }
+    })();
+  }, [order?.store_id, router?.params?.store_id]);
 
   const numericStatus = useMemo(() => toNumber(order?.status), [order?.status]);
   const statusText = useMemo(() => {
@@ -100,6 +122,17 @@ export default function OrderDetail({ id }: { id?: number }) {
   const showPay = numericStatus === 1;
   const showCancel = numericStatus === 1;
   const showConfirm = numericStatus === 3;
+
+  const TERMINAL_STATUSES = useMemo(() => new Set([4, 5]), []);
+
+  useEffect(() => {
+    if (!polling || !orderId) return;
+    if (TERMINAL_STATUSES.has((numericStatus ?? -1))) return;
+    const timer = setInterval(() => {
+      void loadOrder();
+    }, POLL_MS);
+    return () => clearInterval(timer);
+  }, [polling, orderId, numericStatus, loadOrder, TERMINAL_STATUSES]);
 
   const runAction = async (key: Exclude<ActionKey, null>, fn: () => Promise<void>, successText: string) => {
     if (!orderId) return;
@@ -181,10 +214,41 @@ export default function OrderDetail({ id }: { id?: number }) {
 
   return (
     <View style={{ padding: 16 }}>
+      {currentStore && (
+        <View style={{
+          marginBottom: 8,
+          padding: '6px 10px',
+          borderWidth: 1,
+          borderStyle: 'solid',
+          borderColor: '#07c160',
+          borderRadius: 16,
+          display: 'inline-block',
+          backgroundColor: '#f6ffed',
+        }}>
+          <Text style={{ color: '#389e0d' }}>当前门店：{currentStore.name}</Text>
+        </View>
+      )}
       <View style={{ marginBottom: 16 }}>
         <Text style={{ fontSize: 16, fontWeight: 'bold' }}>{statusText}</Text>
         <Text style={{ display: 'block', marginTop: 8 }}>订单号：{order.order_no}</Text>
         <Text style={{ display: 'block', marginTop: 4 }}>下单时间：{order.created_at ?? '--'}</Text>
+        <View style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+          <Text style={{ color: '#666', fontSize: 12 }}>
+            自动刷新：{polling && !TERMINAL_STATUSES.has((numericStatus ?? -1)) ? '开启' : '关闭'}
+            {TERMINAL_STATUSES.has((numericStatus ?? -1)) ? '（已到终态）' : ''}
+          </Text>
+          <Button size="mini" onClick={() => setPolling((p) => !p)}>
+            {polling ? '停止自动刷新' : '开启自动刷新'}
+          </Button>
+          <Button size="mini" onClick={() => void loadOrder()}>
+            刷新状态
+          </Button>
+          {lastRefreshedAt && (
+            <Text style={{ color: '#999', fontSize: 12 }}>
+              最近刷新：{new Date(lastRefreshedAt).toLocaleTimeString()}
+            </Text>
+          )}
+        </View>
       </View>
 
       <View style={{ padding: 12, backgroundColor: '#f7f7f7', borderRadius: 8, marginBottom: 16 }}>

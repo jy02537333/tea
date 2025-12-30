@@ -56,3 +56,28 @@ npm run dev
 ```bash
 WX_API_BASE_URL="http://127.0.0.1:9393" npm run dev
 ```
+
+## 端到端订单演示与统一 CLI 快捷操作
+
+- 简要步骤：
+	- 后端：`bash ./run-tea-api.sh && curl -sS -i http://127.0.0.1:9292/api/v1/health`
+	- 前端：`pnpm -C wx-fe run dev:h5`（或 `dev:weapp`），在小程序端走“加购→结算→下单（自动统一下单+支付模拟）→订单详情”。
+	- 订单状态快捷操作（管理员令牌自动获取/复用）：
+
+```bash
+# 发货（状态→ 配送中 3）
+bash scripts/dev-order-cli.sh deliver <ORDER_ID>
+
+# 确认收货（状态→ 已完成 4）
+bash scripts/dev-order-cli.sh receive <ORDER_ID>
+
+# 取消订单（状态→ 已取消 5；支持原因）
+bash scripts/dev-order-cli.sh cancel <ORDER_ID> -r "超时未支付"
+```
+
+- 说明：订单详情页已内置自动轮询/手动刷新，便于观察状态变化；脚本响应保存在 `build-ci-logs/`。
+- 更多细节与说明：见项目根 [README](../README.md) 与 [START_LOCAL.md](../START_LOCAL.md) 的对应章节。
+
+## 近期特性补充（门店详情）
+
+- 门店详情页：证照、导航/拨号、门店商品映射已实现（最小版）。入口位于首页门店列表的“查看详情”，或门店列表页；详情页支持一键导航到地图、拨打门店电话、跳转查看本店商品（带 `store_id`）。

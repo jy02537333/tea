@@ -151,6 +151,9 @@ export interface Store {
   address?: string;
   latitude?: number;
   longitude?: number;
+  phone?: string;
+  licenses?: Array<string | { name?: string; url: string }>;
+  license_images?: string[]; // 兼容后端不同字段命名
 }
 
 export interface Activity {
@@ -164,4 +167,28 @@ export interface Activity {
   status?: number;
   priority?: number;
   description?: string;
+}
+
+// 用户聚合视图（与后端 GET /api/v1/users/me/summary 对齐的精简版）
+export interface MeSummary {
+  user?: User;
+  wallet?: {
+    balance_cents?: number;
+    tea_coins?: number;
+    frozen_amount_cents?: number;
+  };
+  points?: {
+    balance?: number;
+  };
+  coupons?: {
+    available_count?: number;
+  };
+  share?: {
+    direct_count?: number;
+    team_count?: number;
+    total_commission_cents?: number;
+    available_commission_cents?: number;
+    frozen_commission_cents?: number;
+  };
+  orders_stats?: Record<string, number>;
 }

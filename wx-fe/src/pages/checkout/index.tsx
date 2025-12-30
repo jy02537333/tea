@@ -3,7 +3,9 @@ import { View, Text, Input, Button } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import { listCart } from '../../services/cart';
 import { createOrderFromCart, getAvailableCouponsForOrder } from '../../services/orders';
-import { CartItem, UserCoupon } from '../../services/types';
+import { createUnifiedOrder, mockPayCallback } from '../../services/payments';
+import { CartItem, UserCoupon, Store } from '../../services/types';
+import { getStore } from '../../services/stores';
 import { formatAddress, loadDefaultAddress, saveDefaultAddress } from '../../utils/address';
 
 export default function CheckoutPage() {
@@ -16,11 +18,26 @@ export default function CheckoutPage() {
   const [selectedUserCouponId, setSelectedUserCouponId] = useState<number | undefined>(undefined);
   const [availableCoupons, setAvailableCoupons] = useState<UserCoupon[]>([]);
   const [showCouponList, setShowCouponList] = useState(false);
+  const [currentStore, setCurrentStore] = useState<Store | null>(null);
 
   useEffect(() => {
     void fetchCart();
     void preloadAddress();
+    void loadCurrentStore();
   }, []);
+
+  async function loadCurrentStore() {
+    try {
+      const storeIdRaw = Taro.getStorageSync('current_store_id');
+      const storeId = storeIdRaw ? Number(storeIdRaw) : NaN;
+      if (!Number.isNaN(storeId) && storeId > 0) {
+        const s = await getStore(storeId);
+        setCurrentStore(s as Store);
+      }
+    } catch (_) {
+      // ignore
+    }
+  }
 
   async function fetchCart() {
     try {
@@ -50,7 +67,12 @@ export default function CheckoutPage() {
         setAvailableCoupons([]);
         return;
       }
-      const payload = { order_amount: String(sum) };
+      const storeIdRaw = Taro.getStorageSync('current_store_id');
+      const maybeStoreId = storeIdRaw ? Number(storeIdRaw) : undefined;
+      const payload: { order_amount: string; store_id?: number } = { order_amount: String(sum) };
+      if (maybeStoreId && Number.isFinite(maybeStoreId) && maybeStoreId > 0) {
+        payload.store_id = maybeStoreId;
+      }
       const data = await getAvailableCouponsForOrder(payload);
       const list = data.available || [];
       setAvailableCoupons(list);
@@ -108,11 +130,14 @@ export default function CheckoutPage() {
     }
     setSubmitting(true);
     try {
+      const storeIdRaw = Taro.getStorageSync('current_store_id');
+      const maybeStoreId = storeIdRaw ? Number(storeIdRaw) : undefined;
       const payload = {
         delivery_type: 2, // 简化：2 = 配送
         address_info: address || undefined,
         remark: remark || undefined,
         user_coupon_id: selectedUserCouponId,
+        store_id: maybeStoreId && Number.isFinite(maybeStoreId) && maybeStoreId > 0 ? maybeStoreId : undefined,
       };
       const order = await createOrderFromCart(payload as any);
       if (address.trim()) {
@@ -125,9 +150,30 @@ export default function CheckoutPage() {
           timestamp: Date.now(),
         });
       }
-      Taro.showToast({ title: '下单成功', icon: 'success', duration: 1500 });
+      // 统一下单 + 支付模拟回调
       if ((order as any)?.id) {
-        Taro.navigateTo({ url: `/pages/order-detail/index?id=${(order as any).id}` });
+        try {
+          const payRes = await createUnifiedOrder((order as any).id);
+          await mockPayCallback(payRes.payment_no);
+          Taro.showToast({ title: '支付成功（模拟）', icon: 'success', duration: 1500 });
+          // 跳转到订单详情查看状态
+          const sid = (maybeStoreId && Number.isFinite(maybeStoreId) && maybeStoreId > 0) ? maybeStoreId : undefined;
+          const url = sid
+            ? `/pages/order-detail/index?id=${(order as any).id}&store_id=${sid}`
+            : `/pages/order-detail/index?id=${(order as any).id}`;
+          Taro.navigateTo({ url });
+        } catch (payErr) {
+          console.error('unified order or callback failed', payErr);
+          Taro.showToast({ title: '下单成功，支付模拟失败', icon: 'none', duration: 2000 });
+          // 即使支付失败也允许查看订单详情
+          const sid = (maybeStoreId && Number.isFinite(maybeStoreId) && maybeStoreId > 0) ? maybeStoreId : undefined;
+          const url = sid
+            ? `/pages/order-detail/index?id=${(order as any).id}&store_id=${sid}`
+            : `/pages/order-detail/index?id=${(order as any).id}`;
+          Taro.navigateTo({ url });
+        }
+      } else {
+        Taro.showToast({ title: '下单成功', icon: 'success', duration: 1500 });
       }
     } catch (e) {
       console.error('create order failed', e);
@@ -139,6 +185,23 @@ export default function CheckoutPage() {
 
   return (
     <View style={{ padding: 12 }}>
+      {currentStore && (
+        <View style={{
+          marginBottom: 8,
+          padding: '6px 10px',
+          borderWidth: 1,
+          borderStyle: 'solid',
+          borderColor: '#07c160',
+          borderRadius: 16,
+          display: 'inline-block',
+          backgroundColor: '#f6ffed',
+        }}>
+          <Text style={{ color: '#389e0d' }}>当前门店：{currentStore.name}</Text>
+        </View>
+      )}
+      <Text style={{ fontSize: 12, color: '#999', marginBottom: 8 }}>
+        温馨提示：如购物车含多门店商品，系统将自动拆分为多张订单。
+      </Text>
       <Text>确认订单（共 {items.length} 件）</Text>
       <Text>金额（示意）: {calcTotal()}</Text>
 

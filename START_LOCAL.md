@@ -271,3 +271,45 @@ BASE_URL='http://127.0.0.1:9292/api/v1' go run ./cmd/e2e_single_sku_order
 - 若 `TOKEN` 环境变量为空，CLI 会尝试调用开发登录以获取管理员令牌。
 - 运行成功后订单 `status=2`、`pay_status=2` 表示已支付。
 - 若收到 404 或 401，请检查 API 是否运行在 9292 端口且路由已加载，或确认令牌有效。
+
+---
+
+## 12. 前端 + 后端一键演示命令（订单状态联调）
+
+本节提供统一脚本用于演示订单状态从「待支付(1)→已付款(2)→配送中(3)→已完成(4)/已取消(5)」。
+
+1) 启动后端与健康检查：
+
+```bash
+bash ./run-tea-api.sh
+curl -sS -i http://127.0.0.1:9292/api/v1/health
+```
+
+2) 启动前端并创建订单（wx-fe 已集成统一下单与支付模拟，结算页会自动触发统一下单 + 支付回调）：
+
+```bash
+pnpm -C wx-fe run dev:h5
+# 或
+pnpm -C wx-fe run dev:weapp
+```
+
+3) 使用统一 CLI 操作订单：
+
+```bash
+# 发货（推进到配送中 3）
+bash scripts/dev-order-cli.sh deliver <ORDER_ID>
+
+# 确认收货（推进到已完成 4）
+bash scripts/dev-order-cli.sh receive <ORDER_ID>
+
+# 取消订单（进入已取消 5；支持原因）
+bash scripts/dev-order-cli.sh cancel <ORDER_ID> -r "超时未支付"
+
+# 指定端口（示例 9393）
+bash scripts/dev-order-cli.sh deliver <ORDER_ID> -p 9393
+```
+
+提示：
+- 脚本会自动尝试管理员登录并复用令牌（保存在 `build-ci-logs/admin_login_response.json`）。
+- 响应保存至 `build-ci-logs/`（如 `deliver_*.json` / `receive_*.json` / `cancel_*.json`）。
+- 订单详情页支持自动轮询与手动刷新，方便观察状态变化。

@@ -15,6 +15,7 @@ import {
   FireOutlined,
   CustomerServiceOutlined,
   CreditCardOutlined,
+  ToolOutlined,
 } from '@ant-design/icons';
 import { PropsWithChildren } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -133,6 +134,9 @@ export function AppShell({ children }: PropsWithChildren) {
           </Menu.Item>
           <Menu.Item key="/orders" icon={<ProfileOutlined />}>
             <Link to="/orders">订单管理</Link>
+          </Menu.Item>
+          <Menu.Item key="/dev-tools" icon={<ToolOutlined />}>
+            <a href="https://github.com/jy02537333/tea#readme" target="_blank" rel="noreferrer">开发者工具</a>
           </Menu.Item>
           <Menu.Item key="logout" icon={<LogoutOutlined />} onClick={handleLogout}>
             退出登录
