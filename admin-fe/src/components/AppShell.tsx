@@ -32,7 +32,10 @@ export function AppShell({ children }: PropsWithChildren) {
   // “新”标识显示规则：PR 合并/部署后 30 天自动隐藏
   // 优先读取起始日期 VITE_STORE_FINANCE_NEW_BADGE_START（格式 YYYY-MM-DD），否则以当前构建/运行时间为起点
   const envStart = (import.meta as any)?.env?.VITE_STORE_FINANCE_NEW_BADGE_START as string | undefined;
-  const startDate = envStart && String(envStart).trim() ? dayjs(envStart, 'YYYY-MM-DD') : dayjs();
+  const buildCommitDate = (import.meta as any)?.env?.VITE_BUILD_COMMIT_DATE as string | undefined;
+  const startDate = envStart && String(envStart).trim()
+    ? dayjs(envStart, 'YYYY-MM-DD')
+    : (buildCommitDate && String(buildCommitDate).trim() ? dayjs(buildCommitDate, 'YYYY-MM-DD') : dayjs());
   const endDate = startDate.add(30, 'day').endOf('day');
   const showNewBadge = dayjs().isBefore(endDate);
 
