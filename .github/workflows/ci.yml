@@ -42,6 +42,12 @@ jobs:
         working-directory: admin-fe
         run: pnpm install --frozen-lockfile
 
+      - name: Set NEW badge start date
+        shell: bash
+        run: |
+          echo "VITE_STORE_FINANCE_NEW_BADGE_START=$(date -u +%F)" >> $GITHUB_ENV
+          echo "Set VITE_STORE_FINANCE_NEW_BADGE_START to $(date -u +%F)"
+
       - name: admin-fe typecheck
         working-directory: admin-fe
         run: pnpm test
