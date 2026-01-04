@@ -64,6 +64,21 @@ export interface StoreWithdrawRecord {
   created_at?: string;
 }
 
+// 门店资金流水（聚合支付/退款/提现）
+export interface StoreFinanceTransaction {
+  id: number;
+  store_id: number;
+  type: 'payment' | 'refund' | 'withdraw';
+  direction: 'in' | 'out';
+  amount: string; // 金额（元）
+  fee: string; // 手续费（元），支付/退款为0
+  related_id: number; // 关联订单ID或0
+  related_no: string; // 支付/退款/提现单号
+  method: number; // 支付方式（支付/退款有效）
+  remark?: string;
+  created_at?: string;
+}
+
 export interface StoreProduct {
   id: number;
   store_id: number;
@@ -309,4 +324,25 @@ export async function upsertStoreProduct(
 export async function deleteStoreProduct(id: number, productId: number) {
   const res = await api.delete(`/api/v1/admin/stores/${id}/products/${productId}`);
   return unwrap(res);
+}
+
+// 门店资金流水列表（分页）
+export async function getStoreFinanceTransactions(
+  id: number,
+  params?: { page?: number; limit?: number; start?: string; end?: string; type?: 'payment' | 'refund' | 'withdraw' | '' }
+) {
+  const res = await api.get(`/api/v1/stores/${id}/finance/transactions`, { params });
+  return unwrapPagination<StoreFinanceTransaction>(res);
+}
+
+// 门店资金流水导出（CSV）
+export async function exportStoreFinanceTransactions(
+  id: number,
+  params?: { start?: string; end?: string; type?: 'payment' | 'refund' | 'withdraw' | '' }
+) {
+  const res = await api.get(`/api/v1/stores/${id}/finance/transactions/export`, {
+    params,
+    responseType: 'blob',
+  });
+  return res.data as Blob;
 }
