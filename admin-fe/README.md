@@ -60,6 +60,19 @@ npm run dev
 VITE_API_BASE="http://127.0.0.1:9393" npm run dev
 ```
 
+## 门店财务与流水
+
+- 入口位置：侧边栏“门店财务”（路由 `/store-finance`）。
+- 页面功能：
+	- “门店财务提现”卡片：展示钱包概要（总收入/总退款/总提现/可用余额），支持发起提现申请与查看分页提现记录；可按状态筛选并导出当前页 CSV。
+	- “资金流水（支付/退款/提现）”表格卡片：按时间倒序聚合展示门店收支变动（收款/退款/提现），含方向（收入/支出）、类型、金额、手续费、支付方式、关联号、备注；支持类型与起止日期筛选、分页与导出当前筛选为 CSV。
+- 权限要求：`store:wallet:view`（用于查询流水与导出），提现操作需相应业务权限。
+- 后端接口：
+	- 列表：`GET /api/v1/stores/:id/finance/transactions?start=&end=&page=&limit=&type=`
+	- 导出：`GET /api/v1/stores/:id/finance/transactions/export?start=&end=&type=`
+
+> 本地快速预览（无需登录）：构建后可通过脚本 `node tools/automation/admin-static-server.js` 启动静态服务器，浏览器访问 `http://127.0.0.1:10113/store-finance?tk=临时token`（仅用于预览 UI，实际数据需后端与权限就绪）。
+
 ## 订单操作与权限
 
 - 发货：需要权限 `order:deliver`，在订单状态“已付款”显示。
