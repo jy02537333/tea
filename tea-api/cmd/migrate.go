@@ -60,6 +60,7 @@ func main() {
 		&model.UserCoupon{},
 		&model.Activity{},
 		&model.ActivityProduct{},
+		&model.ActivityRegistration{},
 
 		// 配置管理
 		&model.SystemConfig{},

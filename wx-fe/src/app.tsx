@@ -41,6 +41,10 @@ function App({ children }: PropsWithChildren<Record<string, unknown>>) {
           const n = Number(r);
           if (!Number.isNaN(n) && n > 0) referrerId = n;
         }
+        const tk = sp.get('tk');
+        if (tk) {
+          try { Taro.setStorageSync('token', tk); } catch (_) {}
+        }
       }
       if (sid) {
         Taro.setStorageSync('current_store_id', String(sid));

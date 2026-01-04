@@ -14,10 +14,24 @@ export default function ActivitiesPage() {
 	const [phone, setPhone] = useState('');
 	const [submittingId, setSubmittingId] = useState<number | null>(null);
 	const [fee, setFee] = useState('');
+	const [successActivityId, setSuccessActivityId] = useState<number | null>(null);
+	const [autoOnce, setAutoOnce] = useState(false);
+	const [autoFlag, setAutoFlag] = useState(false);
+	const [autoActivityId, setAutoActivityId] = useState<number | null>(null);
 
 	useEffect(() => {
 		const router = Taro.getCurrentInstance().router;
 		const storeIdParam = router?.params?.store_id;
+		const initName = (router?.params?.name as string) || '';
+		const initPhone = (router?.params?.phone as string) || '';
+		const initFee = (router?.params?.fee as string) || '';
+		const auto = router?.params?.auto === '1';
+		const actIdParam = router?.params?.activity_id ? Number(router?.params?.activity_id) : NaN;
+		if (initName) setName(initName);
+		if (initPhone) setPhone(initPhone);
+		if (initFee) setFee(initFee);
+		if (auto) setAutoFlag(true);
+		if (!Number.isNaN(actIdParam) && actIdParam > 0) setAutoActivityId(actIdParam);
 		let id: number | undefined;
 		if (storeIdParam) {
 			const parsed = Number(storeIdParam);
@@ -38,6 +52,16 @@ export default function ActivitiesPage() {
 			Taro.showToast({ title: '缺少门店信息，请从门店列表进入', icon: 'none' });
 		}
 	}, []);
+
+	useEffect(() => {
+		if (!autoFlag || autoOnce) return;
+		if (activities.length === 0) return;
+		const targetId = autoActivityId || activities[0]?.id;
+		if (targetId) {
+			setAutoOnce(true);
+			void handleRegister(targetId);
+		}
+	}, [autoFlag, autoOnce, activities, autoActivityId]);
 
 	async function fetchActivities(id: number) {
 		setLoading(true);
@@ -91,13 +115,17 @@ export default function ActivitiesPage() {
 				fee: feeNum,
 			});
 			const order: Order | undefined = res?.order as any;
-			Taro.showToast({ title: '报名成功', icon: 'success' });
+			if (!order || Number(order.pay_amount) === 0) {
+				setSuccessActivityId(activityId);
+				Taro.showToast({ title: '报名成功', icon: 'success' });
+			}
 			if (order && Number(order.pay_amount) > 0) {
 				try {
 					const payRes = await createUnifiedOrder(order.id);
 					if (payRes?.payment_no) {
 						await mockPayCallback(payRes.payment_no);
-						Taro.showToast({ title: '支付成功', icon: 'success' });
+						setSuccessActivityId(activityId);
+						Taro.showToast({ title: '报名并支付成功', icon: 'success' });
 					}
 				} catch (err) {
 					console.error('pay activity order failed', err);
@@ -110,6 +138,10 @@ export default function ActivitiesPage() {
 			Taro.showToast({ title: msg, icon: 'none' });
 		} finally {
 			setSubmittingId(null);
+			// 清理输入，提升体验
+			setName('');
+			setPhone('');
+			// 保留 fee 以便用户下次参考
 		}
 	}
 
@@ -174,6 +206,11 @@ export default function ActivitiesPage() {
 						}}
 					>
 						<Text style={{ fontSize: 16, fontWeight: 'bold' }}>{act.name}</Text>
+						{successActivityId === act.id && (
+							<View style={{ marginTop: 4, display: 'inline-block', padding: '2px 8px', backgroundColor: '#f6ffed', borderRadius: 12, borderWidth: 1, borderStyle: 'solid', borderColor: '#b7eb8f' }}>
+								<Text style={{ color: '#389e0d' }}>已报名成功</Text>
+							</View>
+						)}
 						<View style={{ marginTop: 4 }}>
 							<Text>
 								时间：{act.start_time} - {act.end_time}
@@ -190,7 +227,7 @@ export default function ActivitiesPage() {
 							loading={submittingId === act.id}
 							onClick={() => handleRegister(act.id)}
 						>
-							{submittingId === act.id ? '报名中...' : '报名参加'}
+							{submittingId === act.id ? '报名中...' : (fee.trim() && Number(fee) > 0 ? '报名并支付' : '报名参加')}
 						</Button>
 					</View>
 				))}
