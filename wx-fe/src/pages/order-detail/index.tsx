@@ -16,6 +16,13 @@ const STATUS_TEXT: Record<number, string> = {
   5: '已取消',
 };
 
+const PAY_STATUS_TEXT: Record<number, string> = {
+  1: '未付款',
+  2: '已付款',
+  3: '退款中',
+  4: '已退款',
+};
+
 function toNumber(value?: number | string): number | undefined {
   if (typeof value === 'number') return value;
   if (typeof value === 'string') {
@@ -105,6 +112,21 @@ export default function OrderDetail({ id }: { id?: number }) {
     if (!numericStatus) return order?.status ? String(order.status) : '--';
     return STATUS_TEXT[numericStatus] || String(order?.status ?? '--');
   }, [numericStatus, order?.status]);
+
+  const numericPayStatus = useMemo(() => {
+    const v = order?.pay_status;
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string') {
+      const p = parseInt(v, 10);
+      return Number.isNaN(p) ? undefined : p;
+    }
+    return undefined;
+  }, [order?.pay_status]);
+
+  const payStatusText = useMemo(() => {
+    if (!numericPayStatus) return order?.pay_status ? String(order.pay_status) : '--';
+    return PAY_STATUS_TEXT[numericPayStatus] || String(order?.pay_status ?? '--');
+  }, [numericPayStatus, order?.pay_status]);
 
   const addressText = useMemo(() => {
     if (!address) {
@@ -232,6 +254,7 @@ export default function OrderDetail({ id }: { id?: number }) {
         <Text style={{ fontSize: 16, fontWeight: 'bold' }}>{statusText}</Text>
         <Text style={{ display: 'block', marginTop: 8 }}>订单号：{order.order_no}</Text>
         <Text style={{ display: 'block', marginTop: 4 }}>下单时间：{order.created_at ?? '--'}</Text>
+        <Text style={{ display: 'block', marginTop: 4, color: '#8c8c8c', fontSize: 12 }}>支付状态：{payStatusText}</Text>
         <View style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
           <Text style={{ color: '#666', fontSize: 12 }}>
             自动刷新：{polling && !TERMINAL_STATUSES.has((numericStatus ?? -1)) ? '开启' : '关闭'}
@@ -309,6 +332,14 @@ export default function OrderDetail({ id }: { id?: number }) {
           </Button>
         )}
       </View>
+
+      {(numericPayStatus === 3 || numericPayStatus === 4) && (
+        <View style={{ marginTop: 16, padding: 12, backgroundColor: '#fffbe6', borderRadius: 8, border: '1px solid #ffe58f' }}>
+          <Text style={{ fontWeight: 'bold', display: 'block' }}>退款进度</Text>
+          <Text style={{ display: 'block', marginTop: 6, color: '#ad8b00' }}>{numericPayStatus === 3 ? '退款处理中，请耐心等待' : '已退款完成'}</Text>
+          {order.paid_at && <Text style={{ display: 'block', marginTop: 4, color: '#8c8c8c', fontSize: 12 }}>支付时间：{order.paid_at}</Text>}
+        </View>
+      )}
 
       <View style={{ marginTop: 20 }}>
         <Text style={{ fontWeight: 'bold', display: 'block', marginBottom: 8 }}>订单有问题？提交投诉</Text>
