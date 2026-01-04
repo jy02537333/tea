@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, Button, Picker } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import { listStoreFinanceTransactions, type StoreFinanceTransaction, type StoreFinanceQuery } from '../../services/stores';
+import usePermission from '../../hooks/usePermission';
+import { PERM_HINT_NO_STORE_FINANCE, PERM_TOAST_NO_STORE_FINANCE } from '../../constants/permission';
 
 export default function StoreFinancePage() {
   const [storeId, setStoreId] = useState<number | undefined>(undefined);
@@ -10,6 +12,7 @@ export default function StoreFinancePage() {
   const [txType, setTxType] = useState<StoreFinanceQuery['type']>(undefined);
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
+  const perm = usePermission();
 
   useEffect(() => {
     const router = Taro.getCurrentInstance().router;
@@ -18,18 +21,29 @@ export default function StoreFinancePage() {
       const id = Number(storeIdParam);
       if (!Number.isNaN(id) && id > 0) {
         setStoreId(id);
-        void fetchFinanceRecords(id, txType, startDate || undefined, endDate || undefined);
       }
     } else {
       Taro.showToast({ title: '缺少门店信息，请从首页进入', icon: 'none' });
     }
   }, []);
 
+  const allowed = perm.allowedStoreFinance;
+
+  useEffect(() => {
+    if (storeId && !allowed) {
+      Taro.showToast({ title: PERM_TOAST_NO_STORE_FINANCE, icon: 'none' });
+    }
+  }, [storeId, allowed]);
+
   useEffect(() => {
     if (storeId) {
+      if (!allowed) {
+        // 无权限则不加载记录，仅展示提示
+        return;
+      }
       void fetchFinanceRecords(storeId, txType, startDate || undefined, endDate || undefined);
     }
-  }, [storeId, txType, startDate, endDate]);
+  }, [storeId, txType, startDate, endDate, allowed]);
 
   async function fetchFinanceRecords(id: number, type?: string, start?: string, end?: string) {
     setLoading(true);
@@ -92,6 +106,9 @@ export default function StoreFinancePage() {
   return (
     <View style={{ padding: 12 }}>
       <Text style={{ fontSize: 18, fontWeight: 'bold' }}>门店财务流水</Text>
+      {!allowed && (
+        <Text style={{ color: '#999', marginTop: 8 }}>{PERM_HINT_NO_STORE_FINANCE}</Text>
+      )}
 
       {/* 时间范围筛选 */}
       <View
@@ -105,7 +122,7 @@ export default function StoreFinancePage() {
         }}
       >
         <Text>起始日期：</Text>
-        <Picker mode="date" value={startDate} onChange={handleStartChange}>
+        <Picker mode="date" value={startDate} onChange={handleStartChange} disabled={!allowed}>
           <View
             style={{
               padding: 4,
@@ -120,7 +137,7 @@ export default function StoreFinancePage() {
           </View>
         </Picker>
         <Text>结束日期：</Text>
-        <Picker mode="date" value={endDate} onChange={handleEndChange}>
+        <Picker mode="date" value={endDate} onChange={handleEndChange} disabled={!allowed}>
           <View
             style={{
               padding: 4,
@@ -137,23 +154,23 @@ export default function StoreFinancePage() {
 
       {/* 类型筛选 Tab */}
       <View style={{ marginTop: 8, marginBottom: 12, display: 'flex', flexDirection: 'row' }}>
-        <Button size="mini" onClick={() => changeType(undefined)}>
+        <Button size="mini" disabled={!allowed} onClick={() => changeType(undefined)}>
           全部
         </Button>
-        <Button size="mini" onClick={() => changeType('payment')} style={{ marginLeft: 8 }}>
+        <Button size="mini" disabled={!allowed} onClick={() => changeType('payment')} style={{ marginLeft: 8 }}>
           收款
         </Button>
-        <Button size="mini" onClick={() => changeType('refund')} style={{ marginLeft: 8 }}>
+        <Button size="mini" disabled={!allowed} onClick={() => changeType('refund')} style={{ marginLeft: 8 }}>
           退款
         </Button>
-        <Button size="mini" onClick={() => changeType('withdraw')} style={{ marginLeft: 8 }}>
+        <Button size="mini" disabled={!allowed} onClick={() => changeType('withdraw')} style={{ marginLeft: 8 }}>
           提现
         </Button>
       </View>
 
       {loading && <Text>加载中...</Text>}
-      {!loading && !records.length && <Text>暂无财务流水</Text>}
-      {!loading &&
+      {!loading && allowed && !records.length && <Text>暂无财务流水</Text>}
+      {!loading && allowed &&
         records.map((rec) => (
           <View
             key={`${rec.type}-${rec.id}`}

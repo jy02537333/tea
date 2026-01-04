@@ -34,6 +34,7 @@ func SetupRouter() *gin.Engine {
 	partnerAdminHandler := handler.NewPartnerAdminHandler()
 	membershipHandler := handler.NewMembershipHandler()
 	dashboardHandler := handler.NewDashboardHandler()
+	contentHandler := handler.NewContentHandler()
 	productHandler := handler.NewProductHandler(
 		service.NewProductService(),
 	)
@@ -60,6 +61,9 @@ func SetupRouter() *gin.Engine {
 	// Sprint B: 我的/个人中心聚合（最小连通性）
 	api.GET("/users/me/summary", middleware.AuthJWT(), handler.GetUserSummary)
 
+	// 公共内容页（隐私/协议/关于/帮助）
+	api.GET("/content/pages", contentHandler.GetPages)
+
 	// Sprint B: 用户钱包（余额与流水）
 	api.GET("/wallet", middleware.AuthJWT(), handler.GetMyWallet)
 	api.GET("/wallet/transactions", middleware.AuthJWT(), handler.ListMyWalletTransactions)
@@ -83,6 +87,12 @@ func SetupRouter() *gin.Engine {
 
 	// 用户侧工单（小程序意见反馈/订单投诉）
 	api.POST("/tickets", middleware.AuthMiddleware(), ticketUserHandler.Create)
+
+	// 分享/推荐关系（最小版）
+	api.POST("/referrals/bind", middleware.AuthJWT(), handler.BindReferral)
+
+	// 小程序码生成（wxacodeunlimit）
+	api.POST("/wx/wxacode", middleware.AuthJWT(), handler.GetWxaCode)
 
 	// 会员相关（小程序/用户侧只读接口）
 	api.GET("/membership-packages", middleware.AuthMiddleware(), membershipHandler.ListPackages)

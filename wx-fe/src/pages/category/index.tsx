@@ -5,11 +5,14 @@ import { listCategories } from '../../services/categories';
 import { getProducts } from '../../services/products';
 import { listStores } from '../../services/stores';
 import { Category, Product, Store } from '../../services/types';
+import usePermission from '../../hooks/usePermission';
+import { PERM_HINT_STORE_MGMT_READONLY_PAGE } from '../../constants/permission';
 
 const PAGE_SIZE = 10;
 
 export default function CategoryPage() {
   const router = useRouter();
+  const perm = usePermission();
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>(undefined);
 
@@ -220,6 +223,20 @@ export default function CategoryPage() {
 
   return (
     <View style={{ padding: 12 }}>
+      {!perm.allowedStoreMgmt && (
+        <Text style={{ color: '#999', marginBottom: 8 }}>{PERM_HINT_STORE_MGMT_READONLY_PAGE}</Text>
+      )}
+      {/* 管理快捷入口（仅有权限且已选择具体门店时显示） */}
+      {selectedStoreId && (
+        <View style={{ marginBottom: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {perm.allowedStoreAccounts && (
+            <Button size="mini" onClick={() => Taro.navigateTo({ url: `/pages/store-accounts/index?store_id=${selectedStoreId}` })}>管理收款账户</Button>
+          )}
+          {perm.allowedStoreFinance && (
+            <Button size="mini" onClick={() => Taro.navigateTo({ url: `/pages/store-finance/index?store_id=${selectedStoreId}` })}>查看财务流水</Button>
+          )}
+        </View>
+      )}
       <View style={{ marginBottom: 12 }}>
         <Input
           type="text"

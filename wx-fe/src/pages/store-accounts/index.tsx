@@ -8,6 +8,8 @@ import {
   deleteStoreAccount,
   StoreBankAccount,
 } from '../../services/stores';
+import usePermission from '../../hooks/usePermission';
+import { PERM_HINT_NO_STORE_ACCOUNTS, PERM_TOAST_NO_STORE_ACCOUNTS } from '../../constants/permission';
 
 export default function StoreAccountsPage() {
   const instance = Taro.getCurrentInstance();
@@ -26,6 +28,7 @@ export default function StoreAccountsPage() {
   const [accountNo, setAccountNo] = useState('');
   const [bankName, setBankName] = useState('');
   const [isDefault, setIsDefault] = useState(false);
+  const perm = usePermission();
 
   useEffect(() => {
     if (!storeId) {
@@ -34,6 +37,8 @@ export default function StoreAccountsPage() {
     }
     void fetchAccounts(storeId);
   }, [storeId]);
+
+    const allowed = perm.allowedStoreAccounts;
 
   async function fetchAccounts(id: number) {
     setLoading(true);
@@ -58,10 +63,18 @@ export default function StoreAccountsPage() {
   }
 
   function startCreate() {
+    if (!allowed) {
+      Taro.showToast({ title: PERM_TOAST_NO_STORE_ACCOUNTS, icon: 'none' });
+      return;
+    }
     resetForm();
   }
 
   function startEdit(acc: StoreBankAccount) {
+    if (!allowed) {
+      Taro.showToast({ title: PERM_TOAST_NO_STORE_ACCOUNTS, icon: 'none' });
+      return;
+    }
     setEditing(acc);
     setAccountType(acc.account_type || 'bank');
     setAccountName(acc.account_name || '');
@@ -73,6 +86,10 @@ export default function StoreAccountsPage() {
   async function handleSubmit() {
     if (!storeId) {
       Taro.showToast({ title: '缺少门店信息', icon: 'none' });
+      return;
+    }
+    if (!allowed) {
+      Taro.showToast({ title: PERM_TOAST_NO_STORE_ACCOUNTS, icon: 'none' });
       return;
     }
     if (!accountName || !accountNo) {
@@ -106,6 +123,10 @@ export default function StoreAccountsPage() {
 
   async function handleDelete(acc: StoreBankAccount) {
     if (!storeId) return;
+    if (!allowed) {
+      Taro.showToast({ title: PERM_TOAST_NO_STORE_ACCOUNTS, icon: 'none' });
+      return;
+    }
     const res = await Taro.showModal({
       title: '确认删除',
       content: '删除后将无法恢复，确认删除该收款账户吗？',
@@ -152,11 +173,11 @@ export default function StoreAccountsPage() {
           </View>
         )}
         <View style={{ display: 'flex', flexDirection: 'row' }}>
-          <Button size="mini" onClick={() => startEdit(acc)}>
+          <Button size="mini" disabled={!allowed} onClick={() => startEdit(acc)}>
             编辑
           </Button>
           <View style={{ width: 8 }} />
-          <Button size="mini" type="warn" onClick={() => handleDelete(acc)}>
+          <Button size="mini" type="warn" disabled={!allowed} onClick={() => handleDelete(acc)}>
             删除
           </Button>
         </View>
@@ -189,6 +210,7 @@ export default function StoreAccountsPage() {
 
       <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderStyle: 'solid', borderColor: '#eee' }}>
         <Text style={{ fontSize: 16, marginBottom: 8 }}>{editing ? '编辑收款账户' : '新增收款账户'}</Text>
+        {!allowed && <Text style={{ color: '#999', marginBottom: 8 }}>{PERM_HINT_NO_STORE_ACCOUNTS}</Text>}
 
         <View style={{ marginBottom: 8 }}>
           <Text>账户类型（bank / alipay / wechat）</Text>
@@ -235,7 +257,7 @@ export default function StoreAccountsPage() {
           <Switch checked={isDefault} onChange={(e) => setIsDefault(!!(e.detail as any).value)} />
         </View>
 
-        <Button type="primary" onClick={handleSubmit}>
+        <Button type="primary" disabled={!allowed} onClick={handleSubmit}>
           {editing ? '保存修改' : '新增账户'}
         </Button>
         {editing && (

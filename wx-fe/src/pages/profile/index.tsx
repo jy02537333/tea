@@ -4,6 +4,8 @@ import Taro, { usePullDownRefresh } from '@tarojs/taro';
 import { getMeSummary } from '../../services/me';
 import { setToken } from '../../services/api';
 import type { MeSummary, User } from '../../services/types';
+import usePermission from '../../hooks/usePermission';
+import { PERM_TOAST_NO_STORE_MGMT } from '../../constants/permission';
 
 export default function ProfilePage() {
   const [summary, setSummary] = useState<MeSummary | null>(null);
@@ -40,6 +42,7 @@ export default function ProfilePage() {
   }
 
   const user: User | undefined | null = summary?.user;
+  const perm = usePermission();
 
   function ensureLoggedIn() {
     if (!user) {
@@ -93,6 +96,31 @@ export default function ProfilePage() {
   function handleHelpDocs() {
     Taro.navigateTo({ url: '/pages/help/index' }).catch(() => {});
   }
+  function handleSettings() {
+    Taro.navigateTo({ url: '/pages/settings/index' }).catch(() => {});
+  }
+
+  function handleStoreManagement() {
+    if (!ensureLoggedIn()) return;
+    if (!perm.allowedStoreMgmt) {
+      Taro.showToast({ title: PERM_TOAST_NO_STORE_MGMT, icon: 'none' });
+      return;
+    }
+    // 若未选定当前门店，先到门店列表；否则跳转到账户管理
+    let currentId: number | null = null;
+    try {
+      const v = Taro.getStorageSync('current_store_id');
+      const n = Number(v);
+      if (Number.isFinite(n) && n > 0) currentId = n;
+    } catch (_) {}
+    if (currentId) {
+      Taro.navigateTo({ url: `/pages/store-accounts/index?store_id=${currentId}` }).catch(() => {
+        Taro.navigateTo({ url: '/pages/stores/index' }).catch(() => {});
+      });
+    } else {
+      Taro.navigateTo({ url: '/pages/stores/index' }).catch(() => {});
+    }
+  }
 
   function handleViewMembership() {
     if (!ensureLoggedIn()) return;
@@ -116,7 +144,8 @@ export default function ProfilePage() {
   }
 
   const serviceItems = useMemo(
-    () => [
+    () => {
+      const base = [
       { key: 'orders', title: '订单', desc: '查看全部订单', action: handleViewOrders },
       { key: 'wallet', title: '钱包', desc: '余额/提现/茶币', action: handleViewWallet },
       { key: 'points', title: '积分', desc: '积分与成长值', action: handleViewPoints },
@@ -132,8 +161,14 @@ export default function ProfilePage() {
       { key: 'service', title: '售后服务', desc: '进度&售后操作', action: handleServiceTickets },
       { key: 'feedback', title: '意见反馈', desc: '提交工单反馈', action: handleFeedback },
       { key: 'help', title: '帮助文档', desc: '常见问题说明', action: handleHelpDocs },
-    ],
-    [handleViewOrders, handleViewWallet, handleViewPoints, handleViewCoupons, handleShareCenter, handleManageAddresses, handleViewMembership, handleServiceTickets, handleFeedback, handleHelpDocs, user],
+      { key: 'settings', title: '设置', desc: '账号/登录/地址/关于', action: handleSettings },
+      ];
+      if (perm.allowedStoreMgmt) {
+        base.splice(6, 0, { key: 'store_mgmt', title: '门店管理', desc: '门店与收款账户', action: handleStoreManagement });
+      }
+      return base;
+    },
+    [handleViewOrders, handleViewWallet, handleViewPoints, handleViewCoupons, handleShareCenter, handleManageAddresses, handleViewMembership, handleServiceTickets, handleFeedback, handleHelpDocs, handleSettings, handleStoreManagement, perm.allowedStoreMgmt],
   );
 
   function yuan(c?: number) {

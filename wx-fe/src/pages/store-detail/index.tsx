@@ -3,11 +3,13 @@ import { View, Text, Button, Image } from '@tarojs/components';
 import Taro, { useRouter } from '@tarojs/taro';
 import { getStore } from '../../services/stores';
 import { Store } from '../../services/types';
+import usePermission from '../../hooks/usePermission';
 
 export default function StoreDetailPage() {
   const router = useRouter();
   const [store, setStore] = useState<Store | null>(null);
   const [loading, setLoading] = useState(false);
+  const perm = usePermission();
 
   useEffect(() => {
     void loadStore();
@@ -29,6 +31,9 @@ export default function StoreDetailPage() {
       setLoading(false);
     }
   }
+
+  const allowedAccounts = perm.allowedStoreAccounts;
+  const allowedFinance = perm.allowedStoreFinance;
 
   function goNavigate() {
     if (!store) return;
@@ -114,6 +119,14 @@ export default function StoreDetailPage() {
         <Button size="mini" type="primary" onClick={goNavigate}>导航到门店</Button>
         <Button size="mini" onClick={goDial}>拨打电话</Button>
         <Button size="mini" onClick={goStoreProducts}>查看本店商品</Button>
+        {allowedAccounts && store && (
+          <>
+            <Button size="mini" onClick={() => Taro.navigateTo({ url: `/pages/store-accounts/index?store_id=${store.id}` })}>管理收款账户</Button>
+          </>
+        )}
+        {allowedFinance && store && (
+          <Button size="mini" onClick={() => Taro.navigateTo({ url: `/pages/store-finance/index?store_id=${store.id}` })}>查看财务流水</Button>
+        )}
       </View>
 
       {(() => {

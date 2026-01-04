@@ -3,8 +3,11 @@ import { View, Text, Button } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import { listStores } from '../../services/stores';
 import { Store } from '../../services/types';
+import usePermission from '../../hooks/usePermission';
+import { PERM_HINT_STORE_MGMT_READONLY_PAGE, PERM_HINT_STORE_MGMT_READONLY_TOAST } from '../../constants/permission';
 
 export default function StoresPage() {
+  const perm = usePermission();
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -39,12 +42,19 @@ export default function StoresPage() {
 
   function setCurrent(id: number) {
     try { Taro.setStorageSync('current_store_id', String(id)); } catch (_) {}
-    Taro.showToast({ title: '已设为当前门店', icon: 'success' });
+    if (perm.allowedStoreMgmt) {
+      Taro.showToast({ title: '已设为当前门店', icon: 'success' });
+    } else {
+      Taro.showToast({ title: PERM_HINT_STORE_MGMT_READONLY_TOAST, icon: 'none' });
+    }
   }
 
   return (
     <View style={{ padding: 12 }}>
       <Text style={{ fontSize: 16, fontWeight: 'bold' }}>门店列表</Text>
+      {!perm.allowedStoreMgmt && (
+        <Text style={{ display: 'block', marginTop: 6, color: '#999' }}>{PERM_HINT_STORE_MGMT_READONLY_PAGE}</Text>
+      )}
       {loading && <Text style={{ display: 'block', marginTop: 8 }}>加载中...</Text>}
       {!loading && !stores.length && <Text style={{ display: 'block', marginTop: 8 }}>暂无门店</Text>}
       {stores.map((s) => (

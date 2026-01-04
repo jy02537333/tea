@@ -21,6 +21,10 @@ export default {
     'pages/after-sale/index',
     'pages/feedback/index',
     'pages/help/index',
+    'pages/terms/index',
+    'pages/settings/index',
+    'pages/about/index',
+    'pages/privacy/index',
     'pages/profile/index',
     // add other pages here as needed
   ],
