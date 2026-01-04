@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Button, Text, View } from '@tarojs/components';
 import Taro, { usePullDownRefresh } from '@tarojs/taro';
 import { cancelOrder, confirmReceive, listOrders, payOrder } from '../../services/orders';
-import type { Order } from '../../services/types';
+import type { Order, Refund } from '../../services/types';
 import { formatAddress, parseAddressInfo } from '../../utils/address';
 import { createTicket } from '../../services/tickets';
+import { listMyRefunds } from '../../services/refunds';
 
 const STATUS_TEXT: Record<number, string> = {
   1: '待付款',
@@ -26,6 +27,9 @@ export default function AfterSalePage() {
   const [loading, setLoading] = useState(false);
   const [actioning, setActioning] = useState<{ id: number; type: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [expandedRefunds, setExpandedRefunds] = useState<Record<number, boolean>>({});
+  const [refundsMap, setRefundsMap] = useState<Record<number, Refund[]>>({});
+  const [refundsLoadingMap, setRefundsLoadingMap] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     void fetchOrders();
@@ -106,6 +110,26 @@ export default function AfterSalePage() {
     }
   }
 
+  async function toggleRefundTimeline(order: Order) {
+    const opened = !!expandedRefunds[order.id];
+    const next = { ...expandedRefunds, [order.id]: !opened };
+    setExpandedRefunds(next);
+    if (!opened) {
+      // opening: fetch refunds if not loaded
+      if (!refundsMap[order.id]) {
+        setRefundsLoadingMap((m) => ({ ...m, [order.id]: true }));
+        try {
+          const resp = await listMyRefunds({ order_id: order.id, page: 1, limit: 20 });
+          setRefundsMap((m) => ({ ...m, [order.id]: resp?.data || [] }));
+        } catch (_) {
+          // ignore
+        } finally {
+          setRefundsLoadingMap((m) => ({ ...m, [order.id]: false }));
+        }
+      }
+    }
+  }
+
   return (
     <View style={{ padding: 16, backgroundColor: '#f5f6f8', minHeight: '100vh' }}>
       <View style={{ marginBottom: 12 }}>
@@ -162,11 +186,55 @@ export default function AfterSalePage() {
                 查看详情
               </Button>
               {(Number(order.pay_status as any) === 3 || Number(order.pay_status as any) === 4) && (
-                <Button size="mini" type="warn" onClick={() => handleRefundInquiry(order)}>
-                  退款进度咨询
-                </Button>
+                <>
+                  <Button size="mini" type="warn" onClick={() => handleRefundInquiry(order)}>
+                    退款进度咨询
+                  </Button>
+                  <Button size="mini" onClick={() => toggleRefundTimeline(order)}>
+                    {expandedRefunds[order.id] ? '收起退款进度' : '查看退款进度'}
+                  </Button>
+                </>
               )}
             </View>
+            {expandedRefunds[order.id] && (
+              <View style={{ marginTop: 10, padding: 10, backgroundColor: '#fffbe6', borderRadius: 8, border: '1px solid #ffe58f' }}>
+                <Text style={{ fontWeight: 'bold', display: 'block' }}>退款进度</Text>
+                {refundsLoadingMap[order.id] && <Text style={{ color: '#8c8c8c' }}>加载中...</Text>}
+                {!refundsLoadingMap[order.id] && (!refundsMap[order.id] || !refundsMap[order.id].length) && (
+                  <Text style={{ color: '#8c8c8c' }}>暂无退款记录</Text>
+                )}
+                {!refundsLoadingMap[order.id] && refundsMap[order.id] && refundsMap[order.id].map((rf) => (
+                  <View key={rf.id} style={{ marginTop: 8, padding: 8, backgroundColor: '#fff', borderRadius: 8 }}>
+                    <Text style={{ display: 'block' }}>退款单号：{rf.refund_no}</Text>
+                    <Text style={{ display: 'block', marginTop: 2 }}>退款金额：￥{String(rf.refund_amount)}</Text>
+                    <Text style={{ display: 'block', marginTop: 2, color: '#8c8c8c', fontSize: 12 }}>
+                      状态：{rf.status === 1 ? '申请中' : rf.status === 2 ? '退款成功' : '退款失败'}
+                    </Text>
+                    <Text style={{ display: 'block', marginTop: 2, color: '#8c8c8c', fontSize: 12 }}>申请时间：{rf.created_at || '-'}</Text>
+                    {rf.refunded_at && (
+                      <Text style={{ display: 'block', marginTop: 2, color: '#8c8c8c', fontSize: 12 }}>退款完成时间：{rf.refunded_at}</Text>
+                    )}
+                    {rf.refund_reason && (
+                      <Text style={{ display: 'block', marginTop: 2, color: '#999' }}>原因：{rf.refund_reason}</Text>
+                    )}
+                  </View>
+                ))}
+                <View style={{ marginTop: 8 }}>
+                  <Button size="mini" onClick={async () => {
+                    setRefundsLoadingMap((m) => ({ ...m, [order.id]: true }));
+                    try {
+                      const resp = await listMyRefunds({ order_id: order.id, page: 1, limit: 20 });
+                      setRefundsMap((m) => ({ ...m, [order.id]: resp?.data || [] }));
+                      Taro.showToast({ title: '已刷新退款记录', icon: 'none' });
+                    } catch (_) {
+                      Taro.showToast({ title: '刷新失败', icon: 'none' });
+                    } finally {
+                      setRefundsLoadingMap((m) => ({ ...m, [order.id]: false }));
+                    }
+                  }}>刷新退款记录</Button>
+                </View>
+              </View>
+            )}
           </View>
         );
       })}

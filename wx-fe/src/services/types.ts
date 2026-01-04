@@ -192,3 +192,18 @@ export interface MeSummary {
   };
   orders_stats?: Record<string, number>;
 }
+
+// 退款记录（与后端 Refund 模型的前端精简版）
+export interface Refund {
+  id: number;
+  order_id: number;
+  payment_id: number;
+  refund_no: string;
+  refund_amount: string | number;
+  refund_reason?: string;
+  status: number; // 1申请中 2退款成功 3退款失败
+  refunded_at?: string | null;
+  created_at?: string;
+  order?: Pick<Order, 'id' | 'order_no' | 'pay_amount' | 'paid_at' | 'pay_status'>;
+  payment?: { id: number; payment_no?: string; amount?: string | number; status?: number; paid_at?: string };
+}

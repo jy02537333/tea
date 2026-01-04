@@ -2,9 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, Button, Image, Textarea } from '@tarojs/components';
 import Taro, { useRouter } from '@tarojs/taro';
 import { cancelOrder, confirmReceive, getOrder, payOrder } from '../../services/orders';
-import { Order, OrderItem, Store } from '../../services/types';
+import { Order, OrderItem, Store, Refund } from '../../services/types';
 import { getStore } from '../../services/stores';
 import { createTicket } from '../../services/tickets';
+import { listMyRefunds } from '../../services/refunds';
 
 type ActionKey = 'cancel' | 'pay' | 'confirm' | null;
 
@@ -69,6 +70,8 @@ export default function OrderDetail({ id }: { id?: number }) {
   const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
   const POLL_MS = 3000;
   const [currentStore, setCurrentStore] = useState<Store | null>(null);
+  const [refunds, setRefunds] = useState<Refund[]>([]);
+  const [refundsLoading, setRefundsLoading] = useState(false);
 
   const loadOrder = useCallback(async () => {
     if (!orderId) return;
@@ -122,6 +125,27 @@ export default function OrderDetail({ id }: { id?: number }) {
     }
     return undefined;
   }, [order?.pay_status]);
+
+  // 拉取该订单的退款记录（当进入退款态时）
+  useEffect(() => {
+    if (!orderId) return;
+    const ps = numericPayStatus;
+    if (ps === 3 || ps === 4) {
+      (async () => {
+        setRefundsLoading(true);
+        try {
+          const resp = await listMyRefunds({ order_id: orderId, page: 1, limit: 20 });
+          setRefunds(resp?.data || []);
+        } catch (err) {
+          // 静默失败，仅在 UI 保留基本提示
+        } finally {
+          setRefundsLoading(false);
+        }
+      })();
+    } else {
+      setRefunds([]);
+    }
+  }, [orderId, numericPayStatus]);
 
   const payStatusText = useMemo(() => {
     if (!numericPayStatus) return order?.pay_status ? String(order.pay_status) : '--';
@@ -338,6 +362,43 @@ export default function OrderDetail({ id }: { id?: number }) {
           <Text style={{ fontWeight: 'bold', display: 'block' }}>退款进度</Text>
           <Text style={{ display: 'block', marginTop: 6, color: '#ad8b00' }}>{numericPayStatus === 3 ? '退款处理中，请耐心等待' : '已退款完成'}</Text>
           {order.paid_at && <Text style={{ display: 'block', marginTop: 4, color: '#8c8c8c', fontSize: 12 }}>支付时间：{order.paid_at}</Text>}
+          <View style={{ marginTop: 8 }}>
+            {refundsLoading && <Text style={{ color: '#8c8c8c' }}>退款记录加载中...</Text>}
+            {!refundsLoading && !refunds.length && (
+              <Text style={{ color: '#8c8c8c' }}>暂无退款记录</Text>
+            )}
+            {!refundsLoading && refunds.map((rf) => (
+              <View key={rf.id} style={{ marginTop: 8, padding: 8, backgroundColor: '#fff', borderRadius: 8 }}>
+                <Text style={{ display: 'block' }}>退款单号：{rf.refund_no}</Text>
+                <Text style={{ display: 'block', marginTop: 2 }}>退款金额：￥{formatAmount(rf.refund_amount)}</Text>
+                <Text style={{ display: 'block', marginTop: 2, color: '#8c8c8c', fontSize: 12 }}>
+                  状态：{rf.status === 1 ? '申请中' : rf.status === 2 ? '退款成功' : '退款失败'}
+                </Text>
+                <Text style={{ display: 'block', marginTop: 2, color: '#8c8c8c', fontSize: 12 }}>申请时间：{rf.created_at || '-'}</Text>
+                {rf.refunded_at && (
+                  <Text style={{ display: 'block', marginTop: 2, color: '#8c8c8c', fontSize: 12 }}>退款完成时间：{rf.refunded_at}</Text>
+                )}
+                {rf.refund_reason && (
+                  <Text style={{ display: 'block', marginTop: 2, color: '#999' }}>原因：{rf.refund_reason}</Text>
+                )}
+              </View>
+            ))}
+            <View style={{ marginTop: 8 }}>
+              <Button size="mini" onClick={async () => {
+                if (!orderId) return;
+                setRefundsLoading(true);
+                try {
+                  const resp = await listMyRefunds({ order_id: orderId, page: 1, limit: 20 });
+                  setRefunds(resp?.data || []);
+                  Taro.showToast({ title: '已刷新退款记录', icon: 'none' });
+                } catch (_) {
+                  Taro.showToast({ title: '刷新失败', icon: 'none' });
+                } finally {
+                  setRefundsLoading(false);
+                }
+              }}>刷新退款记录</Button>
+            </View>
+          </View>
         </View>
       )}
 
