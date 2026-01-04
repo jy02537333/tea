@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Button, Text, View } from '@tarojs/components';
-import Taro, { usePullDownRefresh } from '@tarojs/taro';
+import Taro, { usePullDownRefresh, useRouter } from '@tarojs/taro';
 import { cancelOrder, confirmReceive, listOrders, payOrder } from '../../services/orders';
 import type { Order, Refund } from '../../services/types';
 import { formatAddress, parseAddressInfo } from '../../utils/address';
@@ -23,6 +23,7 @@ const PAY_STATUS_TEXT: Record<number, string> = {
 };
 
 export default function AfterSalePage() {
+  const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [actioning, setActioning] = useState<{ id: number; type: string } | null>(null);
@@ -30,6 +31,10 @@ export default function AfterSalePage() {
   const [expandedRefunds, setExpandedRefunds] = useState<Record<number, boolean>>({});
   const [refundsMap, setRefundsMap] = useState<Record<number, Refund[]>>({});
   const [refundsLoadingMap, setRefundsLoadingMap] = useState<Record<number, boolean>>({});
+  const showMockRefund = useMemo(() => {
+    const mock = router?.params?.mock_refund;
+    return mock === '1' || mock === 'true';
+  }, [router?.params?.mock_refund]);
 
   useEffect(() => {
     void fetchOrders();
@@ -43,7 +48,23 @@ export default function AfterSalePage() {
     setLoading(true);
     try {
       const resp = await listOrders({ page: 1, limit: 20 });
-      setOrders(resp?.data || []);
+      const list = resp?.data || [];
+      setOrders(list);
+      // 如果 mock_refund 开启，预展开第一条订单的退款时间线并填充示例
+      if (showMockRefund && list.length) {
+        const first = list[0];
+        setExpandedRefunds((m) => ({ ...m, [first.id]: true }));
+        setRefundsMap((m) => ({ ...m, [first.id]: [{
+          id: 998001,
+          order_id: first.id,
+          payment_id: 0,
+          refund_no: 'RF-MOCK-AFTERSALE-001',
+          refund_amount: String(first.pay_amount ?? '0'),
+          refund_reason: '示例退款用于截图展示（售后页）',
+          status: 1,
+          created_at: new Date().toISOString(),
+        }] }));
+      }
       setError(null);
     } catch (err: any) {
       console.error('load orders failed', err);
