@@ -102,8 +102,12 @@ export function AppShell({ children }: PropsWithChildren) {
           <Menu.Item key="/stores" icon={<EnvironmentOutlined />}>
             <Link to="/stores">门店管理</Link>
           </Menu.Item>
-          <Menu.Item key="/store-finance" icon={<AccountBookOutlined />}>
-            <Link to="/store-finance">门店财务</Link>
+          <Menu.Item
+            key="/store-finance"
+            icon={<AccountBookOutlined />}
+            title="门店资金流水（支付/退款/提现）与提现管理"
+          >
+            <Link to="/store-finance">门店财务（资金流水）</Link>
           </Menu.Item>
           <Menu.Item key="/store-accounts" icon={<CreditCardOutlined />}>
             <Link to="/store-accounts">门店收款账户</Link>
