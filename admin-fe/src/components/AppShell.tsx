@@ -1,4 +1,4 @@
-import { Layout, Menu, Typography } from 'antd';
+import { Layout, Menu, Typography, Tag } from 'antd';
 import {
   DashboardOutlined,
   EnvironmentOutlined,
@@ -107,7 +107,9 @@ export function AppShell({ children }: PropsWithChildren) {
             icon={<AccountBookOutlined />}
             title="门店资金流水（支付/退款/提现）与提现管理"
           >
-            <Link to="/store-finance">门店财务（资金流水）</Link>
+            <Link to="/store-finance">
+              门店财务（资金流水） <Tag color="green" style={{ marginLeft: 8, fontSize: 12, lineHeight: '16px' }}>新</Tag>
+            </Link>
           </Menu.Item>
           <Menu.Item key="/store-accounts" icon={<CreditCardOutlined />}>
             <Link to="/store-accounts">门店收款账户</Link>
