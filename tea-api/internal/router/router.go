@@ -81,6 +81,9 @@ func SetupRouter() *gin.Engine {
 	api.GET("/points", middleware.AuthJWT(), handler.GetMyPoints)
 	api.GET("/points/transactions", middleware.AuthJWT(), handler.ListMyPointsTransactions)
 
+	// 用户侧退款查询（列表）
+	api.GET("/refunds", middleware.AuthJWT(), refundHandler.ListMyRefunds)
+
 	// Sprint B: 优惠券模板与领取
 	api.GET("/coupons/templates", middleware.AuthJWT(), handler.ListCouponTemplates)
 	api.POST("/coupons/claim", middleware.AuthJWT(), handler.ClaimCouponFromTemplate)

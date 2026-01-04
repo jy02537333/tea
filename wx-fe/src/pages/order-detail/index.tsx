@@ -72,6 +72,10 @@ export default function OrderDetail({ id }: { id?: number }) {
   const [currentStore, setCurrentStore] = useState<Store | null>(null);
   const [refunds, setRefunds] = useState<Refund[]>([]);
   const [refundsLoading, setRefundsLoading] = useState(false);
+  const showMockRefund = useMemo(() => {
+    const mock = router?.params?.mock_refund;
+    return mock === '1' || mock === 'true';
+  }, [router?.params?.mock_refund]);
 
   const loadOrder = useCallback(async () => {
     if (!orderId) return;
@@ -143,9 +147,18 @@ export default function OrderDetail({ id }: { id?: number }) {
         }
       })();
     } else {
-      setRefunds([]);
+      setRefunds(showMockRefund ? [{
+        id: 999001,
+        order_id: orderId,
+        payment_id: 0,
+        refund_no: 'RF-MOCK-001',
+        refund_amount: typeof order?.pay_amount === 'number' ? order?.pay_amount : (order?.pay_amount || 0),
+        refund_reason: '示例退款用于截图展示',
+        status: 1,
+        created_at: new Date().toISOString(),
+      }] : []);
     }
-  }, [orderId, numericPayStatus]);
+  }, [orderId, numericPayStatus, showMockRefund, order?.pay_amount]);
 
   const payStatusText = useMemo(() => {
     if (!numericPayStatus) return order?.pay_status ? String(order.pay_status) : '--';
@@ -357,10 +370,10 @@ export default function OrderDetail({ id }: { id?: number }) {
         )}
       </View>
 
-      {(numericPayStatus === 3 || numericPayStatus === 4) && (
+      {(numericPayStatus === 3 || numericPayStatus === 4 || showMockRefund) && (
         <View style={{ marginTop: 16, padding: 12, backgroundColor: '#fffbe6', borderRadius: 8, border: '1px solid #ffe58f' }}>
           <Text style={{ fontWeight: 'bold', display: 'block' }}>退款进度</Text>
-          <Text style={{ display: 'block', marginTop: 6, color: '#ad8b00' }}>{numericPayStatus === 3 ? '退款处理中，请耐心等待' : '已退款完成'}</Text>
+          <Text style={{ display: 'block', marginTop: 6, color: '#ad8b00' }}>{(numericPayStatus === 3 || showMockRefund) ? '退款处理中，请耐心等待' : '已退款完成'}</Text>
           {order.paid_at && <Text style={{ display: 'block', marginTop: 4, color: '#8c8c8c', fontSize: 12 }}>支付时间：{order.paid_at}</Text>}
           <View style={{ marginTop: 8 }}>
             {refundsLoading && <Text style={{ color: '#8c8c8c' }}>退款记录加载中...</Text>}
