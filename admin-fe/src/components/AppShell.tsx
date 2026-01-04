@@ -1,4 +1,5 @@
 import { Layout, Menu, Typography, Tag } from 'antd';
+import dayjs from 'dayjs';
 import {
   DashboardOutlined,
   EnvironmentOutlined,
@@ -27,6 +28,12 @@ export function AppShell({ children }: PropsWithChildren) {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout } = useAuthContext();
+
+  // 控制“新”标识的截止日期，可通过环境变量覆盖
+  const envDeadline = (import.meta as any)?.env?.VITE_STORE_FINANCE_NEW_BADGE_DEADLINE as string | undefined;
+  const defaultDeadline = '2026-01-18'; // 自动隐藏日期（本次改动起约两周）
+  const badgeDeadline = envDeadline && String(envDeadline).trim() ? envDeadline : defaultDeadline;
+  const showNewBadge = dayjs().isBefore(dayjs(badgeDeadline, 'YYYY-MM-DD').endOf('day'));
 
   const handleLogout = () => {
     logout();
@@ -108,7 +115,7 @@ export function AppShell({ children }: PropsWithChildren) {
             title="门店资金流水（支付/退款/提现）与提现管理"
           >
             <Link to="/store-finance">
-              门店财务（资金流水） <Tag color="green" style={{ marginLeft: 8, fontSize: 12, lineHeight: '16px' }}>新</Tag>
+              门店财务（资金流水） {showNewBadge && (<Tag color="green" style={{ marginLeft: 8, fontSize: 12, lineHeight: '16px' }}>新</Tag>)}
             </Link>
           </Menu.Item>
           <Menu.Item key="/store-accounts" icon={<CreditCardOutlined />}>
