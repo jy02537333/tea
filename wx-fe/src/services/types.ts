@@ -151,6 +151,9 @@ export interface Store {
   address?: string;
   latitude?: number;
   longitude?: number;
+  phone?: string;
+  licenses?: Array<string | { name?: string; url: string }>;
+  license_images?: string[]; // 兼容后端不同字段命名
 }
 
 export interface Activity {
@@ -164,4 +167,43 @@ export interface Activity {
   status?: number;
   priority?: number;
   description?: string;
+}
+
+// 用户聚合视图（与后端 GET /api/v1/users/me/summary 对齐的精简版）
+export interface MeSummary {
+  user?: User;
+  wallet?: {
+    balance_cents?: number;
+    tea_coins?: number;
+    frozen_amount_cents?: number;
+  };
+  points?: {
+    balance?: number;
+  };
+  coupons?: {
+    available_count?: number;
+  };
+  share?: {
+    direct_count?: number;
+    team_count?: number;
+    total_commission_cents?: number;
+    available_commission_cents?: number;
+    frozen_commission_cents?: number;
+  };
+  orders_stats?: Record<string, number>;
+}
+
+// 退款记录（与后端 Refund 模型的前端精简版）
+export interface Refund {
+  id: number;
+  order_id: number;
+  payment_id: number;
+  refund_no: string;
+  refund_amount: string | number;
+  refund_reason?: string;
+  status: number; // 1申请中 2退款成功 3退款失败
+  refunded_at?: string | null;
+  created_at?: string;
+  order?: Pick<Order, 'id' | 'order_no' | 'pay_amount' | 'paid_at' | 'pay_status'>;
+  payment?: { id: number; payment_no?: string; amount?: string | number; status?: number; paid_at?: string };
 }

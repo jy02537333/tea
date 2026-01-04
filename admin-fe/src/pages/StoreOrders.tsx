@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Alert, Button, Form, Input, Select, Space, Table, Tag, Typography } from 'antd';
+import { Alert, Button, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useNavigate, useParams } from 'react-router-dom';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { AdminOrder, getAdminStoreOrders } from '../services/orders';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AdminOrder, getAdminStoreOrders, postOrderAction } from '../services/orders';
+import { useAuthContext } from '../hooks/useAuth';
 
 const { Title, Text } = Typography;
 
@@ -42,6 +43,8 @@ export default function StoreOrdersPage() {
   const navigate = useNavigate();
   const params = useParams();
   const storeId = Number(params.id || 0);
+  const queryClient = useQueryClient();
+  const { hasPermission } = useAuthContext();
 
   const [filters, setFilters] = useState<FilterValues>({});
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20 });
@@ -61,6 +64,35 @@ export default function StoreOrdersPage() {
     queryFn: () => getAdminStoreOrders(storeId, listParams),
     enabled: storeId > 0,
     placeholderData: keepPreviousData,
+  });
+
+  const ACTION_REASON_MAP: Record<string, string> = {
+    refund: '后台立即退款',
+    'refund/start': '后台标记退款中',
+    'refund/confirm': '后台确认退款完成',
+  };
+
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelTargetId, setCancelTargetId] = useState<number | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+
+  const [reasonModalOpen, setReasonModalOpen] = useState(false);
+  const [reasonTarget, setReasonTarget] = useState<{ id: number; action: string } | null>(null);
+  const [reasonText, setReasonText] = useState('');
+
+  const actionMutation = useMutation({
+    mutationFn: async ({ id, action, reason }: { id: number; action: string; reason?: string }) => {
+      const body = reason ? { reason } : undefined;
+      await postOrderAction(id, action, body);
+    },
+    onSuccess: async () => {
+      message.success('操作成功');
+      await queryClient.invalidateQueries({ queryKey: ['storeOrders', storeId] });
+      await queryClient.invalidateQueries({ queryKey: ['adminOrders'] });
+    },
+    onError: (error: any) => {
+      message.error(error?.message || '操作失败');
+    },
   });
 
   const tableData = useMemo(() => {
@@ -108,17 +140,71 @@ export default function StoreOrdersPage() {
     {
       title: '操作',
       key: 'actions',
-      width: 160,
+      width: 420,
       render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            onClick={() =>
-              navigate(`/orders?orderId=${record.id}&storeId=${storeId}`)
-            }
-          >
+        <Space wrap>
+          <Button type="link" onClick={() => navigate(`/orders?orderId=${record.id}&storeId=${storeId}`)}>
             在订单操作区打开
           </Button>
+          {record.status === 2 && hasPermission('order:deliver') && (
+            <Popconfirm title="确认发货该订单？" onConfirm={() => actionMutation.mutate({ id: record.id, action: 'deliver' })}>
+              <Button type="link" disabled={actionMutation.isPending}>发货</Button>
+            </Popconfirm>
+          )}
+          {record.status === 3 && hasPermission('order:complete') && (
+            <Popconfirm title="确认标记订单完成？" onConfirm={() => actionMutation.mutate({ id: record.id, action: 'complete' })}>
+              <Button type="link" style={{ fontWeight: 600 }} disabled={actionMutation.isPending}>完成</Button>
+            </Popconfirm>
+          )}
+          {hasPermission('order:refund') && record.pay_status === 2 && record.status >= 2 && record.status < 5 && (
+            <Popconfirm
+              title="确认标记该订单为退款中？"
+              onConfirm={() => {
+                setReasonTarget({ id: record.id, action: 'refund/start' });
+                setReasonText(ACTION_REASON_MAP['refund/start']);
+                setReasonModalOpen(true);
+              }}
+            >
+              <Button type="link" disabled={actionMutation.isPending}>标记退款中</Button>
+            </Popconfirm>
+          )}
+          {hasPermission('order:refund') && record.pay_status === 3 && (
+            <Popconfirm
+              title="确认退款已完成？"
+              onConfirm={() => {
+                setReasonTarget({ id: record.id, action: 'refund/confirm' });
+                setReasonText(ACTION_REASON_MAP['refund/confirm']);
+                setReasonModalOpen(true);
+              }}
+            >
+              <Button type="link" disabled={actionMutation.isPending}>确认退款完成</Button>
+            </Popconfirm>
+          )}
+          {hasPermission('order:refund') && record.pay_status === 2 && (
+            <Popconfirm
+              title="确认执行立即退款？"
+              onConfirm={() => {
+                setReasonTarget({ id: record.id, action: 'refund' });
+                setReasonText(ACTION_REASON_MAP['refund']);
+                setReasonModalOpen(true);
+              }}
+            >
+              <Button type="link" danger disabled={actionMutation.isPending}>立即退款</Button>
+            </Popconfirm>
+          )}
+          {record.status > 0 && record.status < 4 && hasPermission('order:cancel') && (
+            <Popconfirm
+              title="确认强制取消该订单？"
+              okButtonProps={{ 'data-testid': 'store-cancel-popconfirm-ok' } as any}
+              onConfirm={() => {
+                setCancelTargetId(record.id);
+                setCancelReason('');
+                setCancelModalOpen(true);
+              }}
+            >
+              <Button type="link" danger disabled={actionMutation.isPending}>管理员取消</Button>
+            </Popconfirm>
+          )}
         </Space>
       ),
     },
@@ -186,6 +272,67 @@ export default function StoreOrdersPage() {
           },
         }}
       />
+
+      <Modal
+        title={cancelTargetId ? `取消订单 · #${cancelTargetId}` : '取消订单'}
+        open={cancelModalOpen}
+        okText="确认取消"
+        cancelText="再想想"
+        confirmLoading={actionMutation.isPending}
+        onCancel={() => {
+          setCancelModalOpen(false);
+          setCancelTargetId(null);
+        }}
+        onOk={async () => {
+          if (!cancelTargetId) return;
+          if (!cancelReason.trim()) {
+            message.warning('请输入取消原因');
+            return;
+          }
+          await actionMutation.mutateAsync({ id: cancelTargetId, action: 'admin-cancel', reason: cancelReason.trim() });
+          setCancelModalOpen(false);
+          setCancelTargetId(null);
+          setCancelReason('');
+        }}
+        destroyOnClose
+      >
+        <Form layout="vertical">
+          <Form.Item label="取消原因" required>
+            <Input.TextArea rows={3} value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="请填写此次取消的原因（必填）" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={reasonTarget ? `填写原因 · #${reasonTarget.id}` : '填写原因'}
+        open={reasonModalOpen}
+        okText="确认提交"
+        cancelText="取消"
+        confirmLoading={actionMutation.isPending}
+        onCancel={() => {
+          setReasonModalOpen(false);
+          setReasonTarget(null);
+          setReasonText('');
+        }}
+        onOk={async () => {
+          if (!reasonTarget) return;
+          if (!reasonText.trim()) {
+            message.warning('请输入原因');
+            return;
+          }
+          await actionMutation.mutateAsync({ id: reasonTarget.id, action: reasonTarget.action, reason: reasonText.trim() });
+          setReasonModalOpen(false);
+          setReasonTarget(null);
+          setReasonText('');
+        }}
+        destroyOnClose
+      >
+        <Form layout="vertical">
+          <Form.Item label="原因" required>
+            <Input.TextArea rows={3} value={reasonText} onChange={(e) => setReasonText(e.target.value)} placeholder="请填写本次操作的原因（必填）" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </Space>
   );
 }

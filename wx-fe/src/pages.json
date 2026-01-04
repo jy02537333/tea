@@ -11,7 +11,15 @@
     "pages/address/index",
     "pages/membership/index",
     "pages/after-sale/index",
-    "pages/profile/index"
+    "pages/profile/index",
+    "pages/category/index",
+    "pages/coupons/index",
+    "pages/activities/index",
+    "pages/store-finance/index",
+    "pages/store-accounts/index",
+    "pages/wallet/index",
+    "pages/points/index",
+    "pages/share/index"
   ],
   "window": {
     "backgroundTextStyle": "light",

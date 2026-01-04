@@ -3,12 +3,14 @@ import { View, Text, Button, Image } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import { getProduct } from '../../services/products';
 import { addCartItem } from '../../services/cart';
-import { Product } from '../../services/types';
+import { Product, Store } from '../../services/types';
+import { getStore } from '../../services/stores';
 
 export default function ProductDetail() {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [currentStore, setCurrentStore] = useState<Store | null>(null);
 
   useEffect(() => {
     void fetchDetail();
@@ -24,8 +26,19 @@ export default function ProductDetail() {
 
     setLoading(true);
     try {
+      if (store_id && Number.isFinite(store_id) && store_id > 0) {
+        try { Taro.setStorageSync('current_store_id', String(store_id)); } catch (_) {}
+      }
       const res = await getProduct(id, store_id);
       setProduct(res as Product);
+      if (store_id) {
+        try {
+          const s = await getStore(store_id);
+          setCurrentStore(s as Store);
+        } catch (e) {
+          // ignore store fetch errors
+        }
+      }
     } catch (e) {
       console.error('load product failed', e);
     } finally {
@@ -52,6 +65,20 @@ export default function ProductDetail() {
 
   return (
     <View style={{ padding: 12 }}>
+      {currentStore && (
+        <View style={{
+          marginBottom: 8,
+          padding: '6px 10px',
+          borderWidth: 1,
+          borderStyle: 'solid',
+          borderColor: '#07c160',
+          borderRadius: 16,
+          display: 'inline-block',
+          backgroundColor: '#f6ffed',
+        }}>
+          <Text style={{ color: '#389e0d' }}>当前门店：{currentStore.name}</Text>
+        </View>
+      )}
       {product.images && (
         <Image
           src={product.images}

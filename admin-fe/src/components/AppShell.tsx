@@ -1,4 +1,5 @@
-import { Layout, Menu, Typography } from 'antd';
+import { Layout, Menu, Typography, Tag } from 'antd';
+import dayjs from 'dayjs';
 import {
   DashboardOutlined,
   EnvironmentOutlined,
@@ -15,6 +16,7 @@ import {
   FireOutlined,
   CustomerServiceOutlined,
   CreditCardOutlined,
+  ToolOutlined,
 } from '@ant-design/icons';
 import { PropsWithChildren } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -26,6 +28,16 @@ export function AppShell({ children }: PropsWithChildren) {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout } = useAuthContext();
+
+  // “新”标识显示规则：PR 合并/部署后 30 天自动隐藏
+  // 优先读取起始日期 VITE_STORE_FINANCE_NEW_BADGE_START（格式 YYYY-MM-DD），否则以当前构建/运行时间为起点
+  const envStart = (import.meta as any)?.env?.VITE_STORE_FINANCE_NEW_BADGE_START as string | undefined;
+  const buildCommitDate = (import.meta as any)?.env?.VITE_BUILD_COMMIT_DATE as string | undefined;
+  const startDate = envStart && String(envStart).trim()
+    ? dayjs(envStart, 'YYYY-MM-DD')
+    : (buildCommitDate && String(buildCommitDate).trim() ? dayjs(buildCommitDate, 'YYYY-MM-DD') : dayjs());
+  const endDate = startDate.add(30, 'day').endOf('day');
+  const showNewBadge = dayjs().isBefore(endDate);
 
   const handleLogout = () => {
     logout();
@@ -101,8 +113,14 @@ export function AppShell({ children }: PropsWithChildren) {
           <Menu.Item key="/stores" icon={<EnvironmentOutlined />}>
             <Link to="/stores">门店管理</Link>
           </Menu.Item>
-          <Menu.Item key="/store-finance" icon={<AccountBookOutlined />}>
-            <Link to="/store-finance">门店财务</Link>
+          <Menu.Item
+            key="/store-finance"
+            icon={<AccountBookOutlined />}
+            title="门店资金流水（支付/退款/提现）与提现管理"
+          >
+            <Link to="/store-finance">
+              门店财务（资金流水） {showNewBadge && (<Tag color="green" style={{ marginLeft: 8, fontSize: 12, lineHeight: '16px' }}>新</Tag>)}
+            </Link>
           </Menu.Item>
           <Menu.Item key="/store-accounts" icon={<CreditCardOutlined />}>
             <Link to="/store-accounts">门店收款账户</Link>
@@ -133,6 +151,9 @@ export function AppShell({ children }: PropsWithChildren) {
           </Menu.Item>
           <Menu.Item key="/orders" icon={<ProfileOutlined />}>
             <Link to="/orders">订单管理</Link>
+          </Menu.Item>
+          <Menu.Item key="/dev-tools" icon={<ToolOutlined />}>
+            <a href="https://github.com/jy02537333/tea#readme" target="_blank" rel="noreferrer">开发者工具</a>
           </Menu.Item>
           <Menu.Item key="logout" icon={<LogoutOutlined />} onClick={handleLogout}>
             退出登录

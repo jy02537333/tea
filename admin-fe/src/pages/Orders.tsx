@@ -224,6 +224,12 @@ export default function OrdersPage() {
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
   const [adjustTargetId, setAdjustTargetId] = useState<number | null>(null);
   const [adjustForm] = Form.useForm<{ new_pay_amount: number; reason?: string }>();
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelTargetId, setCancelTargetId] = useState<number | null>(null);
+  const [cancelForm] = Form.useForm<{ reason?: string }>();
+  const [reasonModalOpen, setReasonModalOpen] = useState(false);
+  const [reasonTarget, setReasonTarget] = useState<{ id: number; action: string } | null>(null);
+  const [reasonForm] = Form.useForm<{ reason: string }>();
 
   const adjustMutation = useMutation({
     mutationFn: async (payload: { id: number; new_pay_amount: number; reason?: string }) => {
@@ -301,9 +307,10 @@ export default function OrdersPage() {
   });
 
   const actionMutation = useMutation({
-    mutationFn: async ({ id, action }: { id: number; action: string }) => {
-      const reason = ACTION_REASON_MAP[action];
-      await postOrderAction(id, action, reason ? { reason } : undefined);
+    mutationFn: async ({ id, action, reason }: { id: number; action: string; reason?: string }) => {
+      const fallback = ACTION_REASON_MAP[action];
+      const body = reason ? { reason } : fallback ? { reason: fallback } : undefined;
+      await postOrderAction(id, action, body);
     },
     onSuccess: async () => {
       message.success('操作成功');
@@ -380,8 +387,23 @@ export default function OrdersPage() {
                 </Button>
               );
             }
+            const onConfirm = () => {
+              if (meta.key === 'admin-cancel') {
+                setCancelTargetId(record.id);
+                cancelForm.setFieldsValue({ reason: '' });
+                setCancelModalOpen(true);
+                return;
+              }
+              if (meta.key === 'refund' || meta.key === 'refund/start' || meta.key === 'refund/confirm') {
+                setReasonTarget({ id: record.id, action: meta.key });
+                reasonForm.setFieldsValue({ reason: ACTION_REASON_MAP[meta.key] || '' });
+                setReasonModalOpen(true);
+                return;
+              }
+              actionMutation.mutate({ id: record.id, action: meta.key });
+            };
             return (
-              <Popconfirm key={meta.key} title={meta.confirm} onConfirm={() => actionMutation.mutate({ id: record.id, action: meta.key })}>
+              <Popconfirm key={meta.key} title={meta.confirm} onConfirm={onConfirm}>
                 <Button
                   type="link"
                   danger={meta.danger}
@@ -526,8 +548,23 @@ export default function OrdersPage() {
                     </Button>
                   );
                 }
+                const onConfirm = () => {
+                  if (meta.key === 'admin-cancel') {
+                    setCancelTargetId(detailOrder.id);
+                    cancelForm.setFieldsValue({ reason: '' });
+                    setCancelModalOpen(true);
+                    return;
+                  }
+                  if (meta.key === 'refund' || meta.key === 'refund/start' || meta.key === 'refund/confirm') {
+                    setReasonTarget({ id: detailOrder.id, action: meta.key });
+                    reasonForm.setFieldsValue({ reason: ACTION_REASON_MAP[meta.key] || '' });
+                    setReasonModalOpen(true);
+                    return;
+                  }
+                  actionMutation.mutate({ id: detailOrder.id, action: meta.key });
+                };
                 return (
-                  <Popconfirm key={meta.key} title={meta.confirm} onConfirm={() => actionMutation.mutate({ id: detailOrder.id, action: meta.key })}>
+                  <Popconfirm key={meta.key} title={meta.confirm} onConfirm={onConfirm}>
                     <Button
                       type={meta.type === 'primary' ? 'primary' : 'default'}
                       danger={meta.danger}
@@ -555,6 +592,60 @@ export default function OrdersPage() {
           </>
         )}
       </Drawer>
+
+      <Modal
+        title={cancelTargetId ? `取消订单 · #${cancelTargetId}` : '取消订单'}
+        open={cancelModalOpen}
+        okText="确认取消"
+        cancelText="再想想"
+        confirmLoading={actionMutation.isPending}
+        onCancel={() => {
+          setCancelModalOpen(false);
+          setCancelTargetId(null);
+        }}
+        onOk={async () => {
+          const values = await cancelForm.validateFields();
+          if (!cancelTargetId) return;
+          await actionMutation.mutateAsync({ id: cancelTargetId, action: 'admin-cancel', reason: values.reason?.trim() });
+          setCancelModalOpen(false);
+          setCancelTargetId(null);
+          cancelForm.resetFields();
+        }}
+        destroyOnClose
+      >
+        <Form form={cancelForm} layout="vertical">
+          <Form.Item label="取消原因" name="reason" rules={[{ required: true, message: '请输入取消原因' }]}>
+            <Input.TextArea rows={3} placeholder="请填写此次取消的原因（必填）" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={reasonTarget ? `填写原因 · #${reasonTarget.id}` : '填写原因'}
+        open={reasonModalOpen}
+        okText="确认提交"
+        cancelText="取消"
+        confirmLoading={actionMutation.isPending}
+        onCancel={() => {
+          setReasonModalOpen(false);
+          setReasonTarget(null);
+        }}
+        onOk={async () => {
+          const values = await reasonForm.validateFields();
+          if (!reasonTarget) return;
+          await actionMutation.mutateAsync({ id: reasonTarget.id, action: reasonTarget.action, reason: values.reason?.trim() });
+          setReasonModalOpen(false);
+          setReasonTarget(null);
+          reasonForm.resetFields();
+        }}
+        destroyOnClose
+      >
+        <Form form={reasonForm} layout="vertical">
+          <Form.Item label="原因" name="reason" rules={[{ required: true, message: '请输入原因' }]}>
+            <Input.TextArea rows={3} placeholder="请填写本次操作的原因（必填）" />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Modal
         title={adjustTargetId ? `订单调价 · #${adjustTargetId}` : '订单调价'}

@@ -3,7 +3,8 @@ import { View, Text, Button, Input } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import { listActivities, registerActivityWithOrder } from '../../services/activities';
 import { createUnifiedOrder, mockPayCallback } from '../../services/payments';
-import type { Activity, Order } from '../../services/types';
+import { getStore } from '../../services/stores';
+import type { Activity, Order, Store } from '../../services/types';
 
 export default function ActivitiesPage() {
 	const [storeId, setStoreId] = useState<number | undefined>(undefined);
@@ -13,20 +14,54 @@ export default function ActivitiesPage() {
 	const [phone, setPhone] = useState('');
 	const [submittingId, setSubmittingId] = useState<number | null>(null);
 	const [fee, setFee] = useState('');
+	const [successActivityId, setSuccessActivityId] = useState<number | null>(null);
+	const [autoOnce, setAutoOnce] = useState(false);
+	const [autoFlag, setAutoFlag] = useState(false);
+	const [autoActivityId, setAutoActivityId] = useState<number | null>(null);
 
 	useEffect(() => {
 		const router = Taro.getCurrentInstance().router;
 		const storeIdParam = router?.params?.store_id;
+		const initName = (router?.params?.name as string) || '';
+		const initPhone = (router?.params?.phone as string) || '';
+		const initFee = (router?.params?.fee as string) || '';
+		const auto = router?.params?.auto === '1';
+		const actIdParam = router?.params?.activity_id ? Number(router?.params?.activity_id) : NaN;
+		if (initName) setName(initName);
+		if (initPhone) setPhone(initPhone);
+		if (initFee) setFee(initFee);
+		if (auto) setAutoFlag(true);
+		if (!Number.isNaN(actIdParam) && actIdParam > 0) setAutoActivityId(actIdParam);
+		let id: number | undefined;
 		if (storeIdParam) {
-			const id = Number(storeIdParam);
-			if (!Number.isNaN(id) && id > 0) {
-				setStoreId(id);
-				void fetchActivities(id);
-			}
+			const parsed = Number(storeIdParam);
+			if (!Number.isNaN(parsed) && parsed > 0) id = parsed;
+		}
+		if (!id) {
+			try {
+				const v = Taro.getStorageSync('current_store_id');
+				const n = Number(v);
+				if (Number.isFinite(n) && n > 0) id = n;
+			} catch (_) {}
+		}
+		if (id) {
+			setStoreId(id);
+			void fetchActivities(id);
+			void fetchStoreInfo(id);
 		} else {
-			Taro.showToast({ title: '缺少门店信息，请从首页进入', icon: 'none' });
+			Taro.showToast({ title: '缺少门店信息，请从门店列表进入', icon: 'none' });
 		}
 	}, []);
+
+	useEffect(() => {
+		if (!autoFlag || autoOnce) return;
+		if (activities.length === 0) return;
+		const targetId = autoActivityId || activities[0]?.id;
+		if (targetId) {
+			setAutoOnce(true);
+			void handleRegister(targetId);
+		}
+	}, [autoFlag, autoOnce, activities, autoActivityId]);
 
 	async function fetchActivities(id: number) {
 		setLoading(true);
@@ -44,6 +79,14 @@ export default function ActivitiesPage() {
 		} finally {
 			setLoading(false);
 		}
+	}
+
+	const [currentStore, setCurrentStore] = useState<Store | null>(null);
+	async function fetchStoreInfo(id: number) {
+		try {
+			const s = await getStore(id);
+			setCurrentStore(s as Store);
+		} catch (_) {}
 	}
 
 	async function handleRegister(activityId: number) {
@@ -72,13 +115,17 @@ export default function ActivitiesPage() {
 				fee: feeNum,
 			});
 			const order: Order | undefined = res?.order as any;
-			Taro.showToast({ title: '报名成功', icon: 'success' });
+			if (!order || Number(order.pay_amount) === 0) {
+				setSuccessActivityId(activityId);
+				Taro.showToast({ title: '报名成功', icon: 'success' });
+			}
 			if (order && Number(order.pay_amount) > 0) {
 				try {
 					const payRes = await createUnifiedOrder(order.id);
 					if (payRes?.payment_no) {
 						await mockPayCallback(payRes.payment_no);
-						Taro.showToast({ title: '支付成功', icon: 'success' });
+						setSuccessActivityId(activityId);
+						Taro.showToast({ title: '报名并支付成功', icon: 'success' });
 					}
 				} catch (err) {
 					console.error('pay activity order failed', err);
@@ -91,11 +138,32 @@ export default function ActivitiesPage() {
 			Taro.showToast({ title: msg, icon: 'none' });
 		} finally {
 			setSubmittingId(null);
+			// 清理输入，提升体验
+			setName('');
+			setPhone('');
+			// 保留 fee 以便用户下次参考
 		}
 	}
 
 	return (
 		<View style={{ padding: 12 }}>
+			{currentStore && (
+				<View style={{
+					marginBottom: 8,
+					padding: '6px 10px',
+					borderWidth: 1,
+					borderStyle: 'solid',
+					borderColor: '#07c160',
+					borderRadius: 16,
+					display: 'inline-block',
+					backgroundColor: '#f6ffed',
+				}}>
+					<Text style={{ color: '#389e0d' }}>当前门店：{currentStore.name}</Text>
+				</View>
+			)}
+			<View style={{ marginBottom: 8 }}>
+				<Button size="mini" onClick={() => Taro.navigateTo({ url: '/pages/stores/index' })}>切换门店</Button>
+			</View>
 			<Text style={{ fontSize: 18, fontWeight: 'bold' }}>活动报名</Text>
 			<View style={{ marginTop: 12 }}>
 				<Text>姓名</Text>
@@ -138,6 +206,11 @@ export default function ActivitiesPage() {
 						}}
 					>
 						<Text style={{ fontSize: 16, fontWeight: 'bold' }}>{act.name}</Text>
+						{successActivityId === act.id && (
+							<View style={{ marginTop: 4, display: 'inline-block', padding: '2px 8px', backgroundColor: '#f6ffed', borderRadius: 12, borderWidth: 1, borderStyle: 'solid', borderColor: '#b7eb8f' }}>
+								<Text style={{ color: '#389e0d' }}>已报名成功</Text>
+							</View>
+						)}
 						<View style={{ marginTop: 4 }}>
 							<Text>
 								时间：{act.start_time} - {act.end_time}
@@ -154,7 +227,7 @@ export default function ActivitiesPage() {
 							loading={submittingId === act.id}
 							onClick={() => handleRegister(act.id)}
 						>
-							{submittingId === act.id ? '报名中...' : '报名参加'}
+							{submittingId === act.id ? '报名中...' : (fee.trim() && Number(fee) > 0 ? '报名并支付' : '报名参加')}
 						</Button>
 					</View>
 				))}

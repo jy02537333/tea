@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -201,3 +202,73 @@ func csvSafeRef(s string) string {
 	s = strings.ReplaceAll(s, "\n", " ")
 	return s
 }
+
+// ===== 用户侧：退款列表查询 =====
+
+// GET /api/v1/refunds
+// 用户侧退款列表（需登录），按当前用户筛选，支持 order_id/status/start/end/page/limit
+func (h *RefundHandler) ListMyRefunds(c *gin.Context) {
+	uid, ok := currentUserID(c)
+	if !ok || uid == 0 {
+		utils.Unauthorized(c, "未登录或令牌无效")
+		return
+	}
+
+	orderID := strings.TrimSpace(c.Query("order_id"))
+	status := strings.TrimSpace(c.Query("status"))
+	start := strings.TrimSpace(c.Query("start"))
+	end := strings.TrimSpace(c.Query("end"))
+
+	page := toIntRef(c.DefaultQuery("page", "1"))
+	size := toIntRef(c.DefaultQuery("limit", "20"))
+	if page < 1 {
+		page = 1
+	}
+	if size <= 0 || size > 200 {
+		size = 20
+	}
+
+	db := database.GetDB()
+	q := db.Model(&model.Refund{}).
+		Joins("JOIN orders ON orders.id = refunds.order_id").
+		Where("orders.user_id = ?", uid).
+		Preload("Order").Preload("Payment")
+
+	if orderID != "" {
+		// 尝试解析为数字，避免SQL注入与类型不匹配
+		if oid, err := strconv.ParseUint(orderID, 10, 64); err == nil {
+			q = q.Where("refunds.order_id = ?", uint(oid))
+		} else {
+			utils.InvalidParam(c, "order_id 参数非法")
+			return
+		}
+	}
+	if status != "" {
+		if st, err := strconv.ParseInt(status, 10, 64); err == nil {
+			q = q.Where("refunds.status = ?", int(st))
+		} else {
+			utils.InvalidParam(c, "status 参数非法")
+			return
+		}
+	}
+	if start != "" {
+		q = q.Where("refunds.created_at >= ?", start)
+	}
+	if end != "" {
+		q = q.Where("refunds.created_at <= ?", end)
+	}
+
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		utils.Error(c, utils.CodeError, err.Error())
+		return
+	}
+	var list []model.Refund
+	if err := q.Order("refunds.id desc").Limit(size).Offset((page-1)*size).Find(&list).Error; err != nil {
+		utils.Error(c, utils.CodeError, err.Error())
+		return
+	}
+	utils.PageSuccess(c, list, total, page, size)
+}
+
+// 使用同包内已有的 currentUserID(c)（定义于 withdrawal.go）

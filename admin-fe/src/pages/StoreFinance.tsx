@@ -21,18 +21,26 @@ import {
   Store,
   StoreWalletSummary,
   StoreWithdrawRecord,
+  StoreFinanceTransaction,
   getStores,
   getStoreWallet,
   getStoreWithdraws,
   applyStoreWithdraw,
+  getStoreFinanceTransactions,
+  exportStoreFinanceTransactions,
 } from '../services/stores';
 import { WITHDRAW_STATUS_LABELS } from '../constants/withdraw';
+import { PAYMENT_METHOD_LABELS } from '../constants/payment';
 
 export default function StoreFinancePage() {
   const queryClient = useQueryClient();
   const [selectedStoreId, setSelectedStoreId] = useState<number | undefined>(undefined);
   const [walletPage, setWalletPage] = useState({ page: 1, limit: 20 });
   const [walletStatus, setWalletStatus] = useState<number | undefined>(undefined);
+  const [txPage, setTxPage] = useState({ page: 1, limit: 20 });
+  const [txType, setTxType] = useState<'' | 'payment' | 'refund' | 'withdraw'>('');
+  const [txStart, setTxStart] = useState<string | undefined>(undefined);
+  const [txEnd, setTxEnd] = useState<string | undefined>(undefined);
   const [withdrawForm] = Form.useForm<{ amount: number; remark?: string }>();
 
   const storesQuery = useQuery({
@@ -69,6 +77,19 @@ export default function StoreFinancePage() {
         page: walletPage.page,
         limit: walletPage.limit,
         status: walletStatus,
+      }),
+    enabled: !!selectedStoreId,
+  });
+
+  const txListQuery = useQuery({
+    queryKey: ['store-finance-tx', selectedStoreId, txPage.page, txPage.limit, txType || 'all', txStart || '', txEnd || ''],
+    queryFn: () =>
+      getStoreFinanceTransactions(selectedStoreId!, {
+        page: txPage.page,
+        limit: txPage.limit,
+        type: txType,
+        start: txStart,
+        end: txEnd,
       }),
     enabled: !!selectedStoreId,
   });
@@ -348,6 +369,122 @@ export default function StoreFinancePage() {
               </Space>
             </>
           )}
+        </Card>
+      )}
+
+      {selectedStoreId && (
+        <Card>
+          <Space direction="vertical" style={{ width: '100%' }} size={12}>
+            <Space wrap>
+              <Divider orientation="left" style={{ margin: 0 }}>
+                资金流水（支付/退款/提现）
+              </Divider>
+              <Space>
+                <Select
+                  style={{ minWidth: 160 }}
+                  placeholder="类型"
+                  value={txType}
+                  onChange={(v) => {
+                    setTxType(v);
+                    setTxPage((prev) => ({ ...prev, page: 1 }));
+                  }}
+                  options={[
+                    { label: '全部类型', value: '' },
+                    { label: '收款', value: 'payment' },
+                    { label: '退款', value: 'refund' },
+                    { label: '提现', value: 'withdraw' },
+                  ]}
+                />
+                <Input
+                  style={{ width: 200 }}
+                  placeholder="开始时间 YYYY-MM-DD"
+                  value={txStart}
+                  onChange={(e) => setTxStart(e.target.value || undefined)}
+                />
+                <Input
+                  style={{ width: 200 }}
+                  placeholder="结束时间 YYYY-MM-DD"
+                  value={txEnd}
+                  onChange={(e) => setTxEnd(e.target.value || undefined)}
+                />
+                <Button
+                  type="default"
+                  onClick={() => {
+                    setTxPage({ page: 1, limit: txPage.limit });
+                    queryClient.invalidateQueries({ queryKey: ['store-finance-tx', selectedStoreId] });
+                  }}
+                >
+                  筛选
+                </Button>
+              </Space>
+              <Button
+                size="small"
+                type="default"
+                icon={<DownloadOutlined />}
+                disabled={!txListQuery.data || txListQuery.data.list.length === 0}
+                onClick={async () => {
+                  const blob = await exportStoreFinanceTransactions(selectedStoreId!, {
+                    start: txStart,
+                    end: txEnd,
+                    type: txType,
+                  });
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `store_${selectedStoreId}_finance_${Date.now()}.csv`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  window.URL.revokeObjectURL(url);
+                }}
+              >
+                导出当前筛选
+              </Button>
+            </Space>
+
+            {txListQuery.isLoading && <Spin />}
+            {txListQuery.isError && <Alert type="error" message="无法获取资金流水" showIcon />}
+            {txListQuery.data && (
+              <Table<StoreFinanceTransaction>
+                size="small"
+                rowKey={(r) => `${r.type}-${r.id}`}
+                dataSource={txListQuery.data.list}
+                pagination={{
+                  current: txPage.page,
+                  pageSize: txPage.limit,
+                  total: txListQuery.data.total,
+                  showSizeChanger: true,
+                  onChange: (page, pageSize) => setTxPage({ page, limit: pageSize || txPage.limit }),
+                }}
+                columns={[
+                  { title: '时间', dataIndex: 'created_at', width: 160 },
+                  {
+                    title: '方向',
+                    dataIndex: 'direction',
+                    width: 90,
+                    render: (val: 'in' | 'out') => (val === 'in' ? '收入' : '支出'),
+                  },
+                  {
+                    title: '类型',
+                    dataIndex: 'type',
+                    width: 100,
+                    render: (t: StoreFinanceTransaction['type']) =>
+                      t === 'payment' ? '收款' : t === 'refund' ? '退款' : '提现',
+                  },
+                  { title: '金额', dataIndex: 'amount', width: 100 },
+                  { title: '手续费', dataIndex: 'fee', width: 100 },
+                  {
+                    title: '方式',
+                    dataIndex: 'method',
+                    width: 120,
+                    render: (m: number) => PAYMENT_METHOD_LABELS[m] ?? (m ? `方式${m}` : '-'),
+                  },
+                  { title: '关联号', dataIndex: 'related_no', width: 200 },
+                  { title: '备注', dataIndex: 'remark' },
+                ]}
+              />
+            )}
+          </Space>
         </Card>
       )}
     </Space>

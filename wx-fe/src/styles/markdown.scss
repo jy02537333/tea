@@ -1,0 +1,46 @@
+.markdown-content {
+  color: #444;
+  line-height: 1.7;
+  font-size: 16px;
+}
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5 {
+  color: #222;
+  margin: 12px 0 8px;
+  font-weight: bold;
+}
+.markdown-content p { margin: 10px 0; }
+.markdown-content a { color: #07c160; text-decoration: none; }
+.markdown-content ul, .markdown-content ol { padding-left: 20px; margin: 8px 0; }
+.markdown-content li { margin: 4px 0; }
+
+/* Code blocks */
+.markdown-content pre {
+  background: #f7f8fa;
+  border: 1px solid #e6e8eb;
+  border-radius: 8px;
+  padding: 12px;
+  overflow: auto;
+}
+.markdown-content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  color: #1f2937;
+}
+
+/* Tables */
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+}
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid #e6e8eb;
+  padding: 8px 12px;
+}
+.markdown-content th {
+  background: #fafafa;
+}

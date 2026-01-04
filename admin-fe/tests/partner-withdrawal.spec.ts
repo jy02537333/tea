@@ -1,14 +1,17 @@
 import { test, expect, request } from '@playwright/test';
 
 const ADMIN_FE = process.env.ADMIN_FE_URL || 'http://127.0.0.1:5173';
-const API_BASE = process.env.API_BASE || 'http://127.0.0.1:9292';
+const API_BASE = process.env.API_BASE || 'http://127.0.0.1:9393';
 
 test.setTimeout(60000);
 
 test('partner withdrawal approve flow', async ({ page }) => {
   const ctx = page.context();
-  // start tracing (will collect snapshots and screenshots)
-  await ctx.tracing.start({ screenshots: true, snapshots: true });
+  // start tracing (will collect snapshots and screenshots) unless disabled
+  const enableTrace = process.env.TRACE !== '0';
+  if (enableTrace) {
+    await ctx.tracing.start({ screenshots: true, snapshots: true });
+  }
   // obtain admin token via dev-login
   const apiRequest = await request.newContext();
   const resp = await apiRequest.post(`${API_BASE}/api/v1/user/dev-login`, { data: { openid: 'admin_openid' } });
@@ -17,7 +20,8 @@ test('partner withdrawal approve flow', async ({ page }) => {
   const token = body?.data?.token || body?.token;
   expect(token).toBeTruthy();
 
-  // set token into localStorage before page load
+  // set API base and token into localStorage before app boot
+  await page.addInitScript((apiBase: string) => { (window as any).__TEA_RUNTIME_CONFIG__ = { apiBaseUrl: apiBase }; }, API_BASE);
   await page.addInitScript((t: string) => { localStorage.setItem('token', t); }, token);
 
   // navigate to partner withdrawals page
@@ -58,7 +62,9 @@ test('partner withdrawal approve flow', async ({ page }) => {
     // on failure save screenshot and stop tracing to help debugging
     const outDir = '/home/frederic/project/tea/build-ci-logs/playwright';
     await page.screenshot({ path: `${outDir}/partner-withdrawal-failure.png`, fullPage: true }).catch(() => {});
-    await ctx.tracing.stop({ path: `${outDir}/partner-withdrawal-trace.zip` }).catch(() => {});
+    if (enableTrace) {
+      await ctx.tracing.stop({ path: `${outDir}/partner-withdrawal-trace.zip` }).catch(() => {});
+    }
     throw err;
   }
 
@@ -86,7 +92,9 @@ test('partner withdrawal approve flow', async ({ page }) => {
   expect(approveResp.ok()).toBeTruthy();
 
   // stop tracing and save artifacts
-  await ctx.tracing.stop({ path: '/home/frederic/project/tea/build-ci-logs/playwright/partner-withdrawal-trace.zip' });
+  if (enableTrace) {
+    await ctx.tracing.stop({ path: '/home/frederic/project/tea/build-ci-logs/playwright/partner-withdrawal-trace.zip' });
+  }
 
   // open reject path as smoke (re-open if modal closed)
   // create a second withdrawal via script before running e2e to test reject path if needed
