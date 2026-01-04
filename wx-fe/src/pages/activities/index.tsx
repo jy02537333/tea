@@ -3,7 +3,8 @@ import { View, Text, Button, Input } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import { listActivities, registerActivityWithOrder } from '../../services/activities';
 import { createUnifiedOrder, mockPayCallback } from '../../services/payments';
-import type { Activity, Order } from '../../services/types';
+import { getStore } from '../../services/stores';
+import type { Activity, Order, Store } from '../../services/types';
 
 export default function ActivitiesPage() {
 	const [storeId, setStoreId] = useState<number | undefined>(undefined);
@@ -17,14 +18,24 @@ export default function ActivitiesPage() {
 	useEffect(() => {
 		const router = Taro.getCurrentInstance().router;
 		const storeIdParam = router?.params?.store_id;
+		let id: number | undefined;
 		if (storeIdParam) {
-			const id = Number(storeIdParam);
-			if (!Number.isNaN(id) && id > 0) {
-				setStoreId(id);
-				void fetchActivities(id);
-			}
+			const parsed = Number(storeIdParam);
+			if (!Number.isNaN(parsed) && parsed > 0) id = parsed;
+		}
+		if (!id) {
+			try {
+				const v = Taro.getStorageSync('current_store_id');
+				const n = Number(v);
+				if (Number.isFinite(n) && n > 0) id = n;
+			} catch (_) {}
+		}
+		if (id) {
+			setStoreId(id);
+			void fetchActivities(id);
+			void fetchStoreInfo(id);
 		} else {
-			Taro.showToast({ title: '缺少门店信息，请从首页进入', icon: 'none' });
+			Taro.showToast({ title: '缺少门店信息，请从门店列表进入', icon: 'none' });
 		}
 	}, []);
 
@@ -44,6 +55,14 @@ export default function ActivitiesPage() {
 		} finally {
 			setLoading(false);
 		}
+	}
+
+	const [currentStore, setCurrentStore] = useState<Store | null>(null);
+	async function fetchStoreInfo(id: number) {
+		try {
+			const s = await getStore(id);
+			setCurrentStore(s as Store);
+		} catch (_) {}
 	}
 
 	async function handleRegister(activityId: number) {
@@ -96,6 +115,23 @@ export default function ActivitiesPage() {
 
 	return (
 		<View style={{ padding: 12 }}>
+			{currentStore && (
+				<View style={{
+					marginBottom: 8,
+					padding: '6px 10px',
+					borderWidth: 1,
+					borderStyle: 'solid',
+					borderColor: '#07c160',
+					borderRadius: 16,
+					display: 'inline-block',
+					backgroundColor: '#f6ffed',
+				}}>
+					<Text style={{ color: '#389e0d' }}>当前门店：{currentStore.name}</Text>
+				</View>
+			)}
+			<View style={{ marginBottom: 8 }}>
+				<Button size="mini" onClick={() => Taro.navigateTo({ url: '/pages/stores/index' })}>切换门店</Button>
+			</View>
 			<Text style={{ fontSize: 18, fontWeight: 'bold' }}>活动报名</Text>
 			<View style={{ marginTop: 12 }}>
 				<Text>姓名</Text>

@@ -119,6 +119,9 @@ export default function StoreDetailPage() {
         <Button size="mini" type="primary" onClick={goNavigate}>导航到门店</Button>
         <Button size="mini" onClick={goDial}>拨打电话</Button>
         <Button size="mini" onClick={goStoreProducts}>查看本店商品</Button>
+        {store && (
+          <Button size="mini" onClick={() => Taro.navigateTo({ url: `/pages/activities/index?store_id=${store.id}` })}>查看活动/报名</Button>
+        )}
         {allowedAccounts && store && (
           <>
             <Button size="mini" onClick={() => Taro.navigateTo({ url: `/pages/store-accounts/index?store_id=${store.id}` })}>管理收款账户</Button>
