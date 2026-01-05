@@ -1,0 +1,22 @@
+SC6a minimal integration evidence
+
+Routes:
+- POST /api/v1/admin/orders/:id/accept  -> AdminAccept (2 -> 3)
+- POST /api/v1/admin/orders/:id/reject  -> AdminReject (-> cancelled 5, pay_status 4)
+
+Handler wiring:
+- OrderHandler.AdminAccept/AdminReject call OrderService and write before/after operation logs
+
+Service transitions:
+- AdminAcceptOrder: only when status=2, set status=3
+- AdminRejectOrder: delegates to AdminRefundOrder (handles inventory/coupon rollback when needed)
+
+Suggested cURL (pseudo):
+# Accept
+curl -X POST "$BASE/api/v1/admin/orders/123/accept" -H "Authorization: Bearer $TOKEN" -d '{"note":"ok"}'
+# Reject
+curl -X POST "$BASE/api/v1/admin/orders/123/reject" -H "Authorization: Bearer $TOKEN" -d '{"reason":"no_stock"}'
+
+Build notes:
+- tea-api builds with go build ./...
+- Minimal unit tests cover 2->3 and 2->5/4

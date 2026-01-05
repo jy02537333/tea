@@ -1,0 +1,4 @@
+=== RUN   TestAdminAcceptOrder_Status2To3
+--- PASS: TestAdminAcceptOrder_Status2To3 (0.00s)
+PASS
+ok  	tea-api/internal/service	(cached)

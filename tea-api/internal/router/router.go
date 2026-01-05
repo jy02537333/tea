@@ -163,6 +163,9 @@ func SetupRouter() *gin.Engine {
 		adminGroup.GET("/orders", orderHandler.AdminList)
 		adminGroup.GET("/orders/export", orderHandler.AdminExport)
 		adminGroup.GET("/orders/:id", orderHandler.AdminDetail)
+		// 门店后台：接受/拒绝订单
+		adminGroup.POST("/orders/:id/accept", middleware.RequirePermission("order:accept"), orderHandler.AdminAccept)
+		adminGroup.POST("/orders/:id/reject", middleware.RequirePermission("order:reject"), orderHandler.AdminReject)
 
 		// 会员与合伙人配置
 		adminGroup.GET("/membership-packages", membershipAdminHandler.ListPackages)
