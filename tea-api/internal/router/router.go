@@ -30,6 +30,7 @@ func SetupRouter() *gin.Engine {
 	refundHandler := handler.NewRefundHandler()
 	financeReportHandler := handler.NewFinanceReportHandler()
 	commissionAdminHandler := handler.NewCommissionAdminHandler()
+	commissionUserHandler := handler.NewCommissionUserHandler()
 	membershipAdminHandler := handler.NewMembershipAdminHandler()
 	partnerAdminHandler := handler.NewPartnerAdminHandler()
 	membershipHandler := handler.NewMembershipHandler()
@@ -76,6 +77,12 @@ func SetupRouter() *gin.Engine {
 	api.POST("/wallet/withdrawals", middleware.AuthJWT(), handler.CreateMyWithdrawal)
 	api.GET("/users/:id/withdrawals", middleware.AuthJWT(), handler.ListUserWithdrawals)
 	api.POST("/users/:id/withdrawals", middleware.AuthJWT(), handler.CreateUserWithdrawal)
+
+	// Sprint C: 佣金计算与记录（用户侧）
+	api.POST("/commissions/calculate", middleware.AuthJWT(), commissionUserHandler.Calculate)
+	api.POST("/commissions", middleware.AuthJWT(), commissionUserHandler.Create)
+	api.GET("/users/:id/commissions", middleware.AuthJWT(), commissionUserHandler.ListUserCommissions)
+	api.GET("/users/:id/commissions/summary", middleware.AuthJWT(), commissionUserHandler.UserCommissionSummary)
 
 	// Sprint B: 积分查询与流水
 	api.GET("/points", middleware.AuthJWT(), handler.GetMyPoints)
