@@ -49,6 +49,19 @@ CI 手动触发：在 GitHub 仓库的 Actions 里选择 “E2E UI (Mock API)”
 - api_port：Mock API 端口（默认 9393）
 - spa_port：SPA 服务端口（默认 5173）
 
+### GitHub Secrets 占位说明（后端连通性 & 截图）
+
+部分 CI 工作流会在 PR 上自动补充“后端连通性摘要”评论，并产出 wx-fe 财务页截图工件。为避免运行失败，请在仓库 Secrets 中预先配置以下键（均为可选，但推荐在正式环境中设置）：
+
+- `API_BASE`：后端 API 基地址，例如 `https://api.example.com` 或 `http://127.0.0.1:9292`。
+  - 用途：`tools/automation/backend-connectivity-summary.sh` 用于健康检查、门店列表与门店财务接口连通性检测，并将结果写入 `build-ci-logs/backend_connectivity.md`，由 CI 追加到 PR 评论中。
+- `ADMIN_TOKEN`：具备门店与财务查询权限的管理员 JWT Token（`Authorization: Bearer <token>`）。
+  - 用途：在有值时，CI 会在同一工作流中调用 `GET /api/v1/stores` 与门店财务相关接口，验证后端路由是否按预期升级并返回 200；为空时，仅执行健康检查并在 PR 评论中标注为“未提供管理员令牌”。
+
+提示：
+- 若暂不希望在 CI 中访问真实后端，可仅配置 `API_BASE` 指向测试环境，或完全不配置上述 Secrets，此时 CI 会跳过后台连通性检查步骤。
+- Secrets 配置入口：GitHub 仓库 → Settings → Secrets and variables → Actions → New repository secret。
+
 This folder contains CI job templates to run the repository's `scripts/run_api_validation.sh` in CI and collect artifacts.
 
 Provided files:

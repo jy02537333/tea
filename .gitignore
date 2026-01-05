@@ -44,5 +44,11 @@ deleted_backups/*.tar.gz
 tea-api/dist/
 tea-api/configs/config.mysql.local.yaml
 
+# Frontend build outputs (do not commit)
+admin-fe/dist/
+admin-fe/playwright-report/
+admin-fe/test-results/
+wx-fe/dist/
+
 # Ignore local GitHub token (do not commit)
 .github_token
