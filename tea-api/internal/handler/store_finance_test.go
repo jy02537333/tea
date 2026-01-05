@@ -108,3 +108,57 @@ func TestStoreFinanceTransactionsExportRoute_Basic(t *testing.T) {
 		t.Fatalf("response is not valid JSON: %v", err)
 	}
 }
+
+// TestStoreFinanceTransactions_InvalidIDMessage checks error payload when id is invalid.
+func TestStoreFinanceTransactions_InvalidIDMessage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+
+	h := NewStoreHandler()
+	r.GET("/api/v1/stores/:id/finance/transactions", h.FinanceTransactions)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/stores/0/finance/transactions", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code == http.StatusOK {
+		t.Fatalf("expected non-200 for invalid id, got %d", w.Code)
+	}
+	var body struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("response is not valid JSON: %v", err)
+	}
+	if body.Message == "" {
+		t.Fatalf("expected message, got empty")
+	}
+}
+
+// TestStoreFinanceTransactionsExport_InvalidIDMessage checks export route error payload for invalid id.
+func TestStoreFinanceTransactionsExport_InvalidIDMessage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+
+	h := NewStoreHandler()
+	r.GET("/api/v1/stores/:id/finance/transactions/export", h.ExportFinanceTransactions)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/stores/0/finance/transactions/export", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code == http.StatusOK {
+		t.Fatalf("expected non-200 for invalid id, got %d", w.Code)
+	}
+	var body struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("response is not valid JSON: %v", err)
+	}
+	if body.Message == "" {
+		t.Fatalf("expected message, got empty")
+	}
+}
