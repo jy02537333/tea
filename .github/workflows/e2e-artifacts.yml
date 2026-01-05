@@ -27,14 +27,20 @@ jobs:
 
       # TODO: start backend tea-api for real E2E; for now, run build or a minimal test
       - name: Playwright install browsers (non-blocking)
-        continue-on-error: true
         run: |
+          set +e
           for i in 1 2 3; do
-            pnpm -C admin-fe exec playwright install --with-deps && exit 0
-            echo "WARN: playwright install failed (attempt $i/3), retrying..."
+            pnpm -C admin-fe exec playwright install --with-deps
+            rc=$?
+            if [ $rc -eq 0 ]; then
+              echo "Playwright browsers installed."
+              exit 0
+            fi
+            echo "WARN: playwright install failed (attempt $i/3, rc=$rc), retrying..."
             sleep 10
           done
           echo "WARN: playwright install failed after retries; continuing to collect other artifacts."
+          exit 0
 
       - name: Run Playwright (placeholder)
         run: pnpm -C admin-fe exec playwright test --reporter=list || true
