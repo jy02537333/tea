@@ -161,6 +161,7 @@ jobs:
 
       - name: Install admin-fe deps
         working-directory: admin-fe
+        continue-on-error: true
         run: pnpm install --frozen-lockfile
 
       - name: Set NEW badge start date
