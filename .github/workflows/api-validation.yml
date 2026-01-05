@@ -180,7 +180,6 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const core = require('@actions/core');
             const fs = require('fs');
             const path = 'build-ci-logs/sprint_c_check_summary.json';
             let body = 'Sprint C: 未找到校验摘要（可能未执行或产物缺失）。';

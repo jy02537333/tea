@@ -50,7 +50,7 @@ jobs:
       - name: wx-fe build
         working-directory: wx-fe
         continue-on-error: true
-        run: pnpm build
+        run: pnpm run build:h5
 
       - name: Install root devDependencies (Playwright)
         if: ${{ github.event_name == 'pull_request' }}
@@ -66,8 +66,11 @@ jobs:
         run: |
           node tools/automation/static-server-10114.js &
           SERVER_PID=$!
-          sleep 2
-          node tools/automation/preview-store-finance-screenshot.playwright.js || true
+          # Wait for static server to be ready
+          for i in $(seq 1 10); do
+            if curl -sS -I http://127.0.0.1:10114/ >/dev/null; then
+              echo "Static server ready"; break; fi; sleep 1; done
+          node tools/automation/preview-store-finance-screenshot.playwright.js || (echo "Retry screenshot once..." && sleep 3 && node tools/automation/preview-store-finance-screenshot.playwright.js || true)
           kill $SERVER_PID || true
 
       - name: Upload wx-fe screenshots
@@ -106,7 +109,6 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const core = require('@actions/core');
             const fs = require('fs');
             const path = 'build-ci-logs/backend_connectivity.md';
             try {
