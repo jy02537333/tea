@@ -22,16 +22,8 @@ jobs:
         with:
           version: 9
 
-      - name: Install FE deps
-        run: pnpm -C admin-fe install --frozen-lockfile
-
-      # TODO: start backend tea-api for real E2E; for now, run build or a minimal test
-      - name: Skip Playwright browser install (placeholder)
-        run: |
-          echo "Skipping Playwright browser install in artifacts workflow (placeholder)."
-
-      - name: Run Playwright (placeholder)
-        run: pnpm -C admin-fe exec playwright test --reporter=list || true
+      - name: Install root devDependencies (Playwright)
+        run: pnpm install --frozen-lockfile
 
       # wx-fe build and screenshots
       - name: Install wx-fe deps
@@ -39,9 +31,6 @@ jobs:
 
       - name: Build wx-fe H5
         run: pnpm -C wx-fe run build:h5
-
-      - name: Install root devDependencies (Playwright)
-        run: pnpm install --frozen-lockfile
 
       - name: Capture wx-fe StoreFinance screenshot
         env:

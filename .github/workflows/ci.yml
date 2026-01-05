@@ -33,6 +33,7 @@ jobs:
         working-directory: wx-fe
         run: |
           mkdir -p ../build-ci-logs
+          : > ../build-ci-logs/wx-fe-typecheck.log
           set +e
           set -o pipefail
           pnpm test 2>&1 | tee ../build-ci-logs/wx-fe-typecheck.log
