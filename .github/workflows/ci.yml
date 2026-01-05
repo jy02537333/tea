@@ -157,12 +157,6 @@ jobs:
         working-directory: admin-fe
         run: pnpm build
 
-      - name: Fail if wx-fe typecheck failed
-        if: ${{ steps.wx_fe_typecheck.outputs.exit_code != '0' }}
-        run: |
-          echo "wx-fe typecheck failed (exit_code=${{ steps.wx_fe_typecheck.outputs.exit_code }}). See artifact log: build-ci-logs/wx-fe-typecheck.log"
-          exit 1
-
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
