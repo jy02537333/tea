@@ -42,7 +42,7 @@ jobs:
           : > "$GITHUB_WORKSPACE/build-ci-logs/wx-fe-typecheck.log"
           set +e
           set -o pipefail
-          pnpm test 2>&1 | tee "$GITHUB_WORKSPACE/build-ci-logs/wx-fe-typecheck.log"
+          pnpm run typecheck 2>&1 | tee "$GITHUB_WORKSPACE/build-ci-logs/wx-fe-typecheck.log"
           rc=${PIPESTATUS[0]}
           echo "exit_code=$rc" >> "$GITHUB_OUTPUT"
           exit 0
