@@ -26,8 +26,15 @@ jobs:
         run: pnpm -C admin-fe install --frozen-lockfile
 
       # TODO: start backend tea-api for real E2E; for now, run build or a minimal test
-      - name: Playwright install browsers
-        run: pnpm -C admin-fe exec playwright install --with-deps
+      - name: Playwright install browsers (non-blocking)
+        continue-on-error: true
+        run: |
+          for i in 1 2 3; do
+            pnpm -C admin-fe exec playwright install --with-deps && exit 0
+            echo "WARN: playwright install failed (attempt $i/3), retrying..."
+            sleep 10
+          done
+          echo "WARN: playwright install failed after retries; continuing to collect other artifacts."
 
       - name: Run Playwright (placeholder)
         run: pnpm -C admin-fe exec playwright test --reporter=list || true
