@@ -113,8 +113,7 @@ jobs:
           body=$(echo "$body_json" | jq -r '.body // ""')
           if [ -z "$body" ]; then echo "No PR body"; exit 0; fi
           new_body=$(printf '%s' "$body" | sed -E \
-            -e 's/- \[ \] 门店详情：? *[^
-]*/- [x] 门店详情：证照、导航\/拨号、门店商品映射（功能完成）/g')
+            -e 's/- \[ \] 门店详情：?.*/- [x] 门店详情：证照、导航\/拨号、门店商品映射（功能完成）/g')
           if [ "$new_body" = "$body" ]; then echo "No store detail checklist line found or already checked"; exit 0; fi
           payload=$(jq -n --arg body "$new_body" '{body: $body}')
           curl -sS -X PATCH -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
