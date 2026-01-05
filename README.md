@@ -248,3 +248,5 @@ kill $(cat /tmp/wx-fe-link-check.*/*h5-preview.pid)
 - 扫码进店（最小版）已实现：在 [wx-fe/src/app.tsx](wx-fe/src/app.tsx) 解析入口参数 `store_id`（query/scene/H5 URL），首页 [wx-fe/src/pages/index/index.tsx](wx-fe/src/pages/index/index.tsx) 与分类页 [wx-fe/src/pages/category/index.tsx](wx-fe/src/pages/category/index.tsx) 接管路由入参并持久化 `current_store_id`，商品详情页 [wx-fe/src/pages/product-detail/index.tsx](wx-fe/src/pages/product-detail/index.tsx) 亦在存在 `store_id` 时持久化；后续页面（订单列表/详情、购物车、结算）按门店维度展示与过滤。
 - 当前门店徽标展示已覆盖：首页、商品详情、购物车、结算、订单详情、订单列表，保证门店上下文的用户可见性与一致性。
 - 门店详情（最小版）已实现：在 [wx-fe/src/pages/store-detail/index.tsx](wx-fe/src/pages/store-detail/index.tsx) 支持展示证照与基础信息、地图导航与电话拨打、并跳转到分类页查看本店商品（携带 `store_id` 进行门店商品映射）。入口位于首页门店卡片“查看详情”按钮或门店列表页。
+
+- 意见反馈与工单：新增「意见反馈」页与入口（设置/个人中心），提交成功弹窗展示工单编号（Ticket ID）；实现优先 `POST /api/v1/feedback`，未提供则回退 `POST /api/v1/tickets`。个人中心新增「我的工单」入口，并与「售后服务」一起排序到「订单」之后。
