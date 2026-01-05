@@ -1,5 +1,14 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { execSync } from 'node:child_process';
+
+// Inject build commit date for client consumption when env not provided
+try {
+  const cd = execSync('git log -1 --format=%cs', { encoding: 'utf-8' }).trim();
+  if (cd) {
+    process.env.VITE_BUILD_COMMIT_DATE = cd; // e.g., 2026-01-04
+  }
+} catch {}
 
 export default defineConfig({
   plugins: [react()],

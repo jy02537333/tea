@@ -2,9 +2,6 @@ name: E2E Artifacts (Playwright)
 
 on:
   workflow_dispatch:
-  # enable later:
-  # pull_request:
-  #   branches: [ master ]
 
 jobs:
   e2e:
@@ -23,15 +20,33 @@ jobs:
         with:
           version: 9
 
-      - name: Install FE deps
-        run: pnpm -C admin-fe install --frozen-lockfile
+      - name: Install root devDependencies (Playwright)
+        run: pnpm install --frozen-lockfile
 
-      # TODO: start backend tea-api for real E2E; for now, run build or a minimal test
-      - name: Playwright install browsers
-        run: pnpm -C admin-fe exec playwright install --with-deps
+      # wx-fe build and screenshots
+      - name: Install wx-fe deps
+        run: pnpm -C wx-fe install --frozen-lockfile
 
-      - name: Run Playwright (placeholder)
-        run: pnpm -C admin-fe exec playwright test --reporter=list || true
+      - name: Build wx-fe H5
+        run: pnpm -C wx-fe run build:h5
+
+      - name: Capture wx-fe StoreFinance screenshot
+        env:
+          PREVIEW_URL: http://127.0.0.1:10114/
+          FINANCE_STORE_ID: 1
+        run: |
+          node tools/automation/static-server-10114.js &
+          SERVER_PID=$!
+          sleep 2
+          node tools/automation/preview-store-finance-screenshot.playwright.js || true
+          kill $SERVER_PID || true
+
+      - name: Upload wx-fe screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: wx-fe-screenshots
+          path: build-ci-logs/screenshots/wx_store_finance.png
+          if-no-files-found: warn
 
       - name: Upload artifact (screenshots/traces)
         uses: actions/upload-artifact@v4
@@ -39,6 +54,7 @@ jobs:
           name: playwright-artifacts
           path: |
             build-ci-logs/playwright/**
+            build-ci-logs/playwright-install.log
           if-no-files-found: warn
 
       # Optional: Upload to OSS (needs secrets)

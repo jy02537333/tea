@@ -2,21 +2,44 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, Button } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import { listOrders } from '../../services/orders';
-import { Order } from '../../services/types';
+import { Order, Store } from '../../services/types';
+import { getStore } from '../../services/stores';
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<number | undefined>(undefined);
+  const [currentStore, setCurrentStore] = useState<Store | null>(null);
+
+  useEffect(() => {
+    void loadCurrentStore();
+  }, []);
 
   useEffect(() => {
     void fetchOrders();
-  }, [status]);
+  }, [status, currentStore?.id]);
+
+  async function loadCurrentStore() {
+    try {
+      const storeIdRaw = Taro.getStorageSync('current_store_id');
+      const storeId = storeIdRaw ? Number(storeIdRaw) : NaN;
+      if (!Number.isNaN(storeId) && storeId > 0) {
+        const s = await getStore(storeId);
+        setCurrentStore(s as Store);
+      }
+    } catch (_) {
+      // ignore
+    }
+  }
 
   async function fetchOrders() {
     setLoading(true);
     try {
-      const res = await listOrders({ page: 1, limit: 20, status });
+      const sid = currentStore?.id;
+      const params: { page?: number; limit?: number; status?: number; store_id?: number } = { page: 1, limit: 20 };
+      if (typeof status === 'number') params.status = status;
+      if (sid && Number.isFinite(sid) && sid > 0) params.store_id = sid;
+      const res = await listOrders(params);
       const maybe: any = res;
       const data: Order[] = Array.isArray(maybe?.data)
         ? maybe.data
@@ -38,11 +61,29 @@ export default function OrdersPage() {
   }
 
   function goDetail(id: number) {
-    Taro.navigateTo({ url: `/pages/order-detail/index?id=${id}` });
+    const sid = currentStore?.id;
+    const url = sid && sid > 0
+      ? `/pages/order-detail/index?id=${id}&store_id=${sid}`
+      : `/pages/order-detail/index?id=${id}`;
+    Taro.navigateTo({ url });
   }
 
   return (
     <View style={{ padding: 12 }}>
+      {currentStore && (
+        <View style={{
+          marginBottom: 8,
+          padding: '6px 10px',
+          borderWidth: 1,
+          borderStyle: 'solid',
+          borderColor: '#07c160',
+          borderRadius: 16,
+          display: 'inline-block',
+          backgroundColor: '#f6ffed',
+        }}>
+          <Text style={{ color: '#389e0d' }}>当前门店：{currentStore.name}</Text>
+        </View>
+      )}
       {/* 状态切换 Tab（简化版） */}
       <View style={{ marginBottom: 12, display: 'flex', flexDirection: 'row' }}>
         <Button size="mini" onClick={() => changeStatus(undefined)}>

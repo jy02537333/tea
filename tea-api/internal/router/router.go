@@ -34,6 +34,7 @@ func SetupRouter() *gin.Engine {
 	partnerAdminHandler := handler.NewPartnerAdminHandler()
 	membershipHandler := handler.NewMembershipHandler()
 	dashboardHandler := handler.NewDashboardHandler()
+	contentHandler := handler.NewContentHandler()
 	productHandler := handler.NewProductHandler(
 		service.NewProductService(),
 	)
@@ -60,6 +61,9 @@ func SetupRouter() *gin.Engine {
 	// Sprint B: 我的/个人中心聚合（最小连通性）
 	api.GET("/users/me/summary", middleware.AuthJWT(), handler.GetUserSummary)
 
+	// 公共内容页（隐私/协议/关于/帮助）
+	api.GET("/content/pages", contentHandler.GetPages)
+
 	// Sprint B: 用户钱包（余额与流水）
 	api.GET("/wallet", middleware.AuthJWT(), handler.GetMyWallet)
 	api.GET("/wallet/transactions", middleware.AuthJWT(), handler.ListMyWalletTransactions)
@@ -77,12 +81,21 @@ func SetupRouter() *gin.Engine {
 	api.GET("/points", middleware.AuthJWT(), handler.GetMyPoints)
 	api.GET("/points/transactions", middleware.AuthJWT(), handler.ListMyPointsTransactions)
 
+	// 用户侧退款查询（列表）
+	api.GET("/refunds", middleware.AuthJWT(), refundHandler.ListMyRefunds)
+
 	// Sprint B: 优惠券模板与领取
 	api.GET("/coupons/templates", middleware.AuthJWT(), handler.ListCouponTemplates)
 	api.POST("/coupons/claim", middleware.AuthJWT(), handler.ClaimCouponFromTemplate)
 
 	// 用户侧工单（小程序意见反馈/订单投诉）
 	api.POST("/tickets", middleware.AuthMiddleware(), ticketUserHandler.Create)
+
+	// 分享/推荐关系（最小版）
+	api.POST("/referrals/bind", middleware.AuthJWT(), handler.BindReferral)
+
+	// 小程序码生成（wxacodeunlimit）
+	api.POST("/wx/wxacode", middleware.AuthJWT(), handler.GetWxaCode)
 
 	// 会员相关（小程序/用户侧只读接口）
 	api.GET("/membership-packages", middleware.AuthMiddleware(), membershipHandler.ListPackages)
@@ -384,6 +397,9 @@ func SetupRouter() *gin.Engine {
 		storeGroup.GET(":id/wallet", middleware.AuthJWT(), middleware.RequirePermission("store:wallet:view"), storeHandler.Wallet)
 		storeGroup.GET(":id/withdraws", middleware.AuthJWT(), middleware.RequirePermission("store:withdraw:view"), storeHandler.ListWithdraws)
 		storeGroup.POST(":id/withdraws", middleware.AuthJWT(), middleware.RequirePermission("store:withdraw:apply"), storeHandler.ApplyWithdraw)
+		// 门店资金流水（支付/退款/提现聚合）与导出
+		storeGroup.GET(":id/finance/transactions", middleware.AuthJWT(), middleware.RequirePermission("store:wallet:view"), storeHandler.FinanceTransactions)
+		storeGroup.GET(":id/finance/transactions/export", middleware.AuthJWT(), middleware.RequirePermission("store:wallet:view"), storeHandler.ExportFinanceTransactions)
 		// 门店优惠券接口（需要登录，后续可按角色细化权限）
 		storeGroup.GET(":id/coupons", middleware.AuthJWT(), middleware.RequirePermission("store:coupons:view"), couponHandler.ListStoreCoupons)
 		storeGroup.POST(":id/coupons", middleware.AuthJWT(), middleware.RequirePermission("store:coupons:manage"), couponHandler.CreateStoreCoupon)

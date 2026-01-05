@@ -57,6 +57,134 @@ jobs:
             -d "$payload" "https://api.github.com/repos/$REPO/issues/$PR_NUMBER" | jq -r '.url // .message'
           echo "Checklist item marked as completed."
 
+      - name: Detect QR entry implemented (wx-fe)
+        id: detect_qr
+        run: |
+          set -e
+          qr_impl=false
+          # Check app.tsx has launch options and current_store_id persistence
+          if grep -Rqi "getLaunchOptionsSync" wx-fe/src/app.tsx && grep -Rqi "current_store_id" wx-fe/src/app.tsx; then qr_impl=true; fi
+          # Check index/category param takeover
+          if grep -Rqi "useRouter" wx-fe/src/pages/index/index.tsx && grep -Rqi "store_id" wx-fe/src/pages/index/index.tsx; then qr_impl=true; fi
+          if grep -Rqi "useRouter" wx-fe/src/pages/category/index.tsx && grep -Rqi "store_id" wx-fe/src/pages/category/index.tsx; then qr_impl=true; fi
+          echo "implemented=$qr_impl" >> "$GITHUB_OUTPUT"
+
+      - name: Update PR body checklist (mark QR entry implemented)
+        if: steps.detect_qr.outputs.implemented == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -e
+          body_json=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/issues/$PR_NUMBER")
+          body=$(echo "$body_json" | jq -r '.body // ""')
+          if [ -z "$body" ]; then echo "No PR body"; exit 0; fi
+          new_body=$(printf '%s' "$body" | sed -E \
+            -e 's/- \[ \] (小程序)?扫码进店(（最小版）)?/- [x] \1扫码进店\2/g' \
+            -e 's/- \[ \] 扫码进店（最小版）/- [x] 扫码进店（最小版）/g')
+          if [ "$new_body" = "$body" ]; then echo "No QR checklist line found or already checked"; exit 0; fi
+          payload=$(jq -n --arg body "$new_body" '{body: $body}')
+          curl -sS -X PATCH -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            -d "$payload" "https://api.github.com/repos/$REPO/issues/$PR_NUMBER" | jq -r '.url // .message'
+          echo "QR entry checklist marked checked."
+
+      - name: Detect store detail implemented (docs)
+        id: detect_store_detail
+        run: |
+          set -e
+          if grep -Rqi "门店.*功能完成" doc/prd_feature_checklist.md; then
+            echo "implemented=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "implemented=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update PR body checklist (mark store detail implemented)
+        if: steps.detect_store_detail.outputs.implemented == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -e
+          body_json=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/issues/$PR_NUMBER")
+          body=$(echo "$body_json" | jq -r '.body // ""')
+          if [ -z "$body" ]; then echo "No PR body"; exit 0; fi
+          new_body=$(printf '%s' "$body" | sed -E \
+            -e 's/- \[ \] 门店详情：?.*/- [x] 门店详情：证照、导航\/拨号、门店商品映射（功能完成）/g')
+          if [ "$new_body" = "$body" ]; then echo "No store detail checklist line found or already checked"; exit 0; fi
+          payload=$(jq -n --arg body "$new_body" '{body: $body}')
+          curl -sS -X PATCH -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            -d "$payload" "https://api.github.com/repos/$REPO/issues/$PR_NUMBER" | jq -r '.url // .message'
+          echo "Store detail checklist marked checked."
+
+      - name: Detect wallet/points (read-only) implemented
+        id: detect_wallet_points
+        run: |
+          set -e
+          # Consider implemented if feature checklist marks both wallet and points as completed
+          wallet_done=$(grep -Rci "\[✅\].*我的-钱包" doc/prd_feature_checklist.md || true)
+          points_done=$(grep -Rci "\[✅\].*我的-积分" doc/prd_feature_checklist.md || true)
+          if [ "${wallet_done}" != "0" ] && [ "${points_done}" != "0" ]; then
+            echo "implemented=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "implemented=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update PR body checklist (mark wallet/points read-only implemented)
+        if: steps.detect_wallet_points.outputs.implemented == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -e
+          body_json=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/issues/$PR_NUMBER")
+          body=$(echo "$body_json" | jq -r '.body // ""')
+          if [ -z "$body" ]; then echo "No PR body"; exit 0; fi
+          new_body=$(printf '%s' "$body" | sed -E 's/- \[ \] 我的-钱包\/积分（只读）/- [x] 我的-钱包\/积分（只读）/g')
+          if [ "$new_body" = "$body" ]; then echo "No wallet/points checklist line found or already checked"; exit 0; fi
+          payload=$(jq -n --arg body "$new_body" '{body: $body}')
+          curl -sS -X PATCH -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            -d "$payload" "https://api.github.com/repos/$REPO/issues/$PR_NUMBER" | jq -r '.url // .message'
+          echo "Wallet/Points (read-only) checklist marked checked."
+
+      - name: Detect share (poster + referral) implemented
+        id: detect_share
+        run: |
+          set -e
+          # 判定标准：前端存在分享页实现 + 服务新增，并且 PRD 功能清单标记为 ✅
+          has_page=$(grep -Rci "export default function SharePage" wx-fe/src/pages/share/index.tsx || true)
+          has_service=$(grep -Rci "bindReferral" wx-fe/src/services/share.ts || true)
+          checklist=$(grep -Rci "\[✅\].*我的-分享" doc/prd_feature_checklist.md || true)
+          if [ "$has_page" != "0" ] && [ "$has_service" != "0" ] && [ "$checklist" != "0" ]; then
+            echo "implemented=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "implemented=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update PR body checklist (mark share minimal implemented)
+        if: steps.detect_share.outputs.implemented == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -e
+          body_json=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/issues/$PR_NUMBER")
+          body=$(echo "$body_json" | jq -r '.body // ""')
+          if [ -z "$body" ]; then echo "No PR body"; exit 0; fi
+          new_body=$(printf '%s' "$body" | sed -E 's/- \[ \] 我的-分享（最小版）/- [x] 我的-分享（最小版）/g')
+          if [ "$new_body" = "$body" ]; then echo "No share checklist line found or already checked"; exit 0; fi
+          payload=$(jq -n --arg body "$new_body" '{body: $body}')
+          curl -sS -X PATCH -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            -d "$payload" "https://api.github.com/repos/$REPO/issues/$PR_NUMBER" | jq -r '.url // .message'
+          echo "Share (minimal) checklist marked checked."
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:

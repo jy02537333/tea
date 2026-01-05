@@ -2,8 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, Button, Image, Textarea } from '@tarojs/components';
 import Taro, { useRouter } from '@tarojs/taro';
 import { cancelOrder, confirmReceive, getOrder, payOrder } from '../../services/orders';
-import { Order, OrderItem } from '../../services/types';
+import { Order, OrderItem, Store, Refund } from '../../services/types';
+import { getStore } from '../../services/stores';
 import { createTicket } from '../../services/tickets';
+import { listMyRefunds } from '../../services/refunds';
 
 type ActionKey = 'cancel' | 'pay' | 'confirm' | null;
 
@@ -13,6 +15,13 @@ const STATUS_TEXT: Record<number, string> = {
   3: '配送中',
   4: '已完成',
   5: '已取消',
+};
+
+const PAY_STATUS_TEXT: Record<number, string> = {
+  1: '未付款',
+  2: '已付款',
+  3: '退款中',
+  4: '已退款',
 };
 
 function toNumber(value?: number | string): number | undefined {
@@ -57,6 +66,16 @@ export default function OrderDetail({ id }: { id?: number }) {
   const [address, setAddress] = useState<Record<string, any> | null>(null);
   const [complaintContent, setComplaintContent] = useState('');
   const [complaintLoading, setComplaintLoading] = useState(false);
+  const [polling, setPolling] = useState(true);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
+  const POLL_MS = 3000;
+  const [currentStore, setCurrentStore] = useState<Store | null>(null);
+  const [refunds, setRefunds] = useState<Refund[]>([]);
+  const [refundsLoading, setRefundsLoading] = useState(false);
+  const showMockRefund = useMemo(() => {
+    const mock = router?.params?.mock_refund;
+    return mock === '1' || mock === 'true';
+  }, [router?.params?.mock_refund]);
 
   const loadOrder = useCallback(async () => {
     if (!orderId) return;
@@ -66,6 +85,7 @@ export default function OrderDetail({ id }: { id?: number }) {
       setOrder(data.order);
       setItems(Array.isArray(data.items) ? data.items : []);
       setAddress(parseAddress(data.order?.address_info));
+      setLastRefreshedAt(Date.now());
     } catch (err: any) {
       console.error('load order failed', err);
       Taro.showToast({ title: err?.message || '加载订单失败', icon: 'none' });
@@ -78,11 +98,72 @@ export default function OrderDetail({ id }: { id?: number }) {
     if (orderId) void loadOrder();
   }, [orderId, loadOrder]);
 
+  // 加载门店信息：优先使用订单的 store_id，其次尝试路由参数
+  useEffect(() => {
+    const fromOrder = toNumber(order?.store_id);
+    const fromRouter = router?.params?.store_id ? Number(router.params.store_id) : undefined;
+    const sid = fromOrder || (fromRouter && Number.isFinite(fromRouter) && fromRouter > 0 ? fromRouter : undefined);
+    if (!sid || (currentStore && currentStore.id === sid)) return;
+    (async () => {
+      try {
+        const s = await getStore(sid);
+        setCurrentStore(s as Store);
+      } catch (_) {
+        // ignore store load error
+      }
+    })();
+  }, [order?.store_id, router?.params?.store_id]);
+
   const numericStatus = useMemo(() => toNumber(order?.status), [order?.status]);
   const statusText = useMemo(() => {
     if (!numericStatus) return order?.status ? String(order.status) : '--';
     return STATUS_TEXT[numericStatus] || String(order?.status ?? '--');
   }, [numericStatus, order?.status]);
+
+  const numericPayStatus = useMemo(() => {
+    const v = order?.pay_status;
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string') {
+      const p = parseInt(v, 10);
+      return Number.isNaN(p) ? undefined : p;
+    }
+    return undefined;
+  }, [order?.pay_status]);
+
+  // 拉取该订单的退款记录（当进入退款态时）
+  useEffect(() => {
+    if (!orderId) return;
+    const ps = numericPayStatus;
+    if (ps === 3 || ps === 4) {
+      (async () => {
+        setRefundsLoading(true);
+        try {
+          const resp = await listMyRefunds({ order_id: orderId, page: 1, limit: 20 });
+          setRefunds(resp?.data || []);
+        } catch (err) {
+          // 静默失败，仅在 UI 保留基本提示
+        } finally {
+          setRefundsLoading(false);
+        }
+      })();
+    } else {
+      setRefunds(showMockRefund ? [{
+        id: 999001,
+        order_id: orderId,
+        payment_id: 0,
+        refund_no: 'RF-MOCK-001',
+        refund_amount: typeof order?.pay_amount === 'number' ? order?.pay_amount : (order?.pay_amount || 0),
+        refund_reason: '示例退款用于截图展示',
+        status: 1,
+        created_at: new Date().toISOString(),
+      }] : []);
+    }
+  }, [orderId, numericPayStatus, showMockRefund, order?.pay_amount]);
+
+  const payStatusText = useMemo(() => {
+    if (!numericPayStatus) return order?.pay_status ? String(order.pay_status) : '--';
+    return PAY_STATUS_TEXT[numericPayStatus] || String(order?.pay_status ?? '--');
+  }, [numericPayStatus, order?.pay_status]);
 
   const addressText = useMemo(() => {
     if (!address) {
@@ -100,6 +181,17 @@ export default function OrderDetail({ id }: { id?: number }) {
   const showPay = numericStatus === 1;
   const showCancel = numericStatus === 1;
   const showConfirm = numericStatus === 3;
+
+  const TERMINAL_STATUSES = useMemo(() => new Set([4, 5]), []);
+
+  useEffect(() => {
+    if (!polling || !orderId) return;
+    if (TERMINAL_STATUSES.has((numericStatus ?? -1))) return;
+    const timer = setInterval(() => {
+      void loadOrder();
+    }, POLL_MS);
+    return () => clearInterval(timer);
+  }, [polling, orderId, numericStatus, loadOrder, TERMINAL_STATUSES]);
 
   const runAction = async (key: Exclude<ActionKey, null>, fn: () => Promise<void>, successText: string) => {
     if (!orderId) return;
@@ -181,10 +273,42 @@ export default function OrderDetail({ id }: { id?: number }) {
 
   return (
     <View style={{ padding: 16 }}>
+      {currentStore && (
+        <View style={{
+          marginBottom: 8,
+          padding: '6px 10px',
+          borderWidth: 1,
+          borderStyle: 'solid',
+          borderColor: '#07c160',
+          borderRadius: 16,
+          display: 'inline-block',
+          backgroundColor: '#f6ffed',
+        }}>
+          <Text style={{ color: '#389e0d' }}>当前门店：{currentStore.name}</Text>
+        </View>
+      )}
       <View style={{ marginBottom: 16 }}>
         <Text style={{ fontSize: 16, fontWeight: 'bold' }}>{statusText}</Text>
         <Text style={{ display: 'block', marginTop: 8 }}>订单号：{order.order_no}</Text>
         <Text style={{ display: 'block', marginTop: 4 }}>下单时间：{order.created_at ?? '--'}</Text>
+        <Text style={{ display: 'block', marginTop: 4, color: '#8c8c8c', fontSize: 12 }}>支付状态：{payStatusText}</Text>
+        <View style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+          <Text style={{ color: '#666', fontSize: 12 }}>
+            自动刷新：{polling && !TERMINAL_STATUSES.has((numericStatus ?? -1)) ? '开启' : '关闭'}
+            {TERMINAL_STATUSES.has((numericStatus ?? -1)) ? '（已到终态）' : ''}
+          </Text>
+          <Button size="mini" onClick={() => setPolling((p) => !p)}>
+            {polling ? '停止自动刷新' : '开启自动刷新'}
+          </Button>
+          <Button size="mini" onClick={() => void loadOrder()}>
+            刷新状态
+          </Button>
+          {lastRefreshedAt && (
+            <Text style={{ color: '#999', fontSize: 12 }}>
+              最近刷新：{new Date(lastRefreshedAt).toLocaleTimeString()}
+            </Text>
+          )}
+        </View>
       </View>
 
       <View style={{ padding: 12, backgroundColor: '#f7f7f7', borderRadius: 8, marginBottom: 16 }}>
@@ -245,6 +369,51 @@ export default function OrderDetail({ id }: { id?: number }) {
           </Button>
         )}
       </View>
+
+      {(numericPayStatus === 3 || numericPayStatus === 4 || showMockRefund) && (
+        <View style={{ marginTop: 16, padding: 12, backgroundColor: '#fffbe6', borderRadius: 8, border: '1px solid #ffe58f' }}>
+          <Text style={{ fontWeight: 'bold', display: 'block' }}>退款进度</Text>
+          <Text style={{ display: 'block', marginTop: 6, color: '#ad8b00' }}>{(numericPayStatus === 3 || showMockRefund) ? '退款处理中，请耐心等待' : '已退款完成'}</Text>
+          {order.paid_at && <Text style={{ display: 'block', marginTop: 4, color: '#8c8c8c', fontSize: 12 }}>支付时间：{order.paid_at}</Text>}
+          <View style={{ marginTop: 8 }}>
+            {refundsLoading && <Text style={{ color: '#8c8c8c' }}>退款记录加载中...</Text>}
+            {!refundsLoading && !refunds.length && (
+              <Text style={{ color: '#8c8c8c' }}>暂无退款记录</Text>
+            )}
+            {!refundsLoading && refunds.map((rf) => (
+              <View key={rf.id} style={{ marginTop: 8, padding: 8, backgroundColor: '#fff', borderRadius: 8 }}>
+                <Text style={{ display: 'block' }}>退款单号：{rf.refund_no}</Text>
+                <Text style={{ display: 'block', marginTop: 2 }}>退款金额：￥{formatAmount(rf.refund_amount)}</Text>
+                <Text style={{ display: 'block', marginTop: 2, color: '#8c8c8c', fontSize: 12 }}>
+                  状态：{rf.status === 1 ? '申请中' : rf.status === 2 ? '退款成功' : '退款失败'}
+                </Text>
+                <Text style={{ display: 'block', marginTop: 2, color: '#8c8c8c', fontSize: 12 }}>申请时间：{rf.created_at || '-'}</Text>
+                {rf.refunded_at && (
+                  <Text style={{ display: 'block', marginTop: 2, color: '#8c8c8c', fontSize: 12 }}>退款完成时间：{rf.refunded_at}</Text>
+                )}
+                {rf.refund_reason && (
+                  <Text style={{ display: 'block', marginTop: 2, color: '#999' }}>原因：{rf.refund_reason}</Text>
+                )}
+              </View>
+            ))}
+            <View style={{ marginTop: 8 }}>
+              <Button size="mini" onClick={async () => {
+                if (!orderId) return;
+                setRefundsLoading(true);
+                try {
+                  const resp = await listMyRefunds({ order_id: orderId, page: 1, limit: 20 });
+                  setRefunds(resp?.data || []);
+                  Taro.showToast({ title: '已刷新退款记录', icon: 'none' });
+                } catch (_) {
+                  Taro.showToast({ title: '刷新失败', icon: 'none' });
+                } finally {
+                  setRefundsLoading(false);
+                }
+              }}>刷新退款记录</Button>
+            </View>
+          </View>
+        </View>
+      )}
 
       <View style={{ marginTop: 20 }}>
         <Text style={{ fontWeight: 'bold', display: 'block', marginBottom: 8 }}>订单有问题？提交投诉</Text>

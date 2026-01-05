@@ -1,14 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, Input, Button, Picker } from '@tarojs/components';
-import Taro from '@tarojs/taro';
+import Taro, { useRouter } from '@tarojs/taro';
 import { listCategories } from '../../services/categories';
 import { getProducts } from '../../services/products';
 import { listStores } from '../../services/stores';
 import { Category, Product, Store } from '../../services/types';
+import usePermission from '../../hooks/usePermission';
+import { PERM_HINT_STORE_MGMT_READONLY_PAGE } from '../../constants/permission';
 
 const PAGE_SIZE = 10;
 
 export default function CategoryPage() {
+  const router = useRouter();
+  const perm = usePermission();
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>(undefined);
 
@@ -17,6 +21,16 @@ export default function CategoryPage() {
   const [selectedStoreId, setSelectedStoreId] = useState<number | undefined>(undefined);
 
   const [keyword, setKeyword] = useState('');
+
+  // 筛选与排序（产地/包装/价格区间/排序）
+  const originRange = ['不限', '华北', '华东', '华南', '西南', '西北', '其他'];
+  const packagingRange = ['不限', '散装', '袋装', '罐装', '礼盒'];
+  const sortRange = ['默认', '价格升序', '价格降序', '销量优先'];
+  const [originPickerIndex, setOriginPickerIndex] = useState(0);
+  const [packagingPickerIndex, setPackagingPickerIndex] = useState(0);
+  const [sortPickerIndex, setSortPickerIndex] = useState(0);
+  const [priceMin, setPriceMin] = useState<string>('');
+  const [priceMax, setPriceMax] = useState<string>('');
 
   const [products, setProducts] = useState<Product[]>([]);
   const [page, setPage] = useState(1);
@@ -32,6 +46,15 @@ export default function CategoryPage() {
     setInitializing(true);
     try {
       await Promise.all([loadCategories(), loadStores()]);
+      // 路由入参接管门店（在门店列表加载后设置 picker 状态）
+      const paramSidRaw = router?.params?.store_id;
+      const paramSid = paramSidRaw ? Number(paramSidRaw) : NaN;
+      if (!Number.isNaN(paramSid) && paramSid > 0) {
+        setSelectedStoreId(paramSid);
+        try { Taro.setStorageSync('current_store_id', String(paramSid)); } catch (_) {}
+        const index = stores.findIndex((s) => s.id === paramSid);
+        setStorePickerIndex(index >= 0 ? index + 1 : 0);
+      }
       await fetchProducts({ reset: true });
     } finally {
       setInitializing(false);
@@ -72,7 +95,16 @@ export default function CategoryPage() {
     }
   }
 
-  type QueryOverrides = { category_id?: number; keyword?: string; store_id?: number };
+  type QueryOverrides = {
+    category_id?: number;
+    keyword?: string;
+    store_id?: number;
+    origin?: string;
+    packaging?: string;
+    min_price?: number;
+    max_price?: number;
+    sort?: string;
+  };
 
   async function fetchProducts(options: { reset?: boolean; overrides?: QueryOverrides } = {}) {
     if (loadingProducts) return;
@@ -81,6 +113,11 @@ export default function CategoryPage() {
     const categoryId = overrides?.category_id !== undefined ? overrides.category_id : selectedCategoryId;
     const storeId = overrides?.store_id !== undefined ? overrides.store_id : selectedStoreId;
     const kw = overrides?.keyword !== undefined ? overrides.keyword : keyword;
+    const origin = overrides?.origin !== undefined ? overrides.origin : originPickerIndex > 0 ? originRange[originPickerIndex] : undefined;
+    const packaging = overrides?.packaging !== undefined ? overrides.packaging : packagingPickerIndex > 0 ? packagingRange[packagingPickerIndex] : undefined;
+    const minPrice = overrides?.min_price !== undefined ? overrides.min_price : priceMin ? Number(priceMin) : undefined;
+    const maxPrice = overrides?.max_price !== undefined ? overrides.max_price : priceMax ? Number(priceMax) : undefined;
+    const sort = overrides?.sort !== undefined ? overrides.sort : (sortPickerIndex === 1 ? 'price_asc' : sortPickerIndex === 2 ? 'price_desc' : sortPickerIndex === 3 ? 'sales_desc' : undefined);
 
     setLoadingProducts(true);
     try {
@@ -90,6 +127,11 @@ export default function CategoryPage() {
         category_id: categoryId,
         keyword: kw ? kw.trim() : undefined,
         store_id: storeId,
+        origin,
+        packaging,
+        min_price: minPrice,
+        max_price: maxPrice,
+        sort,
       });
 
       const list = Array.isArray(response?.data)
@@ -124,6 +166,10 @@ export default function CategoryPage() {
     setStorePickerIndex(index);
     const storeId = index === 0 ? undefined : stores[index - 1]?.id;
     setSelectedStoreId(storeId);
+    try {
+      if (storeId) Taro.setStorageSync('current_store_id', String(storeId));
+      else Taro.removeStorageSync('current_store_id');
+    } catch (_) {}
     void fetchProducts({ reset: true, overrides: { store_id: storeId } });
   }
 
@@ -131,6 +177,41 @@ export default function CategoryPage() {
     const value = (e?.detail?.value ?? keyword).trim();
     setKeyword(value);
     void fetchProducts({ reset: true, overrides: { keyword: value } });
+  }
+
+  function handleOriginChange(e: any) {
+    const index = Number(e?.detail?.value ?? 0);
+    setOriginPickerIndex(index);
+    const origin = index > 0 ? originRange[index] : undefined;
+    void fetchProducts({ reset: true, overrides: { origin } });
+  }
+
+  function handlePackagingChange(e: any) {
+    const index = Number(e?.detail?.value ?? 0);
+    setPackagingPickerIndex(index);
+    const packaging = index > 0 ? packagingRange[index] : undefined;
+    void fetchProducts({ reset: true, overrides: { packaging } });
+  }
+
+  function handleSortChange(e: any) {
+    const index = Number(e?.detail?.value ?? 0);
+    setSortPickerIndex(index);
+    const sort = index === 1 ? 'price_asc' : index === 2 ? 'price_desc' : index === 3 ? 'sales_desc' : undefined;
+    void fetchProducts({ reset: true, overrides: { sort } });
+  }
+
+  function handlePriceMinConfirm(e: any) {
+    const value = String(e?.detail?.value ?? priceMin).trim();
+    setPriceMin(value);
+    const min_price = value ? Number(value) : undefined;
+    void fetchProducts({ reset: true, overrides: { min_price } });
+  }
+
+  function handlePriceMaxConfirm(e: any) {
+    const value = String(e?.detail?.value ?? priceMax).trim();
+    setPriceMax(value);
+    const max_price = value ? Number(value) : undefined;
+    void fetchProducts({ reset: true, overrides: { max_price } });
   }
 
   function handleLoadMore() {
@@ -142,6 +223,20 @@ export default function CategoryPage() {
 
   return (
     <View style={{ padding: 12 }}>
+      {!perm.allowedStoreMgmt && (
+        <Text style={{ color: '#999', marginBottom: 8 }}>{PERM_HINT_STORE_MGMT_READONLY_PAGE}</Text>
+      )}
+      {/* 管理快捷入口（仅有权限且已选择具体门店时显示） */}
+      {selectedStoreId && (
+        <View style={{ marginBottom: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {perm.allowedStoreAccounts && (
+            <Button size="mini" onClick={() => Taro.navigateTo({ url: `/pages/store-accounts/index?store_id=${selectedStoreId}` })}>管理收款账户</Button>
+          )}
+          {perm.allowedStoreFinance && (
+            <Button size="mini" onClick={() => Taro.navigateTo({ url: `/pages/store-finance/index?store_id=${selectedStoreId}` })}>查看财务流水</Button>
+          )}
+        </View>
+      )}
       <View style={{ marginBottom: 12 }}>
         <Input
           type="text"
@@ -168,6 +263,55 @@ export default function CategoryPage() {
             <Text>{storePickerRange[storePickerIndex] || '全部门店'}</Text>
           </View>
         </Picker>
+      </View>
+
+      {/* 筛选与排序区域 */}
+      <View style={{ marginBottom: 16 }}>
+        <Text style={{ fontSize: 14, color: '#666' }}>筛选与排序</Text>
+        <View style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+          {/* 产地 */}
+          <View>
+            <Text style={{ fontSize: 12, color: '#888' }}>产地</Text>
+            <Picker mode="selector" range={originRange} onChange={handleOriginChange} value={originPickerIndex}>
+              <View style={{ marginTop: 6, padding: 10, borderWidth: 1, borderStyle: 'solid', borderColor: '#ddd', borderRadius: 6 }}>
+                <Text>{originRange[originPickerIndex] || '不限'}</Text>
+              </View>
+            </Picker>
+          </View>
+
+          {/* 包装 */}
+          <View>
+            <Text style={{ fontSize: 12, color: '#888' }}>包装</Text>
+            <Picker mode="selector" range={packagingRange} onChange={handlePackagingChange} value={packagingPickerIndex}>
+              <View style={{ marginTop: 6, padding: 10, borderWidth: 1, borderStyle: 'solid', borderColor: '#ddd', borderRadius: 6 }}>
+                <Text>{packagingRange[packagingPickerIndex] || '不限'}</Text>
+              </View>
+            </Picker>
+          </View>
+
+          {/* 价格区间 */}
+          <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 12, color: '#888' }}>最低价</Text>
+              <Input type="number" value={priceMin} placeholder="例如 10" onConfirm={handlePriceMinConfirm} onInput={(e) => setPriceMin(String((e.detail as any).value))} />
+            </View>
+            <Text style={{ marginTop: 18 }}>-</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 12, color: '#888' }}>最高价</Text>
+              <Input type="number" value={priceMax} placeholder="例如 100" onConfirm={handlePriceMaxConfirm} onInput={(e) => setPriceMax(String((e.detail as any).value))} />
+            </View>
+          </View>
+
+          {/* 排序 */}
+          <View>
+            <Text style={{ fontSize: 12, color: '#888' }}>排序</Text>
+            <Picker mode="selector" range={sortRange} onChange={handleSortChange} value={sortPickerIndex}>
+              <View style={{ marginTop: 6, padding: 10, borderWidth: 1, borderStyle: 'solid', borderColor: '#ddd', borderRadius: 6 }}>
+                <Text>{sortRange[sortPickerIndex] || '默认'}</Text>
+              </View>
+            </Picker>
+          </View>
+        </View>
       </View>
 
       <View style={{ marginBottom: 12 }}>
@@ -233,7 +377,10 @@ export default function CategoryPage() {
             <Button
               size="mini"
               style={{ marginTop: 8, width: 120 }}
-              onClick={() => Taro.navigateTo({ url: `/pages/product-detail/index?id=${product.id}` })}
+              onClick={() => {
+                const storeQuery = selectedStoreId ? `&store_id=${selectedStoreId}` : '';
+                Taro.navigateTo({ url: `/pages/product-detail/index?id=${product.id}${storeQuery}` });
+              }}
             >
               查看详情
             </Button>

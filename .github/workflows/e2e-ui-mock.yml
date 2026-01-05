@@ -1,0 +1,75 @@
+name: E2E UI (Mock API)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tests:
+        description: "Tests to run: all | orders | withdrawal | custom files/glob"
+        required: false
+        default: "all"
+        type: string
+      trace:
+        description: "Enable Playwright traces (true/false)"
+        required: false
+        default: true
+        type: boolean
+      workers:
+        description: "Playwright workers (parallelism)"
+        required: false
+        default: 1
+        type: number
+      api_port:
+        description: "Mock API port (default 9393)"
+        required: false
+        default: 9393
+        type: number
+      spa_port:
+        description: "SPA server port (default 5173)"
+        required: false
+        default: 5173
+        type: number
+
+permissions:
+  contents: read
+
+jobs:
+  run-e2e-ui-mock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Enable Corepack (pnpm)
+        run: corepack enable
+
+      - name: Make script executable
+        run: chmod +x scripts/dev-e2e.sh
+
+      - name: Run one-click E2E on Mock API
+        env:
+          E2E_TESTS: ${{ github.event.inputs.tests }}
+          TRACE: ${{ github.event.inputs.trace == 'false' && '0' || '1' }}
+          WORKERS: ${{ github.event.inputs.workers }}
+          API_PORT: ${{ github.event.inputs.api_port }}
+          SPA_PORT: ${{ github.event.inputs.spa_port }}
+          PLAYWRIGHT_HTML_OPEN: never
+        run: scripts/dev-e2e.sh
+
+      - name: Upload UI artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-ui-mock-artifacts
+          path: |
+            build-ci-logs/playwright/**
+            admin-fe/playwright-report/**
+          if-no-files-found: warn
+          retention-days: 7

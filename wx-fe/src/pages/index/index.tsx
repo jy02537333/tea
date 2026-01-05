@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, Input, Button } from '@tarojs/components';
-import Taro from '@tarojs/taro';
+import Taro, { useRouter } from '@tarojs/taro';
 import { getProducts } from '../../services/products';
 import { listStores } from '../../services/stores';
 import { Product, Store } from '../../services/types';
 
 export default function IndexPage() {
+  const router = useRouter();
   const [keyword, setKeyword] = useState('');
   const [products, setProducts] = useState<Product[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
@@ -14,8 +15,18 @@ export default function IndexPage() {
 
   useEffect(() => {
     // 初始化加载附近门店和商品列表
-    void loadStoresAndProducts();
+    void initFromParamsAndLoad();
   }, []);
+
+  async function initFromParamsAndLoad() {
+    const paramSidRaw = router?.params?.store_id;
+    const paramSid = paramSidRaw ? Number(paramSidRaw) : NaN;
+    if (!Number.isNaN(paramSid) && paramSid > 0) {
+      setCurrentStoreId(paramSid);
+      try { Taro.setStorageSync('current_store_id', String(paramSid)); } catch (_) {}
+    }
+    await loadStoresAndProducts();
+  }
 
   async function loadStoresAndProducts() {
     setLoading(true);
@@ -97,8 +108,34 @@ export default function IndexPage() {
     Taro.navigateTo({ url: `/pages/activities/index?store_id=${currentStoreId}` });
   }
 
+  function goStoreDetail(id: number) {
+    Taro.navigateTo({ url: `/pages/store-detail/index?store_id=${id}` });
+  }
+
+  function goStoresList() {
+    Taro.navigateTo({ url: '/pages/stores/index' });
+  }
+
   return (
     <View style={{ padding: 12 }}>
+      {(() => {
+        const current = stores.find((s) => s.id === currentStoreId);
+        if (!current) return null;
+        return (
+          <View style={{
+            marginBottom: 8,
+            padding: '6px 10px',
+            borderWidth: 1,
+            borderStyle: 'solid',
+            borderColor: '#07c160',
+            borderRadius: 16,
+            display: 'inline-block',
+            backgroundColor: '#f6ffed',
+          }}>
+            <Text style={{ color: '#389e0d' }}>当前门店：{current.name}</Text>
+          </View>
+        );
+      })()}
       {/* 搜索栏 */}
       <View style={{ marginBottom: 12 }}>
         <Input
@@ -119,6 +156,12 @@ export default function IndexPage() {
       <View style={{ marginBottom: 12 }}>
         <Button size="mini" onClick={goStoreActivities}>
           查看门店活动
+        </Button>
+      </View>
+
+      <View style={{ marginBottom: 12 }}>
+        <Button size="mini" onClick={goStoresList}>
+          查看门店列表
         </Button>
       </View>
 
@@ -146,9 +189,15 @@ export default function IndexPage() {
               borderRadius: 4,
               backgroundColor: store.id === currentStoreId ? '#007aff' : '#f0f0f0',
             }}
-            onClick={() => handleStoreChange(store.id)}
           >
-            <Text style={{ color: store.id === currentStoreId ? '#fff' : '#333' }}>{store.name}</Text>
+            <View onClick={() => handleStoreChange(store.id)}>
+              <Text style={{ color: store.id === currentStoreId ? '#fff' : '#333' }}>{store.name}</Text>
+            </View>
+            <View style={{ marginTop: 6 }}>
+              <Button size="mini" onClick={() => goStoreDetail(store.id)}>
+                查看详情
+              </Button>
+            </View>
           </View>
         ))}
       </View>

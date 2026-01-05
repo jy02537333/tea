@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, Button } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import { listCart, updateCartItem, removeCartItem } from '../../services/cart';
-import { CartItem, Product } from '../../services/types';
+import { CartItem, Product, Store } from '../../services/types';
 import { getProducts } from '../../services/products';
+import { getStore } from '../../services/stores';
 
 interface CartViewItem extends CartItem {
   product?: Product;
@@ -12,10 +13,25 @@ interface CartViewItem extends CartItem {
 export default function CartPage() {
   const [items, setItems] = useState<CartViewItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [currentStore, setCurrentStore] = useState<Store | null>(null);
 
   useEffect(() => {
     void fetchCart();
+    void loadCurrentStore();
   }, []);
+
+  async function loadCurrentStore() {
+    try {
+      const storeIdRaw = Taro.getStorageSync('current_store_id');
+      const storeId = storeIdRaw ? Number(storeIdRaw) : NaN;
+      if (!Number.isNaN(storeId) && storeId > 0) {
+        const s = await getStore(storeId);
+        setCurrentStore(s as Store);
+      }
+    } catch (_) {
+      // ignore
+    }
+  }
 
   async function fetchCart() {
     setLoading(true);
@@ -79,6 +95,20 @@ export default function CartPage() {
 
   return (
     <View style={{ padding: 12 }}>
+      {currentStore && (
+        <View style={{
+          marginBottom: 8,
+          padding: '6px 10px',
+          borderWidth: 1,
+          borderStyle: 'solid',
+          borderColor: '#07c160',
+          borderRadius: 16,
+          display: 'inline-block',
+          backgroundColor: '#f6ffed',
+        }}>
+          <Text style={{ color: '#389e0d' }}>当前门店：{currentStore.name}</Text>
+        </View>
+      )}
       {loading && <Text>加载中...</Text>}
       {!loading && !items.length && <Text>购物车为空</Text>}
       {items.map((it) => (

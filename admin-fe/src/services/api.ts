@@ -26,6 +26,17 @@ if (saved) {
   setToken(saved);
 }
 
+// 允许通过查询参数 tk 注入临时 token，便于本地验证页面
+try {
+  if (typeof window !== 'undefined') {
+    const usp = new URLSearchParams(window.location.search);
+    const tk = usp.get('tk');
+    if (tk) {
+      setToken(tk);
+    }
+  }
+} catch {}
+
 api.interceptors.response.use(
   (res) => res,
   (error) => {
