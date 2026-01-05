@@ -144,6 +144,8 @@ func SetupRouter() *gin.Engine {
 		adminGroup.POST("/users/:id/blacklist", middleware.OperationLogMiddleware(), userHandler.AdminSetBlacklist)
 		adminGroup.POST("/users/:id/whitelist", middleware.OperationLogMiddleware(), userHandler.AdminSetWhitelist)
 		adminGroup.POST("/uploads", uploadHandler.UploadMedia)
+		// OSS 直传策略（管理端）
+		adminGroup.POST("/storage/oss/policy", uploadHandler.AdminGetOSSPolicy)
 		// 门店订单统计
 		adminGroup.GET("/stores/:id/orders/stats", storeHandler.OrderStats)
 		// 门店订单列表（按门店维度查看订单）
