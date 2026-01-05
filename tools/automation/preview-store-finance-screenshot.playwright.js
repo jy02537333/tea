@@ -8,7 +8,12 @@
 */
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require('playwright');
+let chromium;
+try {
+  ({ chromium } = require('playwright'));
+} catch (e) {
+  chromium = null;
+}
 
 function findBrowserPath() {
   const envPaths = [
@@ -49,6 +54,23 @@ function readJSONSafe(p, fallback = null) {
   const launchOpts = { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] };
   if (executablePath) launchOpts.executablePath = executablePath;
 
+  const out = path.join(screenshotsDir, 'wx_store_finance.png');
+
+  function writePlaceholderScreenshot(message) {
+    try {
+      const png1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO8xne8AAAAASUVORK5CYII=', 'base64');
+      fs.writeFileSync(out, png1x1);
+      fs.writeFileSync(path.join(screenshotsDir, 'wx_store_finance.error.log'), String(message || 'unknown error'));
+      console.warn('Saved placeholder screenshot due to error:', message);
+    } catch (e) {
+      console.warn('Failed to save placeholder screenshot:', e);
+    }
+  }
+
+  if (!chromium) {
+    writePlaceholderScreenshot('playwright not installed');
+    throw new Error('Playwright is not installed; saved placeholder screenshot');
+  }
   console.log('Launching Chromium. executablePath=', executablePath || '(bundled/default)');
   const browser = await chromium.launch(launchOpts);
   const context = await browser.newContext({ viewport: { width: 420, height: 880, deviceScaleFactor: 1 } });
@@ -60,23 +82,45 @@ function readJSONSafe(p, fallback = null) {
   }, token, storeId);
 
   const page = await context.newPage();
-  await page.goto(previewURL, { waitUntil: 'load' });
+  await page.goto(previewURL, { waitUntil: 'domcontentloaded' });
 
   const base = previewURL.replace(/#.*$/, '').replace(/\/$/, '');
-  const target = `${base}/pages/store-finance/index?store_id=${storeId}`;
-  console.log('Navigating to', target);
-  await page.goto(target, { waitUntil: 'load' });
+  const targets = [
+    `${base}/pages/store-finance/index?store_id=${storeId}`,
+    `${base}/#/pages/store-finance/index?store_id=${storeId}`,
+  ];
+  let navigated = false;
+  for (const target of targets) {
+    try {
+      console.log('Navigating to', target);
+      await page.goto(target, { waitUntil: 'domcontentloaded' });
+      // Probe for header text within 5s to confirm page
+      await page.getByText('门店财务流水').waitFor({ timeout: 5000 });
+      navigated = true;
+      break;
+    } catch (e) {
+      console.warn('Navigation attempt failed, trying next target...', e && e.message ? e.message : e);
+    }
+  }
+  if (!navigated) {
+    console.warn('Failed to confirm finance page header; will still attempt screenshot.');
+  }
 
   try { await page.getByText('门店财务流水').waitFor({ timeout: 15000 }); } catch (_) {}
   try { await page.getByRole('button', { name: '返回门店详情' }).waitFor({ timeout: 5000 }); } catch (_) {}
   try { await page.getByRole('button', { name: '回到门店列表' }).first().waitFor({ timeout: 5000 }); } catch (_) {}
 
-  const out = path.join(screenshotsDir, 'wx_store_finance.png');
-  await page.screenshot({ path: out, fullPage: true });
-  console.log('Saved screenshot:', out);
+  try {
+    await page.screenshot({ path: out, fullPage: true });
+    console.log('Saved screenshot:', out);
+  } catch (e) {
+    writePlaceholderScreenshot(e && e.message ? e.message : e);
+    throw e;
+  }
 
   await browser.close();
 })().catch((err) => {
   console.error('[playwright-store-finance] failed:', err);
+  // Do not block CI hard; placeholder may have been saved.
   process.exit(1);
 });
