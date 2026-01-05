@@ -29,8 +29,16 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: wx-fe typecheck
+        id: wx_fe_typecheck
         working-directory: wx-fe
-        run: pnpm test
+        run: |
+          mkdir -p ../build-ci-logs
+          set +e
+          set -o pipefail
+          pnpm test 2>&1 | tee ../build-ci-logs/wx-fe-typecheck.log
+          rc=${PIPESTATUS[0]}
+          echo "exit_code=$rc" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: wx-fe build
         working-directory: wx-fe
@@ -138,6 +146,12 @@ jobs:
       - name: admin-fe build
         working-directory: admin-fe
         run: pnpm build
+
+      - name: Fail if wx-fe typecheck failed
+        if: ${{ steps.wx_fe_typecheck.outputs.exit_code != '0' }}
+        run: |
+          echo "wx-fe typecheck failed (exit_code=${{ steps.wx_fe_typecheck.outputs.exit_code }}). See artifact log: build-ci-logs/wx-fe-typecheck.log"
+          exit 1
 
       - name: Setup Go
         uses: actions/setup-go@v5

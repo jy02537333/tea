@@ -27,10 +27,12 @@ jobs:
 
       # TODO: start backend tea-api for real E2E; for now, run build or a minimal test
       - name: Playwright install browsers (non-blocking)
+        continue-on-error: true
         run: |
           set +e
+          mkdir -p build-ci-logs
           for i in 1 2 3; do
-            pnpm -C admin-fe exec playwright install --with-deps
+            pnpm -C admin-fe exec playwright install --with-deps 2>&1 | tee -a build-ci-logs/playwright-install.log
             rc=$?
             if [ $rc -eq 0 ]; then
               echo "Playwright browsers installed."
@@ -79,6 +81,7 @@ jobs:
           name: playwright-artifacts
           path: |
             build-ci-logs/playwright/**
+            build-ci-logs/playwright-install.log
           if-no-files-found: warn
 
       # Optional: Upload to OSS (needs secrets)
