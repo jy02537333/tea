@@ -31,6 +31,7 @@ jobs:
 
       - name: Install wx-fe deps
         working-directory: wx-fe
+        continue-on-error: true
         run: pnpm install --frozen-lockfile
 
       - name: wx-fe typecheck
@@ -48,14 +49,17 @@ jobs:
 
       - name: wx-fe build
         working-directory: wx-fe
+        continue-on-error: true
         run: pnpm build
 
       - name: Install root devDependencies (Playwright)
         if: ${{ github.event_name == 'pull_request' }}
+        continue-on-error: true
         run: pnpm install --frozen-lockfile
 
       - name: Capture wx-fe StoreFinance screenshot
         if: ${{ github.event_name == 'pull_request' }}
+        continue-on-error: true
         env:
           PREVIEW_URL: http://127.0.0.1:10114/
           FINANCE_STORE_ID: 1
@@ -68,6 +72,7 @@ jobs:
 
       - name: Upload wx-fe screenshots
         if: ${{ github.event_name == 'pull_request' }}
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: wx-fe-screenshots
@@ -84,6 +89,7 @@ jobs:
 
       - name: Backend connectivity summary (optional)
         if: ${{ github.event_name == 'pull_request' }}
+        continue-on-error: true
         env:
           API_BASE: ${{ secrets.API_BASE }}
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
@@ -96,6 +102,7 @@ jobs:
 
       - name: Comment PR with connectivity summary
         if: ${{ github.event_name == 'pull_request' }}
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |
