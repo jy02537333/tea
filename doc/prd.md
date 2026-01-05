@@ -46,6 +46,8 @@
 
 - 后端统一约定使用 `9292`。如遇到启动报错 `listen tcp :9292: bind: address already in use`，请按以下步骤处理，确保 `tea-api` 独占 9292：
 
+> 推荐：直接使用 `./run-tea-api.sh` 启动。脚本会在检测到 `9292` 被占用时自动终止占用进程并重启（必要时会使用 `kill -9` 作为最后手段），避免手动排查。
+
 ```
 # 查看哪个进程占用了 9292
 sudo lsof -iTCP:9292 -sTCP:LISTEN
