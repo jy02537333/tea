@@ -1,8 +1,6 @@
 name: CI
 
 on:
-  push:
-    branches: ["**"]
   pull_request:
     branches: ["**"]
 
@@ -37,6 +35,29 @@ jobs:
       - name: wx-fe build
         working-directory: wx-fe
         run: pnpm build
+
+      - name: Install root devDependencies (Playwright)
+        if: ${{ github.event_name == 'pull_request' }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Capture wx-fe StoreFinance screenshot
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          PREVIEW_URL: http://127.0.0.1:10114/
+          FINANCE_STORE_ID: 1
+        run: |
+          node tools/automation/static-server-10114.js &
+          SERVER_PID=$!
+          sleep 2
+          node tools/automation/preview-store-finance-screenshot.playwright.js || true
+          kill $SERVER_PID || true
+
+      - name: Upload wx-fe screenshots
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: wx-fe-screenshots
+          path: build-ci-logs/screenshots/wx_store_finance.png
 
       - name: Install admin-fe deps
         working-directory: admin-fe

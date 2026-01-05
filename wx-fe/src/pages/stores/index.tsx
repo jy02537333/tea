@@ -4,7 +4,7 @@ import Taro from '@tarojs/taro';
 import { listStores } from '../../services/stores';
 import { Store } from '../../services/types';
 import usePermission from '../../hooks/usePermission';
-import { PERM_HINT_STORE_MGMT_READONLY_PAGE, PERM_HINT_STORE_MGMT_READONLY_TOAST } from '../../constants/permission';
+import { PERM_HINT_STORE_MGMT_READONLY_PAGE, PERM_HINT_STORE_MGMT_READONLY_TOAST, PERM_TOAST_NO_STORE_FINANCE } from '../../constants/permission';
 
 export default function StoresPage() {
   const perm = usePermission();
@@ -42,10 +42,11 @@ export default function StoresPage() {
 
   function setCurrent(id: number) {
     try { Taro.setStorageSync('current_store_id', String(id)); } catch (_) {}
+    const canUseFinance = perm.allowedStoreFinance;
     if (perm.allowedStoreMgmt) {
-      Taro.showToast({ title: '已设为当前门店', icon: 'success' });
+      Taro.showToast({ title: canUseFinance ? '已设为当前门店，可在财务页使用' : '已设为当前门店（财务页需权限）', icon: canUseFinance ? 'success' : 'none' });
     } else {
-      Taro.showToast({ title: PERM_HINT_STORE_MGMT_READONLY_TOAST, icon: 'none' });
+      Taro.showToast({ title: '已设为当前门店（仅用于前端上下文），财务页需权限', icon: 'none' });
     }
   }
 
@@ -64,6 +65,21 @@ export default function StoresPage() {
           <View style={{ marginTop: 8, display: 'flex', gap: 8 }}>
             <Button size="mini" type="primary" onClick={() => goDetail(s.id)}>查看详情</Button>
             <Button size="mini" onClick={() => setCurrent(s.id)}>设为当前门店</Button>
+            <Button
+              size="mini"
+              onClick={() => {
+                if (!perm.allowedStoreFinance) {
+                  Taro.showToast({ title: PERM_TOAST_NO_STORE_FINANCE, icon: 'none' });
+                  return;
+                }
+                Taro.navigateTo({ url: `/pages/store-finance/index?store_id=${s.id}` });
+              }}
+            >
+              财务流水
+            </Button>
+            {!perm.allowedStoreFinance && (
+              <Text style={{ color: '#999', fontSize: 12 }}>（需权限）</Text>
+            )}
           </View>
         </View>
       ))}

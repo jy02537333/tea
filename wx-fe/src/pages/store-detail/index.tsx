@@ -4,6 +4,7 @@ import Taro, { useRouter } from '@tarojs/taro';
 import { getStore } from '../../services/stores';
 import { Store } from '../../services/types';
 import usePermission from '../../hooks/usePermission';
+import { PERM_TOAST_NO_STORE_FINANCE } from '../../constants/permission';
 
 export default function StoreDetailPage() {
   const router = useRouter();
@@ -108,6 +109,10 @@ export default function StoreDetailPage() {
         <Text style={{ display: 'block', color: '#999', fontSize: 12 }}>如提供定位信息，可一键导航</Text>
       </View>
 
+      <Text style={{ display: 'block', color: '#999', fontSize: 12, marginTop: 6 }}>
+        提示：可通过右上角入口查看财务流水或管理收款账户
+      </Text>
+
       {store.phone && (
         <View style={{ marginTop: 8 }}>
           <Text style={{ display: 'block' }}>联系电话：{store.phone}</Text>
@@ -127,8 +132,24 @@ export default function StoreDetailPage() {
             <Button size="mini" onClick={() => Taro.navigateTo({ url: `/pages/store-accounts/index?store_id=${store.id}` })}>管理收款账户</Button>
           </>
         )}
-        {allowedFinance && store && (
-          <Button size="mini" onClick={() => Taro.navigateTo({ url: `/pages/store-finance/index?store_id=${store.id}` })}>查看财务流水</Button>
+        {store && (
+          <>
+            <Button
+              size="mini"
+              onClick={() => {
+                if (!allowedFinance) {
+                  Taro.showToast({ title: PERM_TOAST_NO_STORE_FINANCE, icon: 'none' });
+                  return;
+                }
+                Taro.navigateTo({ url: `/pages/store-finance/index?store_id=${store.id}` });
+              }}
+            >
+              查看财务流水
+            </Button>
+            {!allowedFinance && (
+              <Text style={{ color: '#999', fontSize: 12 }}>（需权限）</Text>
+            )}
+          </>
         )}
       </View>
 

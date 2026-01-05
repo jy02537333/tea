@@ -397,6 +397,9 @@ func SetupRouter() *gin.Engine {
 		storeGroup.GET(":id/wallet", middleware.AuthJWT(), middleware.RequirePermission("store:wallet:view"), storeHandler.Wallet)
 		storeGroup.GET(":id/withdraws", middleware.AuthJWT(), middleware.RequirePermission("store:withdraw:view"), storeHandler.ListWithdraws)
 		storeGroup.POST(":id/withdraws", middleware.AuthJWT(), middleware.RequirePermission("store:withdraw:apply"), storeHandler.ApplyWithdraw)
+		// 门店资金流水（支付/退款/提现聚合）与导出
+		storeGroup.GET(":id/finance/transactions", middleware.AuthJWT(), middleware.RequirePermission("store:wallet:view"), storeHandler.FinanceTransactions)
+		storeGroup.GET(":id/finance/transactions/export", middleware.AuthJWT(), middleware.RequirePermission("store:wallet:view"), storeHandler.ExportFinanceTransactions)
 		// 门店优惠券接口（需要登录，后续可按角色细化权限）
 		storeGroup.GET(":id/coupons", middleware.AuthJWT(), middleware.RequirePermission("store:coupons:view"), couponHandler.ListStoreCoupons)
 		storeGroup.POST(":id/coupons", middleware.AuthJWT(), middleware.RequirePermission("store:coupons:manage"), couponHandler.CreateStoreCoupon)
