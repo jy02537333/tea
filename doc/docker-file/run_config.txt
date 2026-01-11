@@ -1,0 +1,86 @@
+# Tea Project Run Configuration
+
+This file documents how to start the different services of the tea project and how to use the Docker helpers.
+
+## tea-api (Backend Service)
+
+Go backend service.
+
+- How to start (script):
+  ```bash
+  ./run-tea-api.sh
+  ```
+- How to start (direct):
+  ```bash
+  TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
+  ```
+- Port: 9292
+- Key envs: `TEA_JWT_SECRET`, optional `TEA_SERVER_PORT`
+
+### One-click start with Redis/RabbitMQ
+```bash
+chmod +x ./doc/docker-file/start_tea_api.sh
+./doc/docker-file/start_tea_api.sh \
+  --redis-host 192.168.3.82 --redis-port 6379 --redis-password 123456 \
+  --rabbitmq-host 192.168.3.82 --rabbitmq-port 5672 \
+  --rabbitmq-username guest --rabbitmq-password guest --rabbitmq-vhost /
+```
+
+## admin-fe (Admin Frontend)
+
+Vite + React.
+
+- Dev start:
+  ```bash
+  pnpm -C admin-fe dev
+  ```
+- Port: 9094
+- Config: `/api` proxied to tea-api at http://127.0.0.1:9292 in `admin-fe/vite.config.ts`
+
+### Docker helpers
+- Build & run:
+  ```bash
+  chmod +x ./doc/docker-file/run_admin_fe_docker.sh
+  ./doc/docker-file/run_admin_fe_docker.sh
+  ```
+- Start-only (prebuilt image):
+  ```bash
+  chmod +x ./doc/docker-file/start_admin_fe_docker.sh
+  ./doc/docker-file/start_admin_fe_docker.sh http://192.168.3.82:9092
+  ```
+
+## wx-fe (Taro H5 + Weapp)
+
+Taro multi-platform app.
+
+- H5 dev:
+  ```bash
+  pnpm -C wx-fe dev:h5
+  ```
+- Weapp dev:
+  ```bash
+  pnpm -C wx-fe dev:weapp
+  ```
+- H5 port: 9093 (served by Docker runtime)
+
+### Docker (H5 runtime)
+
+Note: As of this update, Dockerfile copies the latest build outputs from `dist` (was `dist-fixed`). The helper script will build H5 before building the image, ensuring the container serves the fresh UI.
+
+- Build & run (uses fresh `dist`):
+  ```bash
+  chmod +x ./doc/docker-file/run_wx_fe_docker.sh
+  ./doc/docker-file/run_wx_fe_docker.sh http://host.docker.internal:9292
+  # Linux: the script already adds --add-host=host.docker.internal:host-gateway
+  ```
+
+- Quick start (no rebuild; requires image `wx-fe:latest` built from `dist`):
+  ```bash
+  chmod +x ./doc/docker-file/start_wx_fe_quick.sh
+  ./doc/docker-file/start_wx_fe_quick.sh http://host.docker.internal:9292 9093
+  ```
+
+### Phone login defaults
+The login page provides a tab switch for WeChat/Phone login. Default phone login values:
+- Mobile: 18985121575
+- Code: 000000

@@ -48,7 +48,7 @@ export default function MyCouponsPage() {
   }
 
   return (
-    <View style={{ padding: 12 }}>
+    <View data-testid="page-coupons" style={{ padding: 12 }}>
       {/* 顶部来源 Tab */}
       <View style={{ marginBottom: 12, display: 'flex', flexDirection: 'row' }}>
         <Button

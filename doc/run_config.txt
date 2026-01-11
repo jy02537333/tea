@@ -1,0 +1,95 @@
+# Tea Project Run Configuration
+
+This file documents how to start the different services of the tea project.
+
+## tea-api (Backend Service)
+
+The backend API service is a Go application.
+
+- **How to start:**
+  Run the shell script from the project root directory:
+  ```bash
+  ./run-tea-api.sh
+  ```
+  Alternatively, you can run the go application directly:
+  ```bash
+  TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
+  ```
+
+- **Listening Port:**
+  - `9292`
+
+- **Startup Parameters/Environment Variables:**
+  - `TEA_JWT_SECRET`: A secret key for JWT token generation. For development, it's usually `dev_secret_change_me`.
+  - `TEA_SERVER_PORT`: (Optional) Use this to override the default port `9292`.
+
+## admin-fe (Admin Frontend)
+
+The admin frontend is a Vite + React application.
+
+- **How to start:**
+  Navigate to the `admin-fe` directory and run the dev script:
+  ```bash
+  cd admin-fe
+  pnpm dev
+  ```
+
+- **Listening Port:**
+  - `9094`
+
+- **Configuration:**
+  - The development server proxies all requests from `/api` to the `tea-api` service at `http://127.0.0.1:9292`. This is configured in `admin-fe/vite.config.ts`.
+
+## wx-fe (WeChat Mini-program Frontend)
+
+The WeChat mini-program frontend is built with Taro.js.
+
+- **How to start:**
+  Navigate to the `wx-fe` directory and run one of the dev scripts:
+
+  For H5 development mode:
+  ```bash
+  cd wx-fe
+  pnpm dev:h5
+  ```
+
+  For WeChat mini-program development mode:
+  ```bash
+  cd wx-fe
+  pnpm dev:weapp
+  ```
+
+- **Listening Port (for H5 mode):**
+  - `9093`
+
+- **Configuration:**
+  - The project uses Taro.js for cross-platform development. The port for the H5 development server is specified in the project's Taro configuration.
+
+### Docker 一键启动（H5 部署）
+- **构建并启动（可配置 tea-api 地址）**
+  - 示例：
+    ```bash
+    ./doc/docker-file/run_wx_fe_docker.sh http://192.168.3.82:9292
+    ```
+  - 说明：
+    - 镜像名：`wx-fe:latest`
+    - 宿主端口：`9093` 映射到容器 `80`
+    - 通过环境变量 `WX_API_BASE_URL` 注入后端地址（入口脚本会在启动时替换构建时占位符）。
+
+- **仅启动已构建镜像**
+  - 示例：
+    ```bash
+    ./doc/docker-file/start_wx_fe_docker.sh http://192.168.3.82:9292
+    ```
+  - 说明：
+    - 依赖已存在的 `wx-fe:latest` 镜像；同样通过 `WX_API_BASE_URL` 配置后端地址。
+
+- **快速启动（不重新编译镜像）**
+  - 示例：
+    ```bash
+    ./doc/docker-file/start_wx_fe_quick.sh http://host.docker.internal:9292
+    # 指定自定义端口：
+    ./doc/docker-file/start_wx_fe_quick.sh http://192.168.3.82:9292 9095
+    ```
+  - 说明：
+    - 固定使用 `wx-fe:latest`，不执行构建，仅以 `WX_API_BASE_URL` 注入后端地址并启动容器。

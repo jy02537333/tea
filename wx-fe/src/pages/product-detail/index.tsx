@@ -5,6 +5,7 @@ import { getProduct } from '../../services/products';
 import { addCartItem } from '../../services/cart';
 import { Product, Store } from '../../services/types';
 import { getStore } from '../../services/stores';
+import './index.scss';
 
 export default function ProductDetail() {
   const [product, setProduct] = useState<Product | null>(null);
@@ -64,38 +65,31 @@ export default function ProductDetail() {
   if (!product) return <Text>未找到商品</Text>;
 
   return (
-    <View style={{ padding: 12 }}>
+    <View className="page-product-detail">
       {currentStore && (
-        <View style={{
-          marginBottom: 8,
-          padding: '6px 10px',
-          borderWidth: 1,
-          borderStyle: 'solid',
-          borderColor: '#07c160',
-          borderRadius: 16,
-          display: 'inline-block',
-          backgroundColor: '#f6ffed',
-        }}>
-          <Text style={{ color: '#389e0d' }}>当前门店：{currentStore.name}</Text>
+        <View className="store-badge">
+          <Text className="store-text">当前门店：{currentStore.name}</Text>
         </View>
       )}
       {product.images && (
-        <Image
-          src={product.images}
-          mode="aspectFill"
-          style={{ width: '100%', height: 200, marginBottom: 12 }}
-        />
+        <Image className="cover" src={product.images} mode="aspectFill" />
       )}
-      <Text style={{ fontSize: 18, fontWeight: 'bold' }}>{product.name}</Text>
-      <View style={{ marginTop: 8, marginBottom: 12 }}>
-        <Text>价格: {product.price}</Text>
-        {product.original_price && (
-          <Text> 原价: {product.original_price}</Text>
-        )}
+      <View className="content">
+        <Text className="title">{product.name}</Text>
+        <View className="price-row">
+          <Text className="price-now">¥ {typeof product.price === 'string' ? product.price : Number(product.price).toFixed(2)}</Text>
+          {product.original_price && (
+            <Text className="price-origin">¥ {product.original_price}</Text>
+          )}
+        </View>
       </View>
-      <Button disabled={submitting} onClick={handleAddToCart}>
-        {submitting ? '提交中...' : '加入购物车'}
-      </Button>
+
+      <View className="action-bar">
+        <Button className="btn-primary" disabled={submitting} onClick={handleAddToCart}>
+          {submitting ? '提交中...' : '加入购物车'}
+        </Button>
+        <Button className="btn-secondary" onClick={() => Taro.navigateTo({ url: '/pages/cart/index' })}>去购物车</Button>
+      </View>
     </View>
   );
 }

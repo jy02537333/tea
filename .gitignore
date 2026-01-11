@@ -48,7 +48,7 @@ tea-api/configs/config.mysql.local.yaml
 admin-fe/dist/
 admin-fe/playwright-report/
 admin-fe/test-results/
-wx-fe/dist/
+wx-fe/dist-fixed/
 
 # Ignore local GitHub token (do not commit)
 .github_token

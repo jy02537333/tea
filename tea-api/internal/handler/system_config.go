@@ -68,6 +68,63 @@ func (h *SystemConfigHandler) List(c *gin.Context) {
 	response.Success(c, gin.H{"list": list})
 }
 
+// PublicListSiteConfigs lists public site configs (readonly).
+// GET /api/v1/site/configs?keys=site_copyright,site_phone
+// GET /api/v1/site/configs?prefix=site_
+func (h *SystemConfigHandler) PublicListSiteConfigs(c *gin.Context) {
+	if h.db == nil {
+		response.Error(c, http.StatusInternalServerError, "db not ready")
+		return
+	}
+
+	keysParam := strings.TrimSpace(c.Query("keys"))
+	prefix := strings.TrimSpace(c.Query("prefix"))
+
+	// 安全收口：仅允许读取 site_ 前缀
+	if keysParam == "" && prefix == "" {
+		prefix = "site_"
+	}
+
+	q := h.db.Model(&model.SystemConfig{}).Where("status = ?", 1)
+	if keysParam != "" {
+		raw := strings.Split(keysParam, ",")
+		keys := make([]string, 0, len(raw))
+		for _, k := range raw {
+			k = strings.TrimSpace(k)
+			if k == "" {
+				continue
+			}
+			if !strings.HasPrefix(k, "site_") {
+				response.BadRequest(c, "只允许读取 site_ 前缀配置")
+				return
+			}
+			keys = append(keys, k)
+		}
+		if len(keys) > 0 {
+			q = q.Where("config_key IN ?", keys)
+		} else {
+			q = q.Where("config_key LIKE ?", "site_%")
+		}
+	} else {
+		if prefix == "" {
+			prefix = "site_"
+		}
+		if !strings.HasPrefix(prefix, "site_") {
+			response.BadRequest(c, "只允许读取 site_ 前缀配置")
+			return
+		}
+		q = q.Where("config_key LIKE ?", prefix+"%")
+	}
+
+	var list []model.SystemConfig
+	if err := q.Order("id ASC").Find(&list).Error; err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response.Success(c, gin.H{"list": list})
+}
+
 // UpsertMany upserts system configs.
 // PUT /api/v1/admin/system/configs
 func (h *SystemConfigHandler) UpsertMany(c *gin.Context) {

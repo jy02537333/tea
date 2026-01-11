@@ -34,7 +34,7 @@ export default function WalletPage() {
   }
 
   return (
-    <View style={{ padding: 16 }}>
+    <View data-testid="page-wallet" style={{ padding: 16 }}>
       <Text style={{ fontSize: 18, fontWeight: 'bold' }}>钱包</Text>
       {loading && <Text style={{ display: 'block', marginTop: 8 }}>加载中...</Text>}
       {!loading && (

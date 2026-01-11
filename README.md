@@ -6,7 +6,32 @@
 
 前端联调快捷入口： [admin-fe/README.md](admin-fe/README.md) · [wx-fe/README.md](wx-fe/README.md)
 
+快捷脚本（wx-fe H5 in Docker）：
+- 开发（HMR）：bash scripts/wx-fe_h5_in_docker.sh dev
+- 静态预览：bash scripts/wx-fe_h5_in_docker.sh preview
+- 停止容器：bash scripts/wx-fe_stop_docker.sh（或 `bash scripts/wx-fe_stop_docker.sh <name>` / `ALL=1 bash scripts/wx-fe_stop_docker.sh`）
+
 管理端演示提示：可在后台配合 `scripts/dev-order-cli.sh` 一键演示发货/完成/取消（deliver/receive/cancel），详见本文“端到端订单联调与开发者 CLI（演示）”。
+
+### wx-fe Nginx 运行时（端口 9093）
+
+- 说明：`wx-fe/Dockerfile` 现复制最新构建目录 `dist` 到 Nginx，运行时通过 `WX_API_BASE_URL` 注入后端地址。
+- 构建并启动（使用一键脚本）：
+
+```bash
+chmod +x doc/docker-file/run_wx_fe_docker.sh
+./doc/docker-file/run_wx_fe_docker.sh http://host.docker.internal:9292
+# 访问：http://127.0.0.1:9093
+```
+
+- 快速启动（基于已构建镜像 `wx-fe:latest`）：
+
+```bash
+chmod +x doc/docker-file/start_wx_fe_quick.sh
+./doc/docker-file/start_wx_fe_quick.sh http://host.docker.internal:9292 9093
+```
+
+- 提示：Linux 下容器访问宿主后端需 `--add-host=host.docker.internal:host-gateway`（脚本已内置）。
 
 ## 最小 UI 测试（基于 Mock API，一键运行）
 
@@ -238,7 +263,27 @@ bash scripts/wx-fe_link_check.sh
 - 停止 H5 预览：
 
 ```bash
-kill $(cat /tmp/wx-fe-link-check.*/*h5-preview.pid)
+
+快捷启动与停止（Docker，一键脚本）：
+
+```bash
+# 启动开发（HMR）
+bash scripts/wx-fe_h5_in_docker.sh dev
+# 启动静态预览（build + serve）
+bash scripts/wx-fe_h5_in_docker.sh preview
+# 停止容器（默认名 tea-wxfe；或传入自定义名）
+bash scripts/wx-fe_stop_docker.sh
+bash scripts/wx-fe_stop_docker.sh my-wxfe
+```
+
+快捷启动（Docker，一键脚本）：
+
+```bash
+# 开发（HMR）
+bash scripts/wx-fe_h5_in_docker.sh dev
+# 静态预览（build + serve）
+bash scripts/wx-fe_h5_in_docker.sh preview
+```
 ```
 
 说明：脚本在检测到工作区日志目录不可写时，会自动将临时产物落在 `/tmp/wx-fe-link-check.<timestamp>/`，同时在工作区 `build-ci-logs/wx-fe-link-check/summary-latest.txt` 复制一份摘要，便于归档。

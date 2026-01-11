@@ -28,12 +28,11 @@ const (
 	maxReleaseBatchSize     = 500
 )
 
-// ReleaseFrozenCommissions finds commissions whose hold period expired and marks them as available.
-// It also appends a commission transaction entry for auditing purposes.
-func ReleaseFrozenCommissions(batchSize int) (int, error) {
-	db, err := requireDB()
-	if err != nil {
-		return 0, err
+// ReleaseFrozenCommissionsTx finds commissions whose hold period expired and marks them as available.
+// It operates within the provided transaction.
+func ReleaseFrozenCommissionsTx(tx *gorm.DB, batchSize int) (int, error) {
+	if tx == nil {
+		return 0, errors.New("tx is nil")
 	}
 	if batchSize <= 0 {
 		batchSize = defaultReleaseBatchSize
@@ -44,7 +43,7 @@ func ReleaseFrozenCommissions(batchSize int) (int, error) {
 
 	var candidates []model.Commission
 	now := time.Now()
-	if err := db.Where("status = ? AND available_at IS NOT NULL AND available_at <= ?", StatusFrozen, now).
+	if err := tx.Where("status = ? AND available_at IS NOT NULL AND available_at <= ?", StatusFrozen, now).
 		Order("id").
 		Limit(batchSize).
 		Find(&candidates).Error; err != nil {
@@ -54,13 +53,11 @@ func ReleaseFrozenCommissions(batchSize int) (int, error) {
 		return 0, nil
 	}
 
-	tx := db.Begin()
 	processed := 0
 	for _, cm := range candidates {
 		if err := tx.Model(&model.Commission{}).
 			Where("id = ? AND status = ?", cm.ID, StatusFrozen).
 			Update("status", StatusAvailable).Error; err != nil {
-			tx.Rollback()
 			return processed, err
 		}
 
@@ -72,12 +69,26 @@ func ReleaseFrozenCommissions(batchSize int) (int, error) {
 			Note:         "auto release",
 		}
 		if err := tx.Create(&relTx).Error; err != nil {
-			tx.Rollback()
 			return processed, err
 		}
 		processed++
 	}
+	return processed, nil
+}
 
+// ReleaseFrozenCommissions finds commissions whose hold period expired and marks them as available.
+// It also appends a commission transaction entry for auditing purposes.
+func ReleaseFrozenCommissions(batchSize int) (int, error) {
+	db, err := requireDB()
+	if err != nil {
+		return 0, err
+	}
+	tx := db.Begin()
+	processed, err := ReleaseFrozenCommissionsTx(tx, batchSize)
+	if err != nil {
+		tx.Rollback()
+		return processed, err
+	}
 	if err := tx.Commit().Error; err != nil {
 		return processed, err
 	}

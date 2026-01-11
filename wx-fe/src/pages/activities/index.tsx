@@ -5,6 +5,7 @@ import { listActivities, registerActivityWithOrder } from '../../services/activi
 import { createUnifiedOrder, mockPayCallback } from '../../services/payments';
 import { getStore } from '../../services/stores';
 import type { Activity, Order, Store } from '../../services/types';
+import { buildOrderShareAttributionParams } from '../../services/shareAttribution';
 
 export default function ActivitiesPage() {
 	const [storeId, setStoreId] = useState<number | undefined>(undefined);
@@ -109,10 +110,12 @@ export default function ActivitiesPage() {
 		}
 		setSubmittingId(activityId);
 		try {
+			const shareParams = buildOrderShareAttributionParams({ storeId, requireStoreId: true });
 			const res = await registerActivityWithOrder(activityId, {
 				name: name.trim(),
 				phone: phone.trim(),
 				fee: feeNum,
+				...shareParams,
 			});
 			const order: Order | undefined = res?.order as any;
 			if (!order || Number(order.pay_amount) === 0) {

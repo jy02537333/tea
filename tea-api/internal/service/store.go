@@ -7,6 +7,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -21,6 +22,35 @@ import (
 type StoreService struct{ db *gorm.DB }
 
 func NewStoreService() *StoreService { return &StoreService{db: database.GetDB()} }
+
+// DB returns underlying gorm DB for limited administrative ops
+func (s *StoreService) DB() *gorm.DB { return s.db }
+
+// ListStoreTables 列出门店桌号
+func (s *StoreService) ListStoreTables(storeID uint) ([]model.StoreTable, error) {
+	var list []model.StoreTable
+	if err := s.db.Where("store_id = ? AND status = 1", storeID).Order("id asc").Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+// CreateStoreTable 新增门店桌号
+func (s *StoreService) CreateStoreTable(storeID uint, tableNo string, capacity int, note string) (*model.StoreTable, error) {
+	if tableNo = strings.TrimSpace(tableNo); tableNo == "" {
+		return nil, errors.New("table_no 不能为空")
+	}
+	st := &model.StoreTable{StoreID: storeID, TableNo: tableNo, Capacity: capacity, Status: 1, Note: strings.TrimSpace(note)}
+	if err := s.db.Create(st).Error; err != nil {
+		return nil, err
+	}
+	return st, nil
+}
+
+// DeleteStoreTable 删除门店桌号
+func (s *StoreService) DeleteStoreTable(storeID, tableID uint) error {
+	return s.db.Where("store_id = ? AND id = ?", storeID, tableID).Delete(&model.StoreTable{}).Error
+}
 
 type StoreWalletSummary struct {
 	StoreID        uint            `json:"store_id"`

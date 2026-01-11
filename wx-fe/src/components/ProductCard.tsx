@@ -1,13 +1,34 @@
 import React from 'react';
-import { View, Text, Button } from '@tarojs/components';
-import { Product } from '../services/types';
+import { View, Text, Image } from '@tarojs/components';
+import type { Product } from '../services/types';
+import './ProductCard.scss';
 
-export default function ProductCard({ product, onAdd }: { product: Product; onAdd?: (id: number) => void }) {
+export default function ProductCard(props: {
+  product: Product;
+  showCover?: boolean;
+  onClick?: () => void;
+  extra?: React.ReactNode;
+}) {
+  const { product, showCover = true, onClick, extra } = props;
+
+  function coverUrl(p: Product): string {
+    const raw = (p as any).image_url || (p as any).cover || p.images || '';
+    const first = String(raw).split(',').map((s) => s.trim()).filter(Boolean)[0];
+    return first || 'https://dummyimage.com/300x300/dcdcdc/333333&text=Tea';
+  }
+
   return (
-    <View style={{ borderWidth: 1, borderColor: '#eee', padding: 8, borderRadius: 4 }}>
-      <Text style={{ fontSize: 16 }}>{product.name}</Text>
-      <Text>价格: {product.price}</Text>
-      <Button onClick={() => onAdd && onAdd(product.id)}>加入购物车</Button>
+    <View className="card-product" onClick={onClick}>
+      {showCover && (
+        <Image src={coverUrl(product)} mode="aspectFill" className="cover-sm" />
+      )}
+      <Text className="name">{product.name}</Text>
+      <Text className="price">¥ {typeof product.price === 'string' ? product.price : Number(product.price).toFixed(2)}</Text>
+      {extra && (
+        <View className="actions" onClick={(e) => { e.stopPropagation?.(); }}>
+          {extra}
+        </View>
+      )}
     </View>
   );
 }

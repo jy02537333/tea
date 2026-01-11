@@ -26,9 +26,10 @@ type fakeOrderService struct {
 	errToReturn    error
 }
 
-func (f *fakeOrderService) CreateOrderFromCart(userID uint, deliveryType int, addressInfo, remark string, userCouponID uint, storeID uint, orderType int) (*model.Order, error) {
-	return nil, nil
+func (f *fakeOrderService) CreateOrderFromCart(userID uint, deliveryType int, addressInfo, remark string, userCouponID uint, storeID uint, orderType int, tableID uint, tableNo string, sharerUID uint, shareStoreID uint) (*model.Order, error) {
+	return &model.Order{}, nil
 }
+
 func (f *fakeOrderService) ListOrders(userID uint, status int, page, limit int, storeID uint) ([]model.Order, int64, error) {
 	return nil, 0, nil
 }

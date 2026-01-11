@@ -77,7 +77,7 @@ export default function StoreFinancePage() {
       setTotal(Number(res?.total || items.length || 0));
     } catch (e) {
       console.error('load store finance records failed', e);
-      const status = e?.response?.status || e?.status;
+      const status = (e as any)?.response?.status || (e as any)?.status;
       if (status === 404) {
         setBackendMissing(true);
         Taro.showToast({ title: '后端路由未提供', icon: 'none' });

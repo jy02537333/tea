@@ -13,7 +13,7 @@ export async function registerActivity(activityId: number, payload: { name: stri
 
 export async function registerActivityWithOrder(
 	activityId: number,
-	payload: { name: string; phone: string; fee: number },
+	payload: { name: string; phone: string; fee: number; sharer_uid?: number; share_store_id?: number },
 ): Promise<{ registration: any; order: Order }> {
 	const res = await api.post(`/api/v1/activities/${activityId}/register-with-order`, payload);
 	return unwrapResponse<{ registration: any; order: Order }>(res);

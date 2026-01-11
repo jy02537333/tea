@@ -1,5 +1,5 @@
 import api, { unwrapResponse } from './api';
-import { Store, PaginationResponse } from './types';
+import { Store, PaginationResponse, Product } from './types';
 
 export interface StoreFinanceQuery {
   start?: string;
@@ -40,6 +40,15 @@ export async function listStores(params: any = {}): Promise<PaginationResponse<S
 export async function getStore(id: number): Promise<Store> {
   const res = await api.get(`/api/v1/stores/${id}`);
   return unwrapResponse<Store>(res);
+}
+
+// 门店特供（商家商城）商品列表
+export async function listStoreExclusiveProducts(
+  storeId: number,
+  params: { page?: number; limit?: number; keyword?: string } = {},
+): Promise<PaginationResponse<Product>> {
+  const res = await api.get(`/api/v1/stores/${storeId}/exclusive-products`, { params });
+  return unwrapResponse<PaginationResponse<Product>>(res);
 }
 
 // 门店收款账户列表

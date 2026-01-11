@@ -15,6 +15,28 @@ type BannerHandler struct{}
 
 func NewBannerHandler() *BannerHandler { return &BannerHandler{} }
 
+// ListBanners 用户侧广告/轮播图列表（只读，仅返回启用状态）
+// GET /api/v1/banners?limit=10
+func (h *BannerHandler) ListBanners(c *gin.Context) {
+	limit := atoi(c.DefaultQuery("limit", "10"))
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 50 {
+		limit = 50
+	}
+
+	db := database.GetDB()
+	q := db.Model(&model.Banner{}).Where("status = ?", 1)
+
+	var list []model.Banner
+	if err := q.Order("sort desc").Order("id desc").Limit(limit).Find(&list).Error; err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.Success(c, list)
+}
+
 type bannerPayload struct {
 	Title    string `json:"title"`
 	ImageURL string `json:"image_url"`

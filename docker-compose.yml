@@ -59,6 +59,29 @@ services:
     environment:
       TZ: Asia/Shanghai
 
+  wx-fe:
+    image: node:18-alpine
+    container_name: tea-wx-fe
+    restart: unless-stopped
+    working_dir: /app/wx-fe
+    depends_on:
+      - tea-api
+    environment:
+      TZ: Asia/Shanghai
+      # 前端请求接口基址（不含 /api/v1），容器内通过服务名访问 tea-api
+      WX_API_BASE_URL: http://tea-api:8080
+      # 解决容器内文件变更监听问题（可选）
+      CHOKIDAR_USEPOLLING: "1"
+    volumes:
+      - ./wx-fe:/app/wx-fe
+    ports:
+      - "10088:10088"
+    command: >-
+      sh -c "apk add --no-cache git &&
+             npm i -g pnpm &&
+             pnpm install &&
+             pnpm run dev:h5"
+
 volumes:
   tea-mysql-data:
   tea-redis-data:

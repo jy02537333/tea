@@ -22,6 +22,7 @@ func SetupRouter() *gin.Engine {
 	userHandler := handler.NewUserHandler()
 	accrualHandler := handler.NewAccrualHandler()
 	rbacHandler := handler.NewRBACHandler()
+	uploadHandler := handler.NewUploadHandler()
 	logsHandler := handler.NewLogsHandler()
 	systemConfigHandler := handler.NewSystemConfigHandler()
 	rechargeAdminHandler := handler.NewRechargeAdminHandler()
@@ -46,11 +47,12 @@ func SetupRouter() *gin.Engine {
 	couponHandler := handler.NewCouponHandler()
 	storeHandler := handler.NewStoreHandler()
 	invHandler := handler.NewStoreInventoryHandler()
+	exclusiveProductsHandler := handler.NewStoreExclusiveProductsHandler(service.NewProductService())
 	modelHandler := handler.NewModelHandler()
-	uploadHandler := handler.NewUploadHandler()
 	activityHandler := handler.NewActivityHandler()
 	ticketHandler := handler.NewTicketHandler()
 	ticketUserHandler := handler.NewTicketUserHandler()
+	sharePosterHandler := handler.NewSharePosterHandler()
 
 	// API路由组
 	api := r.Group("/api/v1")
@@ -63,6 +65,10 @@ func SetupRouter() *gin.Engine {
 
 	// 公共内容页（隐私/协议/关于/帮助）
 	api.GET("/content/pages", contentHandler.GetPages)
+	// 首页运营：公共广告/轮播图（只读）
+	api.GET("/banners", bannerHandler.ListBanners)
+	// 首页运营：站点基础配置（只读，仅 site_ 前缀）
+	api.GET("/site/configs", systemConfigHandler.PublicListSiteConfigs)
 
 	// Sprint B: 用户钱包（余额与流水）
 	api.GET("/wallet", middleware.AuthJWT(), handler.GetMyWallet)
@@ -93,6 +99,8 @@ func SetupRouter() *gin.Engine {
 
 	// 分享/推荐关系（最小版）
 	api.POST("/referrals/bind", middleware.AuthJWT(), handler.BindReferral)
+	// 分享海报模板（后台可配置，多模板可切换）
+	api.GET("/share/posters", sharePosterHandler.ListPublic)
 
 	// 小程序码生成（wxacodeunlimit）
 	api.POST("/wx/wxacode", middleware.AuthJWT(), handler.GetWxaCode)
@@ -144,6 +152,9 @@ func SetupRouter() *gin.Engine {
 		adminGroup.POST("/users/:id/blacklist", middleware.OperationLogMiddleware(), userHandler.AdminSetBlacklist)
 		adminGroup.POST("/users/:id/whitelist", middleware.OperationLogMiddleware(), userHandler.AdminSetWhitelist)
 		adminGroup.POST("/uploads", uploadHandler.UploadMedia)
+		// 绑定门店管理员（新增）
+		adminGroup.POST("/stores/:id/bind-admin", storeHandler.BindAdmin)
+
 		// 门店订单统计
 		adminGroup.GET("/stores/:id/orders/stats", storeHandler.OrderStats)
 		// 门店订单列表（按门店维度查看订单）
@@ -238,6 +249,13 @@ func SetupRouter() *gin.Engine {
 		rbacGroup.POST("/user/revoke-role", middleware.RequirePermission("rbac:manage"), rbacHandler.RevokeRoleFromUser)
 	}
 
+	// 上传相关（仅登录即可）：获取 OSS 直传策略
+	uploadGroup := api.Group("/upload")
+	uploadGroup.Use(middleware.AuthJWT())
+	{
+		uploadGroup.POST("/oss/policy", uploadHandler.OSSPolicy)
+	}
+
 	// 操作日志接口（只读，rbac:view）
 	logsGroup := api.Group("/admin/logs")
 	logsGroup.Use(middleware.AuthMiddleware())
@@ -255,6 +273,8 @@ func SetupRouter() *gin.Engine {
 	{
 		systemGroup.GET("/configs", middleware.RequirePermission("system:config:view"), systemConfigHandler.List)
 		systemGroup.PUT("/configs", middleware.RequirePermission("system:config:manage"), systemConfigHandler.UpsertMany)
+		systemGroup.GET("/share-posters", middleware.RequirePermission("system:config:view"), sharePosterHandler.AdminGet)
+		systemGroup.PUT("/share-posters", middleware.RequirePermission("system:config:manage"), sharePosterHandler.AdminPut)
 	}
 
 	// 营销：广告/轮播图管理（Banner）
@@ -375,6 +395,7 @@ func SetupRouter() *gin.Engine {
 		orderGroup.POST("/:id/complete", middleware.RequirePermission("order:complete"), orderHandler.Complete)
 		orderGroup.POST("/:id/admin-cancel", middleware.RequirePermission("order:cancel"), orderHandler.AdminCancel)
 		orderGroup.POST("/:id/adjust", middleware.RequirePermission("order:adjust"), orderHandler.AdminAdjustPayAmount)
+		orderGroup.POST("/:id/set-table", middleware.RequirePermission("order:adjust"), orderHandler.AdminSetTable)
 		orderGroup.POST("/:id/refund", middleware.RequirePermission("order:refund"), orderHandler.AdminRefund)
 		orderGroup.POST("/:id/refund/start", middleware.RequirePermission("order:refund"), orderHandler.AdminRefundStart)
 		orderGroup.POST("/:id/refund/confirm", middleware.RequirePermission("order:refund"), orderHandler.AdminRefundConfirm)
@@ -384,33 +405,59 @@ func SetupRouter() *gin.Engine {
 	storeGroup := api.Group("/stores")
 	{
 		storeGroup.GET("", storeHandler.List)
-		storeGroup.GET(":id", storeHandler.Get)
+		storeGroup.GET("/:id", storeHandler.Get)
 		storeGroup.POST("", middleware.AuthJWT(), storeHandler.Create)
-		storeGroup.PUT(":id", middleware.AuthJWT(), storeHandler.Update)
-		storeGroup.DELETE(":id", middleware.AuthJWT(), storeHandler.Delete)
+		storeGroup.PUT("/:id", middleware.AuthJWT(), middleware.RequireStoreScope("id"), storeHandler.Update)
+		storeGroup.DELETE("/:id", middleware.AuthJWT(), middleware.RequireStoreScope("id"), storeHandler.Delete)
+		// 门店订单统计（支持 days 维度）
+		storeGroup.GET("/:id/orders/stats", middleware.AuthJWT(), middleware.RequireStoreScope("id"), storeHandler.OrderStats)
+		// 门店订单列表（门店后台使用，复用管理端实现）
+		storeGroup.GET("/:id/orders", middleware.AuthJWT(), middleware.RequireStoreScope("id"), orderHandler.AdminStoreOrders)
+		// 门店售后订单（仅退款记录列表）
+		storeGroup.GET("/:id/refunds", middleware.AuthJWT(), middleware.RequireStoreScope("id"), refundHandler.ListStoreRefunds)
+				// 门店设置订单桌号（仅本店订单，store 角色校验 order:adjust 权限）
+				storeGroup.POST("/:id/orders/:orderId/set-table",
+					middleware.AuthJWT(),
+					middleware.RequireStoreScope("id"),
+					middleware.RequirePermissionIfRole("store", "order:adjust"),
+					orderHandler.StoreSetTable,
+				)
+		// 门店商品管理（门店后台使用，复用库存接口）
+		storeGroup.GET("/:id/products", middleware.AuthJWT(), middleware.RequireStoreScope("id"), invHandler.List)
+		storeGroup.POST("/:id/products", middleware.AuthJWT(), middleware.RequireStoreScope("id"), invHandler.Upsert)
+		storeGroup.DELETE("/:id/products/:pid", middleware.AuthJWT(), middleware.RequireStoreScope("id"), invHandler.Delete)
+
+		// 门店桌号管理（新增/删除/列表）
+		storeGroup.GET("/:id/tables", middleware.AuthJWT(), middleware.RequireStoreScope("id"), middleware.RequirePermissionIfRole("store", "store:tables:view"), storeHandler.ListTables)
+		storeGroup.POST("/:id/tables", middleware.AuthJWT(), middleware.RequireStoreScope("id"), middleware.RequirePermissionIfRole("store", "store:tables:manage"), storeHandler.CreateTable)
+		storeGroup.DELETE("/:id/tables/:tableId", middleware.AuthJWT(), middleware.RequireStoreScope("id"), middleware.RequirePermissionIfRole("store", "store:tables:manage"), storeHandler.DeleteTable)
+		// 商家商城/门店特供商品（需要登录，可按角色控制）
+		storeGroup.GET("/:id/exclusive-products", middleware.AuthJWT(), middleware.RequireStoreScope("id"), middleware.RequirePermissionIfRole("store", "store:exclusive_products:view"), exclusiveProductsHandler.List)
+		storeGroup.POST("/:id/exclusive-products", middleware.AuthJWT(), middleware.RequireStoreScope("id"), middleware.RequirePermissionIfRole("store", "store:exclusive_products:manage"), exclusiveProductsHandler.Create)
+		storeGroup.POST("/:id/exclusive-products/new", middleware.AuthJWT(), middleware.RequireStoreScope("id"), middleware.RequirePermissionIfRole("store", "store:exclusive_products:manage"), exclusiveProductsHandler.CreateNew)
 		// 门店收款账户管理（需要登录，可按角色控制）
-		storeGroup.GET(":id/accounts", middleware.AuthJWT(), middleware.RequirePermission("store:accounts:view"), storeHandler.ListAccounts)
-		storeGroup.POST(":id/accounts", middleware.AuthJWT(), middleware.RequirePermission("store:accounts:manage"), storeHandler.CreateAccount)
-		storeGroup.PUT(":id/accounts/:accountId", middleware.AuthJWT(), middleware.RequirePermission("store:accounts:manage"), storeHandler.UpdateAccount)
-		storeGroup.DELETE(":id/accounts/:accountId", middleware.AuthJWT(), middleware.RequirePermission("store:accounts:manage"), storeHandler.DeleteAccount)
+		storeGroup.GET("/:id/accounts", middleware.AuthJWT(), middleware.RequireStoreScope("id"), middleware.RequirePermission("store:accounts:view"), storeHandler.ListAccounts)
+		storeGroup.POST("/:id/accounts", middleware.AuthJWT(), middleware.RequireStoreScope("id"), middleware.RequirePermission("store:accounts:manage"), storeHandler.CreateAccount)
+		storeGroup.PUT("/:id/accounts/:accountId", middleware.AuthJWT(), middleware.RequireStoreScope("id"), middleware.RequirePermission("store:accounts:manage"), storeHandler.UpdateAccount)
+		storeGroup.DELETE("/:id/accounts/:accountId", middleware.AuthJWT(), middleware.RequireStoreScope("id"), middleware.RequirePermission("store:accounts:manage"), storeHandler.DeleteAccount)
 		// 门店钱包与提现接口（需要登录，后续可按角色细化权限）
-		storeGroup.GET(":id/wallet", middleware.AuthJWT(), middleware.RequirePermission("store:wallet:view"), storeHandler.Wallet)
-		storeGroup.GET(":id/withdraws", middleware.AuthJWT(), middleware.RequirePermission("store:withdraw:view"), storeHandler.ListWithdraws)
-		storeGroup.POST(":id/withdraws", middleware.AuthJWT(), middleware.RequirePermission("store:withdraw:apply"), storeHandler.ApplyWithdraw)
+		storeGroup.GET("/:id/wallet", middleware.AuthJWT(), middleware.RequireStoreScope("id"), middleware.RequirePermission("store:wallet:view"), storeHandler.Wallet)
+		storeGroup.GET("/:id/withdraws", middleware.AuthJWT(), middleware.RequireStoreScope("id"), middleware.RequirePermission("store:withdraw:view"), storeHandler.ListWithdraws)
+		storeGroup.POST("/:id/withdraws", middleware.AuthJWT(), middleware.RequireStoreScope("id"), middleware.RequirePermission("store:withdraw:apply"), storeHandler.ApplyWithdraw)
 		// 门店资金流水（支付/退款/提现聚合）与导出
-		storeGroup.GET(":id/finance/transactions", middleware.AuthJWT(), middleware.RequirePermission("store:wallet:view"), storeHandler.FinanceTransactions)
-		storeGroup.GET(":id/finance/transactions/export", middleware.AuthJWT(), middleware.RequirePermission("store:wallet:view"), storeHandler.ExportFinanceTransactions)
+		storeGroup.GET("/:id/finance/transactions", middleware.AuthJWT(), middleware.RequireStoreScope("id"), middleware.RequirePermission("store:wallet:view"), storeHandler.FinanceTransactions)
+		storeGroup.GET("/:id/finance/transactions/export", middleware.AuthJWT(), middleware.RequireStoreScope("id"), middleware.RequirePermission("store:wallet:view"), storeHandler.ExportFinanceTransactions)
 		// 门店优惠券接口（需要登录，后续可按角色细化权限）
-		storeGroup.GET(":id/coupons", middleware.AuthJWT(), middleware.RequirePermission("store:coupons:view"), couponHandler.ListStoreCoupons)
-		storeGroup.POST(":id/coupons", middleware.AuthJWT(), middleware.RequirePermission("store:coupons:manage"), couponHandler.CreateStoreCoupon)
-		storeGroup.PUT(":id/coupons/:couponId", middleware.AuthJWT(), middleware.RequirePermission("store:coupons:manage"), couponHandler.UpdateStoreCoupon)
+		storeGroup.GET("/:id/coupons", middleware.AuthJWT(), middleware.RequireStoreScope("id"), middleware.RequirePermission("store:coupons:view"), couponHandler.ListStoreCoupons)
+		storeGroup.POST("/:id/coupons", middleware.AuthJWT(), middleware.RequireStoreScope("id"), middleware.RequirePermission("store:coupons:manage"), couponHandler.CreateStoreCoupon)
+		storeGroup.PUT("/:id/coupons/:couponId", middleware.AuthJWT(), middleware.RequireStoreScope("id"), middleware.RequirePermission("store:coupons:manage"), couponHandler.UpdateStoreCoupon)
 		// 门店活动接口（需要登录，后续可按角色细化权限）
-		storeGroup.GET(":id/activities", middleware.AuthMiddleware(), activityHandler.ListStoreActivities)
-		storeGroup.POST(":id/activities", middleware.AuthMiddleware(), activityHandler.CreateStoreActivity)
-		storeGroup.PUT(":id/activities/:activityId", middleware.AuthMiddleware(), activityHandler.UpdateStoreActivity)
+		storeGroup.GET("/:id/activities", middleware.AuthMiddleware(), middleware.RequireStoreScope("id"), middleware.RequirePermissionIfRole("store", "store:activities:view"), activityHandler.ListStoreActivities)
+		storeGroup.POST("/:id/activities", middleware.AuthMiddleware(), middleware.RequireStoreScope("id"), middleware.RequirePermissionIfRole("store", "store:activities:manage"), activityHandler.CreateStoreActivity)
+		storeGroup.PUT("/:id/activities/:activityId", middleware.AuthMiddleware(), middleware.RequireStoreScope("id"), middleware.RequirePermissionIfRole("store", "store:activities:manage"), activityHandler.UpdateStoreActivity)
 		// 门店活动报名接口（需要登录，后续可按角色细化权限）
-		storeGroup.GET(":id/activities/:activityId/registrations", middleware.AuthMiddleware(), activityHandler.ListActivityRegistrations)
-		storeGroup.POST(":id/activities/:activityId/registrations/:registrationId/refund", middleware.AuthMiddleware(), activityHandler.RefundActivityRegistration)
+		storeGroup.GET("/:id/activities/:activityId/registrations", middleware.AuthMiddleware(), middleware.RequireStoreScope("id"), middleware.RequirePermissionIfRole("store", "store:activities:view"), activityHandler.ListActivityRegistrations)
+		storeGroup.POST("/:id/activities/:activityId/registrations/:registrationId/refund", middleware.AuthMiddleware(), middleware.RequireStoreScope("id"), middleware.RequirePermissionIfRole("store", "store:activities:manage"), activityHandler.RefundActivityRegistration)
 	}
 
 	// 优惠券相关路由

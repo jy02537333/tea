@@ -88,6 +88,11 @@ export default function ProfilePage() {
     Taro.navigateTo({ url: '/pages/after-sale/index' }).catch(() => {});
   }
 
+  function handleMyTickets() {
+    if (!ensureLoggedIn()) return;
+    Taro.navigateTo({ url: '/pages/after-sale/index' }).catch(() => {});
+  }
+
   function handleFeedback() {
     if (!ensureLoggedIn()) return;
     Taro.navigateTo({ url: '/pages/feedback/index' }).catch(() => {});
@@ -146,29 +151,30 @@ export default function ProfilePage() {
   const serviceItems = useMemo(
     () => {
       const base = [
-      { key: 'orders', title: '订单', desc: '查看全部订单', action: handleViewOrders },
-      { key: 'wallet', title: '钱包', desc: '余额/提现/茶币', action: handleViewWallet },
-      { key: 'points', title: '积分', desc: '积分与成长值', action: handleViewPoints },
-      { key: 'coupons', title: '优惠券', desc: '查看可用权益', action: handleViewCoupons },
-      { key: 'share', title: '分享推广', desc: '推广数据与收益', action: handleShareCenter },
-      { key: 'address', title: '收货地址', desc: '管理常用地址', action: handleManageAddresses },
-      {
-        key: 'membership',
-        title: '会员权益',
-        desc: user ? '查看会员与权益' : '登录后可同步权益',
-        action: handleViewMembership,
-      },
-      { key: 'service', title: '售后服务', desc: '进度&售后操作', action: handleServiceTickets },
-      { key: 'feedback', title: '意见反馈', desc: '提交工单反馈', action: handleFeedback },
-      { key: 'help', title: '帮助文档', desc: '常见问题说明', action: handleHelpDocs },
-      { key: 'settings', title: '设置', desc: '账号/登录/地址/关于', action: handleSettings },
+        { key: 'orders', title: '订单', desc: '查看全部订单', action: handleViewOrders },
+        { key: 'my_tickets', title: '我的工单', desc: '查看反馈与售后', action: handleMyTickets },
+        { key: 'service', title: '售后服务', desc: '进度&售后操作', action: handleServiceTickets },
+        { key: 'wallet', title: '钱包', desc: '余额/提现/茶币', action: handleViewWallet },
+        { key: 'points', title: '积分', desc: '积分与成长值', action: handleViewPoints },
+        { key: 'coupons', title: '优惠券', desc: '查看可用权益', action: handleViewCoupons },
+        { key: 'share', title: '分享推广', desc: '推广数据与收益', action: handleShareCenter },
+        { key: 'address', title: '收货地址', desc: '管理常用地址', action: handleManageAddresses },
+        {
+          key: 'membership',
+          title: '会员权益',
+          desc: user ? '查看会员与权益' : '登录后可同步权益',
+          action: handleViewMembership,
+        },
+        { key: 'feedback', title: '意见反馈', desc: '提交工单反馈', action: handleFeedback },
+        { key: 'help', title: '帮助文档', desc: '常见问题说明', action: handleHelpDocs },
+        { key: 'settings', title: '设置', desc: '账号/登录/地址/关于', action: handleSettings },
       ];
       if (perm.allowedStoreMgmt) {
         base.splice(6, 0, { key: 'store_mgmt', title: '门店管理', desc: '门店与收款账户', action: handleStoreManagement });
       }
       return base;
     },
-    [handleViewOrders, handleViewWallet, handleViewPoints, handleViewCoupons, handleShareCenter, handleManageAddresses, handleViewMembership, handleServiceTickets, handleFeedback, handleHelpDocs, handleSettings, handleStoreManagement, perm.allowedStoreMgmt],
+    [handleViewOrders, handleViewWallet, handleViewPoints, handleViewCoupons, handleShareCenter, handleManageAddresses, handleViewMembership, handleMyTickets, handleServiceTickets, handleFeedback, handleHelpDocs, handleSettings, handleStoreManagement, perm.allowedStoreMgmt],
   );
 
   function yuan(c?: number) {
@@ -235,21 +241,32 @@ export default function ProfilePage() {
 
       <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 20, marginTop: 16 }}>
         <Text style={{ fontSize: 16, fontWeight: 'bold' }}>我的服务</Text>
-        <View style={{ display: 'flex', flexWrap: 'wrap', marginTop: 12 }}>
-          {serviceItems.map((item, index) => (
+        <View
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            marginTop: 12,
+            borderTop: '1px solid #f0f0f0',
+            borderLeft: '1px solid #f0f0f0',
+            borderRadius: 12,
+            overflow: 'hidden',
+          }}
+        >
+          {serviceItems.map((item) => (
             <View
               key={item.key}
               style={{
-                width: '50%',
-                paddingTop: 12,
-                paddingBottom: 12,
+                paddingTop: 14,
+                paddingBottom: 14,
+                paddingLeft: 8,
+                paddingRight: 8,
                 textAlign: 'center',
-                borderRight: index % 2 === 0 ? '1px solid #f0f0f0' : 'none',
-                borderBottom: index < serviceItems.length - 2 ? '1px solid #f0f0f0' : 'none',
+                borderRight: '1px solid #f0f0f0',
+                borderBottom: '1px solid #f0f0f0',
               }}
               onClick={item.action}
             >
-              <Text style={{ display: 'block', fontSize: 18, fontWeight: 'bold' }}>{item.title}</Text>
+              <Text style={{ display: 'block', fontSize: 16, fontWeight: 'bold' }}>{item.title}</Text>
               <Text style={{ color: '#999', fontSize: 12 }}>{item.desc}</Text>
             </View>
           ))}

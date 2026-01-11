@@ -236,6 +236,9 @@ TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
 > 扫码进店（最小版）
 
 - 支持用户通过二维码进入指定门店：在小程序 `onLaunch` 阶段解析入口参数（`query.store_id` 或 `scene`），将门店 ID 持久化到 `current_store_id`；首页/分类页在首渲染时接管路由入参的 `store_id`，同步设置页面选中门店与全局存储，确保后续商品列表、订单列表、结算页等均按当前门店维度展示与过滤。
+- 支持桌号（堂食）入参约定：二维码/链接可同时携带 `table_id` 与 `table_no`，两者均会被持久化并在创建订单时透传到后端。
+  - `table_id`：数字 ID（用于系统内关联/唯一标识）。
+  - `table_no`：门店自定义桌号（不限定格式，示例：`A12`、`2-03`、`包间1`），优先作为对外展示与门店端识别。
 - 受限说明：如二维码未包含有效 `store_id` 或链接指向不支持门店接管的页面，则仅在支持的页面生效；后续版本将补充更全面的入口覆盖与门店选择控件。
 
 1. 选择商品/服务
@@ -1269,6 +1272,15 @@ TEA_JWT_SECRET=dev_secret_change_me go run ./tea-api/main.go
 - `GET /api/v1/admin/partners` — 合伙人列表与等级
 - `GET /api/v1/admin/partners/{id}/commissions` — 某合伙人佣金流水
 - `POST /api/v1/admin/commissions/settle` — 触发批量结算/解冻任务（管理员触发或定时任务）
+
+验真证明（2026-01-08）：
+
+- 已在后端实现并通过回归测试验真：门店订单在“完成/确认完成”节点触发佣金记录生成与解冻，且佣金归属读取下单时冻结在订单上的 `referrer_id/share_store_id`，不会被后续“最后一次点击覆盖绑定关系”影响。
+- 触发节点（当前最小闭环中，作为 PRD 所述“门店核销/订单完成”的工程落点之一）：
+  - `POST /api/v1/orders/:id/receive`（用户自取/确认完成）→ `tea-api/internal/handler/order.go` → `tea-api/internal/service/order.go::Receive(...)`
+  - `POST /api/v1/orders/:id/complete`（管理端完成）→ `tea-api/internal/handler/order.go` → `tea-api/internal/service/order.go::Complete(...)`
+- 结算实现（读取冻结字段）：`tea-api/internal/service/order.go` → `maybeCreateStoreOrderCommissionsOnCompleted(...)`（门店订单且已支付+已完成时基于订单 `referrer_id/share_store_id` 生成 `commissions` 记录，并解冻为 `available`；风控期/N 天解冻可在后续迭代中通过配置对齐）。
+- 回归测试（走真实 API + 直接查库断言归属不随覆盖绑定变化）：`tea-api/test/store_order_commission_freeze_attribution_test.go` → `Test_StoreOrderCommission_UsesFrozenSharer_NotOverriddenBinding`；运行：`go test ./test -run Test_StoreOrderCommission_UsesFrozenSharer_NotOverriddenBinding -count=1`
 
 验收要点：佣金计算结果可复现、佣金解冻与提现流程可追溯且退款回滚不会导致余额错算；财务能够导出对账明细。
 

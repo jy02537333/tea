@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AdminOrder, getAdminStoreOrders, postOrderAction } from '../services/orders';
+import { AdminOrder, getAdminStoreOrders, getStoreOrders, postOrderAction } from '../services/orders';
 import { useAuthContext } from '../hooks/useAuth';
 
 const { Title, Text } = Typography;
@@ -41,14 +41,27 @@ interface FilterValues {
 
 export default function StoreOrdersPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const params = useParams();
   const storeId = Number(params.id || 0);
   const queryClient = useQueryClient();
-  const { hasPermission } = useAuthContext();
+  const { hasPermission, user } = useAuthContext();
 
   const [filters, setFilters] = useState<FilterValues>({});
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20 });
   const [filterForm] = Form.useForm<FilterValues>();
+
+  // 支持从 Header 搜索跳转：/stores/:id/orders?orderNo=...
+  useEffect(() => {
+    const sp = new URLSearchParams(location.search);
+    const orderNo = sp.get('orderNo');
+    if (!orderNo) return;
+    const keyword = String(orderNo).trim();
+    if (!keyword) return;
+    filterForm.setFieldsValue({ order_no: keyword });
+    setFilters((prev) => ({ ...prev, order_no: keyword }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   const listParams = useMemo(
     () => ({
@@ -61,7 +74,7 @@ export default function StoreOrdersPage() {
 
   const ordersQuery = useQuery({
     queryKey: ['storeOrders', storeId, listParams.page, listParams.page_size, listParams.status ?? 'all'],
-    queryFn: () => getAdminStoreOrders(storeId, listParams),
+    queryFn: () => (user?.role === 'store' ? getStoreOrders(storeId, listParams) : getAdminStoreOrders(storeId, listParams)),
     enabled: storeId > 0,
     placeholderData: keepPreviousData,
   });
@@ -79,6 +92,8 @@ export default function StoreOrdersPage() {
   const [reasonModalOpen, setReasonModalOpen] = useState(false);
   const [reasonTarget, setReasonTarget] = useState<{ id: number; action: string } | null>(null);
   const [reasonText, setReasonText] = useState('');
+
+  // 按 PRD：订单中的桌号不可编辑，移除相关弹窗与操作
 
   const actionMutation = useMutation({
     mutationFn: async ({ id, action, reason }: { id: number; action: string; reason?: string }) => {
@@ -143,6 +158,7 @@ export default function StoreOrdersPage() {
       width: 420,
       render: (_, record) => (
         <Space wrap>
+                    {/* 订单桌号不可编辑（按 PRD） */}
           <Button type="link" onClick={() => navigate(`/orders?orderId=${record.id}&storeId=${storeId}`)}>
             在订单操作区打开
           </Button>
@@ -302,6 +318,8 @@ export default function StoreOrdersPage() {
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* 订单桌号不可编辑，移除相关弹窗 */}
 
       <Modal
         title={reasonTarget ? `填写原因 · #${reasonTarget.id}` : '填写原因'}

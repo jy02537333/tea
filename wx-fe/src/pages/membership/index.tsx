@@ -6,6 +6,7 @@ import type { User } from '../../services/types';
 import { listMembershipPackages, createMembershipOrder } from '../../services/membership';
 import type { MembershipPackage } from '../../services/membership';
 import { createUnifiedOrder } from '../../services/payments';
+import { buildOrderShareAttributionParams } from '../../services/shareAttribution';
 
 const GENDER_TEXT = ['未知', '男', '女'];
 
@@ -73,7 +74,8 @@ export default function MembershipPage() {
     }
     setOpeningPackageId(pkg.id);
     try {
-      const order = await createMembershipOrder({ package_id: pkg.id });
+	  const shareParams = buildOrderShareAttributionParams({ requireStoreId: false });
+      const order = await createMembershipOrder({ package_id: pkg.id, ...shareParams });
       const p = await createUnifiedOrder(order.order_id);
       await Taro.requestPayment({
 			timeStamp: String((p as any).timestamp || (p as any).timeStamp),

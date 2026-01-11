@@ -15,7 +15,7 @@ import (
 
 // membershipOrderService 定义创建会员订单所需的服务接口，便于后续测试注入 fake 实现。
 type membershipOrderService interface {
-	CreateMembershipOrder(userID, packageID uint, remark string) (*model.Order, error)
+	CreateMembershipOrder(userID, packageID uint, remark string, sharerUID uint, shareStoreID uint) (*model.Order, error)
 }
 
 // MembershipHandler 小程序/用户侧会员相关接口
@@ -67,6 +67,9 @@ func (h *MembershipHandler) ListPackages(c *gin.Context) {
 type createMembershipOrderReq struct {
 	PackageID uint   `json:"package_id" binding:"required"`
 	Remark    string `json:"remark"`
+	SharerUID uint   `json:"sharer_uid"`
+	// 会员订单 store_id=0，不允许携带 share_store_id（必须为 0）
+	ShareStoreID uint `json:"share_store_id"`
 }
 
 // CreateOrder POST /api/v1/membership-orders
@@ -81,7 +84,7 @@ func (h *MembershipHandler) CreateOrder(c *gin.Context) {
 		return
 	}
 
-	order, err := h.orderSvc.CreateMembershipOrder(userID, req.PackageID, req.Remark)
+	order, err := h.orderSvc.CreateMembershipOrder(userID, req.PackageID, req.Remark, req.SharerUID, req.ShareStoreID)
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, err.Error())
 		return

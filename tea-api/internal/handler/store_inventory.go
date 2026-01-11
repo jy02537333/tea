@@ -62,7 +62,14 @@ func (h *StoreInventoryHandler) List(c *gin.Context) {
 			bizTypePtr = &v
 		}
 	}
-	list, total, err := h.svc.List(uint(sid), page, limit, bizTypePtr)
+	statusParam := c.Query("status")
+	var statusPtr *int
+	if statusParam != "" {
+		if v, err := strconv.Atoi(statusParam); err == nil {
+			statusPtr = &v
+		}
+	}
+	list, total, err := h.svc.List(uint(sid), page, limit, bizTypePtr, statusPtr)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return

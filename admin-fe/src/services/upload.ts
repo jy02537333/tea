@@ -12,3 +12,17 @@ export async function uploadMedia(file: File): Promise<UploadResponse> {
   });
   return unwrap<UploadResponse>(res);
 }
+
+export interface OssPolicy {
+  accessid: string;
+  host: string;
+  policy: string;
+  signature: string;
+  dir: string;
+  expire: number;
+}
+
+export async function getOssPolicy(dir?: string): Promise<OssPolicy> {
+  const res = await api.post('/api/v1/upload/oss/policy', dir ? { dir } : {});
+  return unwrap<OssPolicy>(res);
+}

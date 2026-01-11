@@ -16,6 +16,25 @@ import (
 // RequireAccrualPermission 仅允许具备计息权限的角色访问（向后兼容，内部转到 RequirePermission）
 func RequireAccrualPermission() gin.HandlerFunc { return RequirePermission("accrual:run") }
 
+// RequirePermissionIfRole 仅当当前用户的 role 与 expectedRole 匹配时，才校验指定权限点。
+// 用于实现“仅某类角色强制走权限点，其它角色维持原行为”。
+func RequirePermissionIfRole(expectedRole string, permName string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		v, ok := c.Get("role")
+		if !ok {
+			c.Next()
+			return
+		}
+		role, _ := v.(string)
+		if strings.EqualFold(role, expectedRole) {
+			RequirePermission(permName)(c)
+			return
+		}
+
+		c.Next()
+	}
+}
+
 // RequirePermission 校验当前用户是否具备指定权限（DB优先，配置回退，admin 永远放行）
 // permName: 形如 "accrual:run"、"accrual:export" 等
 func RequirePermission(permName string) gin.HandlerFunc {

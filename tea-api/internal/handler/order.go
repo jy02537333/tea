@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -19,7 +20,7 @@ import (
 
 // orderService 定义了 OrderHandler 所需的服务方法，便于在测试中注入 fake 实现。
 type orderService interface {
-	CreateOrderFromCart(userID uint, deliveryType int, addressInfo, remark string, userCouponID uint, storeID uint, orderType int) (*model.Order, error)
+	CreateOrderFromCart(userID uint, deliveryType int, addressInfo, remark string, userCouponID uint, storeID uint, orderType int, tableID uint, tableNo string, sharerUID uint, shareStoreID uint) (*model.Order, error)
 	ListOrders(userID uint, status int, page, limit int, storeID uint) ([]model.Order, int64, error)
 	GetOrder(userID, orderID uint) (*model.Order, []model.OrderItem, error)
 	AdminListOrders(status int, page, limit int, storeID uint, startTime, endTime *time.Time) ([]model.Order, int64, error)
@@ -50,6 +51,11 @@ type createOrderReq struct {
 	UserCouponID uint   `json:"user_coupon_id"`
 	StoreID      uint   `json:"store_id"`
 	OrderType    int    `json:"order_type"` // 1商城 2堂食 3外卖
+	TableID      uint   `json:"table_id"`
+	TableNo      string `json:"table_no"`
+	// 分享/推荐参数（可选）：用于下单时强校验并冻结到订单
+	SharerUID    uint `json:"sharer_uid"`
+	ShareStoreID uint `json:"share_store_id"`
 }
 
 // availableCouponsReq 查询当前订单可用优惠券的请求体（最小版，仅按金额与门店过滤）
@@ -68,7 +74,7 @@ func (h *OrderHandler) CreateFromCart(c *gin.Context) {
 		response.BadRequest(c, "参数错误")
 		return
 	}
-	order, err := h.svc.CreateOrderFromCart(userID, req.DeliveryType, req.AddressInfo, req.Remark, req.UserCouponID, req.StoreID, req.OrderType)
+	order, err := h.svc.CreateOrderFromCart(userID, req.DeliveryType, req.AddressInfo, req.Remark, req.UserCouponID, req.StoreID, req.OrderType, req.TableID, req.TableNo, req.SharerUID, req.ShareStoreID)
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, err.Error())
 		return
@@ -611,6 +617,127 @@ func (h *OrderHandler) AdminAdjustPayAmount(c *gin.Context) {
 	response.Success(c, gin.H{"ok": true})
 }
 
+// AdminSetTable 管理端设置订单桌号信息（需权限）
+// POST /api/v1/orders/:id/set-table
+func (h *OrderHandler) AdminSetTable(c *gin.Context) {
+	uidVal, _ := c.Get("user_id")
+	operatorID := uint(uidVal.(uint))
+
+	oid, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		response.BadRequest(c, "非法的订单ID")
+		return
+	}
+
+	var req struct {
+		TableID uint   `json:"table_id"`
+		TableNo string `json:"table_no"`
+		Reason  string `json:"reason"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "参数错误")
+		return
+	}
+	req.TableNo = strings.TrimSpace(req.TableNo)
+
+	var before model.Order
+	if err := database.GetDB().First(&before, uint(oid)).Error; err != nil {
+		response.Error(c, http.StatusBadRequest, "订单不存在")
+		return
+	}
+
+	if err := database.GetDB().Model(&model.Order{}).Where("id = ?", uint(oid)).Updates(map[string]any{
+		"table_id": req.TableID,
+		"table_no": req.TableNo,
+	}).Error; err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	var after model.Order
+	_ = database.GetDB().First(&after, uint(oid)).Error
+	_ = writeOpLog(c, operatorID, "order", "order.set_table", map[string]any{
+		"order_id": uint(oid),
+		"reason":   req.Reason,
+		"before": map[string]any{
+			"table_id": before.TableID,
+			"table_no": before.TableNo,
+		},
+		"after": map[string]any{
+			"table_id": after.TableID,
+			"table_no": after.TableNo,
+		},
+	})
+
+	response.Success(c, gin.H{"ok": true})
+}
+
+// StoreSetTable 门店管理员设置本店订单的桌号（需门店范围与权限）
+// POST /api/v1/stores/:storeId/orders/:id/set-table
+func (h *OrderHandler) StoreSetTable(c *gin.Context) {
+	uidVal, _ := c.Get("user_id")
+	operatorID := uint(uidVal.(uint))
+
+	storeID64, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil || storeID64 == 0 {
+		response.BadRequest(c, "非法的门店ID")
+		return
+	}
+	storeID := uint(storeID64)
+
+	oid64, err := strconv.ParseUint(c.Param("orderId"), 10, 32)
+	if err != nil || oid64 == 0 {
+		response.BadRequest(c, "非法的订单ID")
+		return
+	}
+	oid := uint(oid64)
+
+	var req struct {
+		TableID uint   `json:"table_id"`
+		TableNo string `json:"table_no"`
+		Reason  string `json:"reason"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "参数错误")
+		return
+	}
+	req.TableNo = strings.TrimSpace(req.TableNo)
+
+	var before model.Order
+	if err := database.GetDB().First(&before, oid).Error; err != nil {
+		response.Error(c, http.StatusBadRequest, "订单不存在")
+		return
+	}
+	if before.StoreID != storeID {
+		response.Error(c, http.StatusForbidden, "订单不属于该门店")
+		return
+	}
+
+	if err := database.GetDB().Model(&model.Order{}).Where("id = ?", oid).Updates(map[string]any{
+		"table_id": req.TableID,
+		"table_no": req.TableNo,
+	}).Error; err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	var after model.Order
+	_ = database.GetDB().First(&after, oid).Error
+	_ = writeOpLog(c, operatorID, "order", "order.set_table", map[string]any{
+		"order_id": oid,
+		"reason":   req.Reason,
+		"before": map[string]any{
+			"table_id": before.TableID,
+			"table_no": before.TableNo,
+		},
+		"after": map[string]any{
+			"table_id": after.TableID,
+			"table_no": after.TableNo,
+		},
+	})
+
+	response.Success(c, gin.H{"ok": true})
+}
 // writeOpLog 写入操作日志（包含详细 requestData）
 func writeOpLog(c *gin.Context, userID uint, module, operation string, data map[string]any) error {
 	bs, _ := json.Marshal(data)

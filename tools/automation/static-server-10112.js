@@ -1,7 +1,8 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const root = path.resolve(__dirname, '../../wx-fe/dist');
+const outputRoot = 'dist-fixed';
+const root = path.resolve(__dirname, `../../wx-fe/${outputRoot}`);
 const port = 10112;
 http.createServer((req, res) => {
   const reqPath = req.url.split('?')[0];

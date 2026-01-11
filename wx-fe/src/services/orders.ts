@@ -1,7 +1,20 @@
 import api, { unwrapResponse } from './api';
 import { AvailableCouponsResponse, Order, OrderDetailPayload, PaginationResponse } from './types';
 
-export async function createOrderFromCart(payload: { delivery_type: number; address_info?: string; remark?: string; user_coupon_id?: number; store_id?: number; order_type?: number }): Promise<Order> {
+export type CreateOrderFromCartPayload = {
+  delivery_type: number;
+  address_info?: string;
+  remark?: string;
+  user_coupon_id?: number;
+  store_id?: number;
+  order_type?: number;
+  table_id?: number;
+  table_no?: string;
+  sharer_uid?: number;
+  share_store_id?: number;
+};
+
+export async function createOrderFromCart(payload: CreateOrderFromCartPayload): Promise<Order> {
   const res = await api.post('/api/v1/orders/from-cart', payload);
   return unwrapResponse<Order>(res);
 }

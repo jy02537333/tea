@@ -22,6 +22,13 @@ export interface Product {
   images?: string;
   stock?: number;
   status?: number;
+
+  // 可选字段：后端若返回则用于首页“上新/热销”等运营位
+  created_at?: string;
+  sales?: number;
+  is_hot?: boolean;
+  is_new?: boolean;
+  is_recommend?: boolean;
 }
 
 export interface Category {

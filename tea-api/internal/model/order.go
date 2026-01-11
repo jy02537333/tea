@@ -12,7 +12,13 @@ type Order struct {
 	BaseModel
 	OrderNo string `gorm:"type:varchar(32);uniqueIndex;not null" json:"order_no"`
 	UserID  uint   `gorm:"index;not null" json:"user_id"`
+	// ReferrerID 下单当时冻结的直推推荐人（用于防止后续推荐关系覆盖影响历史订单归属）
+	ReferrerID *uint `gorm:"index" json:"referrer_id"`
+	// ShareStoreID 下单当时冻结的分享门店ID（门店商品分享场景下应与订单 StoreID 一致）
+	ShareStoreID uint `gorm:"index;default:0" json:"share_store_id"`
 	StoreID uint   `gorm:"index;default:0" json:"store_id"`
+	TableID uint   `gorm:"index;default:0" json:"table_id"`
+	TableNo string `gorm:"type:varchar(50);default:''" json:"table_no"`
 	// MembershipPackageID 若非空则表示会员/合伙人礼包订单
 	MembershipPackageID *uint           `gorm:"index" json:"membership_package_id"`
 	TotalAmount         decimal.Decimal `gorm:"type:decimal(10,2);not null" json:"total_amount"`

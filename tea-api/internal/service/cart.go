@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 
 	"tea-api/internal/model"
@@ -16,6 +17,81 @@ type CartService struct {
 
 func NewCartService() *CartService {
 	return &CartService{db: database.GetDB()}
+}
+
+// IsExclusiveProductForStore checks if a product is bound to the store as an exclusive item.
+// biz_type=3 表示门店特供/其他。
+func (s *CartService) IsExclusiveProductForStore(storeID uint, productID uint) (bool, error) {
+	if storeID == 0 || productID == 0 {
+		return false, nil
+	}
+	const bizTypeExclusive = 3
+	var cnt int64
+	if err := s.db.Table("store_products").
+		Where("store_id = ? AND biz_type = ? AND product_id = ?", storeID, bizTypeExclusive, productID).
+		Count(&cnt).Error; err != nil {
+		return false, fmt.Errorf("校验门店特供商品失败: %w", err)
+	}
+	return cnt > 0, nil
+}
+
+// FindFirstNonExclusiveProductInCart returns the first product_id in user's cart
+// that is NOT bound to the store as an exclusive item.
+// If none found, returns 0, nil.
+func (s *CartService) FindFirstNonExclusiveProductInCart(storeID uint, userID uint) (uint, error) {
+	if storeID == 0 || userID == 0 {
+		return 0, nil
+	}
+
+	items, err := s.ListItems(userID)
+	if err != nil {
+		return 0, err
+	}
+	if len(items) == 0 {
+		return 0, nil
+	}
+
+	ids := make([]uint, 0, len(items))
+	seen := make(map[uint]struct{}, len(items))
+	for _, it := range items {
+		if it.ProductID == 0 {
+			continue
+		}
+		if _, ok := seen[it.ProductID]; ok {
+			continue
+		}
+		seen[it.ProductID] = struct{}{}
+		ids = append(ids, it.ProductID)
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	const bizTypeExclusive = 3
+	var rows []struct {
+		ProductID uint `gorm:"column:product_id"`
+	}
+	if err := s.db.Table("store_products").
+		Select("product_id").
+		Where("store_id = ? AND biz_type = ? AND product_id IN ?", storeID, bizTypeExclusive, ids).
+		Find(&rows).Error; err != nil {
+		return 0, fmt.Errorf("校验购物车商品归属失败: %w", err)
+	}
+
+	allowed := make(map[uint]struct{}, len(rows))
+	for _, r := range rows {
+		if r.ProductID == 0 {
+			continue
+		}
+		allowed[r.ProductID] = struct{}{}
+	}
+
+	for _, pid := range ids {
+		if _, ok := allowed[pid]; !ok {
+			return pid, nil
+		}
+	}
+	return 0, nil
 }
 
 // GetOrCreateCart 获取或创建用户购物车
@@ -118,6 +194,59 @@ func (s *CartService) ListItems(userID uint) ([]model.CartItem, error) {
 		return nil, fmt.Errorf("获取购物车列表失败: %w", err)
 	}
 	return items, nil
+}
+
+// GetStorePriceOverrides 返回购物车商品在指定门店的覆盖价映射。
+// 目前仅针对门店特供（biz_type=3）的覆盖价。
+func (s *CartService) GetStorePriceOverrides(storeID uint, items []model.CartItem) (map[uint]decimal.Decimal, error) {
+	if storeID == 0 {
+		return map[uint]decimal.Decimal{}, nil
+	}
+	if len(items) == 0 {
+		return map[uint]decimal.Decimal{}, nil
+	}
+
+	ids := make([]uint, 0, len(items))
+	seen := make(map[uint]struct{}, len(items))
+	for _, it := range items {
+		if it.ProductID == 0 {
+			continue
+		}
+		if _, ok := seen[it.ProductID]; ok {
+			continue
+		}
+		seen[it.ProductID] = struct{}{}
+		ids = append(ids, it.ProductID)
+	}
+	if len(ids) == 0 {
+		return map[uint]decimal.Decimal{}, nil
+	}
+
+	// biz_type=3 表示门店特供/其他
+	const bizTypeExclusive = 3
+
+	var rows []struct {
+		ProductID     uint            `gorm:"column:product_id"`
+		PriceOverride decimal.Decimal `gorm:"column:price_override"`
+	}
+	if err := s.db.Table("store_products").
+		Select("product_id, price_override").
+		Where("store_id = ? AND biz_type = ? AND product_id IN ?", storeID, bizTypeExclusive, ids).
+		Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("获取门店覆盖价失败: %w", err)
+	}
+
+	res := make(map[uint]decimal.Decimal, len(rows))
+	for _, r := range rows {
+		// 仅当覆盖价>0时才视为有效覆盖
+		if r.ProductID == 0 {
+			continue
+		}
+		if r.PriceOverride.GreaterThan(decimal.Zero) {
+			res[r.ProductID] = r.PriceOverride
+		}
+	}
+	return res, nil
 }
 
 // UpdateItem 更新购物车条目数量（<=0 则删除）

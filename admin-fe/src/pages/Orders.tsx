@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Descriptions, Divider, Drawer, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag, Typography, message, DatePicker } from 'antd';
+import { Alert, Button, Descriptions, Divider, Drawer, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag, Tabs, Typography, message, DatePicker } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AdminOrder, AdminOrderItem, AdminOrderListParams, exportAdminOrders, getAdminOrderDetail, getAdminOrders, postOrderAction } from '../services/orders';
+import { RefundRecord, listRefundsRecords } from '../services/financeRecords';
 import type { Store } from '../services/stores';
 import { useStores } from '../hooks/useStores';
 import { useAuthContext } from '../hooks/useAuth';
@@ -133,12 +134,20 @@ interface FilterValues {
   date_range?: [any, any];
 }
 
+interface RefundFilterValues {
+  refund_no?: string;
+  order_id?: number;
+  store_id?: number;
+}
+
 export default function OrdersPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const initialStoreId = searchParams.get('storeId');
   const initialOrderId = searchParams.get('orderId');
+  const initialOrderNo = searchParams.get('orderNo');
+  const initialTab = searchParams.get('tab') || 'orders';
 
   const queryClient = useQueryClient();
   const { hasPermission } = useAuthContext();
@@ -149,6 +158,7 @@ export default function OrdersPage() {
   const [drawerOpen, setDrawerOpen] = useState<boolean>(!!initialOrderId);
   const [detailId, setDetailId] = useState<number | null>(initialOrderId ? Number(initialOrderId) || null : null);
   const [filterForm] = Form.useForm<FilterValues>();
+  const [activeTab, setActiveTab] = useState<string>(initialTab);
   const [storeDropdownOpen, setStoreDropdownOpen] = useState(false);
   const storesQuery = useStores({ enabled: storeDropdownOpen });
   const storeOptions = useMemo(
@@ -166,9 +176,26 @@ export default function OrdersPage() {
     }
   }, [filterForm, initialStoreId]);
 
+  useEffect(() => {
+    if (initialOrderNo) {
+      filterForm.setFieldsValue({ order_no: initialOrderNo });
+      setFilters((prev) => ({ ...prev, order_no: String(initialOrderNo) }));
+    }
+  }, [filterForm, initialOrderNo]);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
   // 保持 URL 与当前选中订单同步，便于刷新后还原状态
   useEffect(() => {
     const params = new URLSearchParams(location.search);
+    // tab
+    if (activeTab && activeTab !== 'orders') {
+      params.set('tab', activeTab);
+    } else {
+      params.delete('tab');
+    }
     if (detailId) {
       params.set('orderId', String(detailId));
     } else {
@@ -182,7 +209,7 @@ export default function OrdersPage() {
     navigate({ search: params.toString() ? `?${params.toString()}` : '' }, { replace: true });
     // 仅在 detailId 或 filters.store_id 变化时更新 URL
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detailId, filters.store_id]);
+  }, [detailId, filters.store_id, activeTab]);
 
   const listParams: AdminOrderListParams = useMemo(
     () => ({
@@ -231,6 +258,8 @@ export default function OrdersPage() {
   const [reasonTarget, setReasonTarget] = useState<{ id: number; action: string } | null>(null);
   const [reasonForm] = Form.useForm<{ reason: string }>();
 
+	const [tableForm] = Form.useForm<{ table_id?: number; table_no?: string; reason?: string }>();
+
   const adjustMutation = useMutation({
     mutationFn: async (payload: { id: number; new_pay_amount: number; reason?: string }) => {
       await postOrderAction(payload.id, 'adjust', {
@@ -250,6 +279,33 @@ export default function OrdersPage() {
       message.error(error?.message || '调价失败');
     },
   });
+
+  const setTableMutation = useMutation({
+    mutationFn: async (payload: { id: number; table_id: number; table_no: string; reason?: string }) => {
+      await postOrderAction(payload.id, 'set-table', {
+        table_id: payload.table_id,
+        table_no: payload.table_no,
+        reason: payload.reason?.trim() || undefined,
+      });
+    },
+    onSuccess: async () => {
+      message.success('桌号已更新');
+      await queryClient.invalidateQueries({ queryKey: ['adminOrders'] });
+      if (detailId) queryClient.invalidateQueries({ queryKey: ['adminOrderDetail', detailId] });
+    },
+    onError: (error: any) => {
+      message.error(error?.message || '更新桌号失败');
+    },
+  });
+
+  useEffect(() => {
+    if (!detailOrder) return;
+    tableForm.setFieldsValue({
+      table_id: Number(detailOrder.table_id ?? 0) || 0,
+      table_no: detailOrder.table_no ?? '',
+      reason: '',
+    });
+  }, [detailOrder, tableForm]);
 
   const openAdjustModal = (order: AdminOrder) => {
     setAdjustTargetId(order.id);
@@ -441,7 +497,107 @@ export default function OrdersPage() {
     setPagination({ page: 1, limit: 20 });
   };
 
-  return (
+  const refundsQuery = useQuery({
+    queryKey: ['adminRefunds', 'page1', 'limit200'],
+    queryFn: () => listRefundsRecords({ page: 1, limit: 200 }),
+    enabled: activeTab === 'after-sales',
+  });
+
+  const [refundForm] = Form.useForm<RefundFilterValues>();
+  const [refundFilters, setRefundFilters] = useState<RefundFilterValues>({});
+
+  const refundTableData = useMemo(() => {
+    const list = refundsQuery.data?.list ?? [];
+    const refundNo = refundFilters.refund_no?.trim().toLowerCase();
+    const orderId = refundFilters.order_id;
+    const storeId = refundFilters.store_id;
+    return list.filter((r) => {
+      if (refundNo && !String(r.refund_no ?? '').toLowerCase().includes(refundNo)) return false;
+      if (orderId && Number(r.order_id) !== Number(orderId)) return false;
+      if (storeId && String(r.store_name ?? '').indexOf(String(storeId)) === -1) {
+        // store_id 在 refund record 中不一定直接返回，这里保持最小筛选：仅当后端返回 store_name 时不做强约束
+      }
+      return true;
+    });
+  }, [refundFilters.order_id, refundFilters.refund_no, refundFilters.store_id, refundsQuery.data?.list]);
+
+  const refundColumns: ColumnsType<RefundRecord> = [
+    { title: 'ID', dataIndex: 'id', width: 80 },
+    { title: '退款单号', dataIndex: 'refund_no', width: 220 },
+    { title: '订单 ID', dataIndex: 'order_id', width: 120 },
+    { title: '退款金额', dataIndex: 'refund_amount', width: 120, render: (val: string) => `￥${val}` },
+    { title: '门店', dataIndex: 'store_name', width: 160, render: (val?: string) => val || '-' },
+    { title: '状态', dataIndex: 'status', width: 120 },
+    {
+      title: '创建时间',
+      dataIndex: 'created_at',
+      width: 180,
+      render: (val?: string) => (val ? new Date(val).toLocaleString() : '-'),
+    },
+  ];
+
+  const afterSalesContent = (
+    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>
+        <Form
+          layout="inline"
+          form={refundForm}
+          onFinish={(values) => setRefundFilters({
+            refund_no: values.refund_no?.trim(),
+            order_id: values.order_id ? Number(values.order_id) : undefined,
+            store_id: values.store_id ? Number(values.store_id) : undefined,
+          })}
+        >
+          <Form.Item name="refund_no" label="退款单号">
+            <Input allowClear placeholder="模糊搜索退款单号" style={{ width: 220 }} />
+          </Form.Item>
+          <Form.Item name="order_id" label="订单ID">
+            <InputNumber min={1} precision={0} placeholder="订单ID" style={{ width: 160 }} />
+          </Form.Item>
+          <Form.Item name="store_id" label="门店">
+            <Select
+              allowClear
+              showSearch
+              style={{ width: 240 }}
+              loading={storesQuery.isLoading}
+              placeholder={storesQuery.isLoading ? '加载门店...' : '选择门店'}
+              optionFilterProp="label"
+              options={storeOptions}
+              onDropdownVisibleChange={(open) => setStoreDropdownOpen(open)}
+            />
+          </Form.Item>
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit" loading={refundsQuery.isFetching}>
+                筛选
+              </Button>
+              <Button onClick={() => { refundForm.resetFields(); setRefundFilters({}); }}>重置</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+        <Space>
+          <Button icon={<ReloadOutlined />} onClick={() => refundsQuery.refetch()} loading={refundsQuery.isFetching}>
+            刷新
+          </Button>
+        </Space>
+      </Space>
+
+      {refundsQuery.isError && (
+        <Alert type="error" showIcon message="加载退款列表失败" description={(refundsQuery.error as any)?.message || '请确认已登录且具备权限'} />
+      )}
+
+      <Table
+        bordered
+        rowKey="id"
+        loading={refundsQuery.isLoading}
+        dataSource={refundTableData}
+        columns={refundColumns}
+        pagination={false}
+      />
+    </Space>
+  );
+
+  const ordersContent = (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>
         <Form layout="inline" form={filterForm} onFinish={handleFilter}>
@@ -519,6 +675,8 @@ export default function OrdersPage() {
               <Descriptions.Item label="门店 ID">{detailOrder.store_id}</Descriptions.Item>
               <Descriptions.Item label="用户 ID">{detailOrder.user_id}</Descriptions.Item>
               <Descriptions.Item label="金额">{formatCurrency(detailOrder.pay_amount)}</Descriptions.Item>
+              <Descriptions.Item label="桌号（table_no）">{detailOrder.table_no || '-'}</Descriptions.Item>
+              <Descriptions.Item label="桌ID（table_id）">{detailOrder.table_id ?? 0}</Descriptions.Item>
               <Descriptions.Item label="状态">
                 {ORDER_STATUS_MAP[detailOrder.status]?.label || detailOrder.status}
               </Descriptions.Item>
@@ -532,6 +690,43 @@ export default function OrdersPage() {
                 {detailOrder.updated_at ? new Date(detailOrder.updated_at).toLocaleString() : '-'}
               </Descriptions.Item>
             </Descriptions>
+
+			<Divider />
+			<Title level={5}>桌号编辑</Title>
+			<Form
+				form={tableForm}
+				layout="inline"
+				onFinish={async (values) => {
+					await tableForm.validateFields();
+					await setTableMutation.mutateAsync({
+						id: detailOrder.id,
+						table_id: Number(values.table_id ?? 0) || 0,
+						table_no: String(values.table_no ?? '').trim(),
+						reason: values.reason,
+					});
+				}}
+			>
+				<Form.Item label="table_id" name="table_id">
+					<InputNumber min={0} precision={0} style={{ width: 160 }} placeholder="0 表示无" />
+				</Form.Item>
+				<Form.Item label="table_no" name="table_no">
+					<Input allowClear style={{ width: 220 }} placeholder="门店自定义（如 A12）" />
+				</Form.Item>
+				<Form.Item label="原因" name="reason">
+					<Input allowClear style={{ width: 220 }} placeholder="可选" />
+				</Form.Item>
+				<Form.Item>
+					<Button
+						type="primary"
+						htmlType="submit"
+						disabled={!hasPermission('order:adjust') || setTableMutation.isPending}
+						loading={setTableMutation.isPending}
+					>
+						保存桌号
+					</Button>
+				</Form.Item>
+			</Form>
+
             <Divider />
             <Title level={5}>可执行操作</Title>
             <Space wrap>
@@ -682,5 +877,16 @@ export default function OrdersPage() {
         </Form>
       </Modal>
     </Space>
+  );
+
+  return (
+    <Tabs
+      activeKey={activeTab}
+      onChange={(key) => setActiveTab(key)}
+      items={[
+        { key: 'orders', label: '订单列表', children: ordersContent },
+        { key: 'after-sales', label: '售后订单', children: afterSalesContent },
+      ]}
+    />
   );
 }

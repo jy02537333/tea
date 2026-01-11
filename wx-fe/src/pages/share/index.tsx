@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, Button, Canvas, Image as TaroImage } from '@tarojs/components';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, Button, Canvas, Image as TaroImage, Picker } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import { getMeSummary } from '../../services/me';
 import type { MeSummary } from '../../services/types';
-import { buildShareLink, getWxaCode } from '../../services/share';
+import { buildShareLink, getWxaCode, listSharePosterTemplates } from '../../services/share';
 import { getStore } from '../../services/stores';
-import QRCode from 'qrcode';
+// 动态引入 QRCode 以减少首屏体积
 import { DEFAULT_SHARE_TEMPLATE } from '../../constants/share';
 
 export default function SharePage() {
@@ -13,6 +13,8 @@ export default function SharePage() {
   const [loading, setLoading] = useState(false);
   const [posterPath, setPosterPath] = useState<string | null>(null);
   const [useBgImage, setUseBgImage] = useState<boolean>(false);
+  const [posterTemplates, setPosterTemplates] = useState<Array<{ id: string; title?: string; image_url: string }>>([]);
+  const [posterTemplateIndex, setPosterTemplateIndex] = useState<number>(0); // 0 = pure
 
   useEffect(() => {
     try {
@@ -38,6 +40,26 @@ export default function SharePage() {
     try {
       const s = await getMeSummary();
       setSummary(s);
+
+    // 加载分享海报模板（后台可配置，多张可切换）
+    try {
+      const list = await listSharePosterTemplates();
+      const cleaned = (list || [])
+        .filter((it) => it && typeof it.image_url === 'string' && it.image_url.trim())
+        .map((it) => ({ id: String(it.id || ''), title: it.title, image_url: String(it.image_url || '').trim() }))
+        .filter((it) => it.id && it.image_url);
+      setPosterTemplates(cleaned);
+      // restore selection
+      try {
+        const savedId = String(Taro.getStorageSync('share_poster_template_id') || '').trim();
+        if (savedId) {
+          const idx = cleaned.findIndex((x) => x.id === savedId);
+          if (idx >= 0) setPosterTemplateIndex(idx + 1);
+        }
+      } catch (_) {}
+    } catch (_) {
+      // ignore template load errors
+    }
     } catch (e: any) {
       Taro.showToast({ title: e?.message || '加载分享数据失败', icon: 'none' });
     } finally {
@@ -46,6 +68,12 @@ export default function SharePage() {
   }
 
   const shareStats = summary?.share;
+
+  const posterTemplateOptions = useMemo(() => {
+    if (!posterTemplates.length) return [] as string[];
+    const titles = posterTemplates.map((t, i) => (t.title && String(t.title).trim()) || `模板${i + 1}`);
+    return ['纯色模板', ...titles];
+  }, [posterTemplates]);
 
   async function handleGenerateShare() {
     try {
@@ -72,13 +100,24 @@ export default function SharePage() {
       }
 
       const env = (Taro as any)?.getEnv ? (Taro as any).getEnv() : 'WEB';
-      const bgDataUrl = useBgImage ? generateDefaultBgDataUrl() : undefined;
+      let bgDataUrl: string | undefined;
+      if (posterTemplates.length > 0) {
+        if (posterTemplateIndex > 0) {
+          bgDataUrl = posterTemplates[posterTemplateIndex - 1]?.image_url;
+        } else {
+          bgDataUrl = undefined;
+        }
+      } else {
+        bgDataUrl = useBgImage ? generateDefaultBgDataUrl() : undefined;
+      }
       if (env === 'WEB' && typeof document !== 'undefined') {
         const url = await composePosterH5({
           avatar: summary?.user?.avatar,
           nickname: summary?.user?.nickname || '茶友',
           store: storeInfo,
-          codeDataUrl: codeDataUrl || (await QRCode.toDataURL(link, { width: 240, margin: 1 })),
+          codeDataUrl:
+            codeDataUrl ||
+            (await (await import('qrcode')).default.toDataURL(link, { width: 240, margin: 1 })),
           bgDataUrl,
         });
         setPosterPath(url);
@@ -88,7 +127,9 @@ export default function SharePage() {
           avatar: summary?.user?.avatar,
           nickname: summary?.user?.nickname || '茶友',
           store: storeInfo,
-          codeDataUrl: codeDataUrl || (await QRCode.toDataURL(link, { width: 240, margin: 1 })),
+          codeDataUrl:
+            codeDataUrl ||
+            (await (await import('qrcode')).default.toDataURL(link, { width: 240, margin: 1 })),
           bgDataUrl,
         });
         setPosterPath(temp);
@@ -195,8 +236,18 @@ export default function SharePage() {
     // 背景图或渐变
     if (params.bgDataUrl) {
       try {
-        const bgPath = await dataUrlToTempFile(params.bgDataUrl, `bg_${Date.now()}.png`);
-        ctx.drawImage(bgPath, 0, 0, width, height);
+        let bgPath = '';
+        if (params.bgDataUrl.startsWith('data:image')) {
+          bgPath = await dataUrlToTempFile(params.bgDataUrl, `bg_${Date.now()}.png`);
+        } else {
+          const info = await Taro.getImageInfo({ src: params.bgDataUrl });
+          bgPath = info?.path || '';
+        }
+        if (bgPath) {
+          ctx.drawImage(bgPath, 0, 0, width, height);
+        } else {
+          throw new Error('empty bg path');
+        }
       } catch (_) {
         const grad = ctx.createLinearGradient(0, 0, 0, height);
         grad.addColorStop(0, '#fdf6e3');
@@ -340,7 +391,7 @@ export default function SharePage() {
   }
 
   return (
-    <View style={{ padding: 16 }}>
+    <View data-testid="page-share" style={{ padding: 16 }}>
       <Text style={{ fontSize: 18, fontWeight: 'bold' }}>分享推广</Text>
       {loading && <Text style={{ display: 'block', marginTop: 8 }}>加载中...</Text>}
       {!loading && (
@@ -354,21 +405,44 @@ export default function SharePage() {
           <Button style={{ marginTop: 12 }} type="primary" size="mini" onClick={handleGenerateShare}>
             生成分享链接/海报
           </Button>
-          <Button
-            style={{ marginTop: 12, marginLeft: 8 }}
-            size="mini"
-            onClick={() => {
-              const next = !useBgImage;
-              setUseBgImage(next);
-              try {
-                Taro.setStorageSync('share_useBgImage', next ? '1' : '0');
-              } catch (_) {
-                // ignore storage write errors
-              }
-            }}
-          >
-            {useBgImage ? '使用纯色模板' : '使用背景图模板'}
-          </Button>
+          {posterTemplates.length > 0 && posterTemplateOptions.length > 0 && (
+            <Picker
+              mode="selector"
+              range={posterTemplateOptions}
+              value={posterTemplateIndex}
+              onChange={(e) => {
+                const v = Number((e as any)?.detail?.value || 0);
+                const next = Number.isFinite(v) ? v : 0;
+                setPosterTemplateIndex(next);
+                try {
+                  const id = next > 0 ? posterTemplates[next - 1]?.id : '';
+                  if (id) Taro.setStorageSync('share_poster_template_id', id);
+                  else Taro.removeStorageSync('share_poster_template_id');
+                } catch (_) {}
+              }}
+            >
+              <Button style={{ marginTop: 12, marginLeft: 8 }} size="mini">
+                模板：{posterTemplateOptions[posterTemplateIndex] || '纯色模板'}
+              </Button>
+            </Picker>
+          )}
+          {posterTemplates.length === 0 && (
+            <Button
+              style={{ marginTop: 12, marginLeft: 8 }}
+              size="mini"
+              onClick={() => {
+                const next = !useBgImage;
+                setUseBgImage(next);
+                try {
+                  Taro.setStorageSync('share_useBgImage', next ? '1' : '0');
+                } catch (_) {
+                  // ignore storage write errors
+                }
+              }}
+            >
+              {useBgImage ? '使用纯色模板' : '使用背景图模板'}
+            </Button>
+          )}
           {posterPath && (
             <View style={{ marginTop: 12 }}>
               <Text style={{ display: 'block', marginBottom: 8 }}>预览：</Text>

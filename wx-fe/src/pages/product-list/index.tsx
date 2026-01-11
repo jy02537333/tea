@@ -1,17 +1,27 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, Button, Input, Picker } from '@tarojs/components';
-import Taro from '@tarojs/taro';
+import Taro, { useRouter } from '@tarojs/taro';
 import { listProducts } from '../../services/products';
 import { Product, Store } from '../../services/types';
-import { listStores } from '../../services/stores';
+import { listStores, listStoreExclusiveProducts } from '../../services/stores';
 import usePermission from '../../hooks/usePermission';
 import { PERM_HINT_STORE_MGMT_READONLY_PAGE } from '../../constants/permission';
+import { listCart, addCartItem } from '../../services/cart';
+import './index.scss';
+import ProductCard from '../../components/ProductCard';
 
 export default function ProductList() {
+  const router = useRouter();
   const perm = usePermission();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
+  const [cartCount, setCartCount] = useState(0);
+
+  const exclusiveMode = useMemo(() => {
+    const v = (router as any)?.params?.exclusive;
+    return v === '1' || v === 'true' || v === 1 || v === true;
+  }, [router]);
 
   // 门店选择（与分类页保持一致）
   const [stores, setStores] = useState<Store[]>([]);
@@ -35,11 +45,44 @@ export default function ProductList() {
   }, []);
 
   async function bootstrap() {
-    await loadStores();
-    await fetch();
+    const list = await loadStores();
+
+    const initial = getInitialStoreId(list);
+    if (initial) {
+      setSelectedStoreId(initial);
+      const idx = list.findIndex((s) => s.id === initial);
+      setStorePickerIndex(idx >= 0 ? idx + 1 : 0);
+    }
+
+    // 特供模式必须选择门店；未选门店时不自动拉取
+    if (exclusiveMode && !initial) {
+      setProducts([]);
+      return;
+    }
+
+    await fetch({ store_id: initial });
+
+    // 购物车汇总（仅显示条数，避免复杂汇总）
+    try {
+      const items = await listCart();
+      setCartCount(Array.isArray(items) ? items.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0) : 0);
+    } catch (_) {}
   }
 
-  async function loadStores() {
+  function getInitialStoreId(list: Store[]): number | undefined {
+    const rawParam = (router as any)?.params?.store_id;
+    const fromParam = rawParam ? Number(rawParam) : NaN;
+    if (!Number.isNaN(fromParam) && fromParam > 0) return fromParam;
+
+    try {
+      const raw = Taro.getStorageSync('current_store_id');
+      const fromStorage = raw ? Number(raw) : NaN;
+      if (!Number.isNaN(fromStorage) && fromStorage > 0) return fromStorage;
+    } catch (_) {}
+    return undefined;
+  }
+
+  async function loadStores(): Promise<Store[]> {
     try {
       const res = await listStores({ page: 1, limit: 50 });
       const list = Array.isArray(res?.data)
@@ -50,9 +93,11 @@ export default function ProductList() {
             ? (res as any)
             : [];
       setStores(list);
+      return list;
     } catch (error) {
       console.error('load stores failed', error);
       Taro.showToast({ title: '加载门店失败', icon: 'none' });
+      return [];
     }
   }
 
@@ -71,6 +116,26 @@ export default function ProductList() {
     try {
       const kw = overrides.keyword !== undefined ? overrides.keyword : keyword;
       const storeId = overrides.store_id !== undefined ? overrides.store_id : selectedStoreId;
+
+      if (exclusiveMode) {
+        if (!storeId) {
+          setProducts([]);
+          return;
+        }
+        const res = await listStoreExclusiveProducts(storeId, {
+          page: 1,
+          limit: 20,
+          keyword: kw ? kw.trim() : undefined,
+        });
+        const maybe = res as any;
+        let items: Product[] = [];
+        if (Array.isArray(maybe?.data)) items = maybe.data;
+        else if (Array.isArray(maybe?.items)) items = maybe.items;
+        else if (Array.isArray(maybe)) items = maybe;
+        setProducts(items);
+        return;
+      }
+
       const origin = overrides.origin !== undefined ? overrides.origin : originPickerIndex > 0 ? originRange[originPickerIndex] : undefined;
       const packaging = overrides.packaging !== undefined ? overrides.packaging : packagingPickerIndex > 0 ? packagingRange[packagingPickerIndex] : undefined;
       const minPrice = overrides.min_price !== undefined ? overrides.min_price : priceMin ? Number(priceMin) : undefined;
@@ -153,12 +218,12 @@ export default function ProductList() {
   }
 
   return (
-    <View style={{ padding: 12 }}>
-      {!perm.allowedStoreMgmt && (
+    <View className="page-product-list">
+      {!exclusiveMode && !perm.allowedStoreMgmt && (
         <Text style={{ color: '#999', marginBottom: 8 }}>{PERM_HINT_STORE_MGMT_READONLY_PAGE}</Text>
       )}
       {/* 管理快捷入口（仅有权限且已选择具体门店时显示） */}
-      {selectedStoreId && (
+      {!exclusiveMode && selectedStoreId && (
         <View style={{ marginBottom: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {perm.allowedStoreAccounts && (
             <Button size="mini" onClick={() => Taro.navigateTo({ url: `/pages/store-accounts/index?store_id=${selectedStoreId}` })}>管理收款账户</Button>
@@ -169,19 +234,10 @@ export default function ProductList() {
         </View>
       )}
       {/* 门店选择 */}
-      <View style={{ marginBottom: 16 }}>
-        <Text style={{ fontSize: 14, color: '#666' }}>选择门店</Text>
+      <View className="filters">
+        <Text className="label">选择门店</Text>
         <Picker mode="selector" range={storePickerRange} onChange={handleStoreChange} value={storePickerIndex}>
-          <View
-            style={{
-              marginTop: 8,
-              padding: 12,
-              borderWidth: 1,
-              borderStyle: 'solid',
-              borderColor: '#ddd',
-              borderRadius: 6,
-            }}
-          >
+          <View className="picker">
             <Text>{storePickerRange[storePickerIndex] || '全部门店'}</Text>
           </View>
         </Picker>
@@ -197,6 +253,7 @@ export default function ProductList() {
         />
       </View>
 
+      {!exclusiveMode && (
       <View style={{ marginBottom: 16 }}>
         <Text style={{ fontSize: 14, color: '#666' }}>筛选与排序</Text>
         <View style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
@@ -244,19 +301,43 @@ export default function ProductList() {
           </View>
         </View>
       </View>
+      )}
 
-      {products.map((p) => (
-        <View key={p.id} style={{ marginBottom: 12, borderBottomWidth: 1, borderColor: '#eee', paddingBottom: 8 }}>
-          <Text style={{ fontSize: 16, fontWeight: 'bold' }}>{p.name}</Text>
-          <Text>价格: {p.price}</Text>
-          <Button onClick={() => {
-            const storeQuery = selectedStoreId ? `&store_id=${selectedStoreId}` : '';
-            Taro.navigateTo({ url: `/pages/product-detail/index?id=${p.id}${storeQuery}` });
-          }}>
-            查看详情
-          </Button>
-        </View>
-      ))}
+      <View className="grid">
+        {products.map((p) => (
+          <ProductCard
+            key={p.id}
+            product={p}
+            showCover
+            onClick={() => {
+              const storeQuery = selectedStoreId ? `&store_id=${selectedStoreId}` : '';
+              Taro.navigateTo({ url: `/pages/product-detail/index?id=${p.id}${storeQuery}` });
+            }}
+            extra={(
+              <>
+                <Button className="btn-view" onClick={() => {
+                  const storeQuery = selectedStoreId ? `&store_id=${selectedStoreId}` : '';
+                  Taro.navigateTo({ url: `/pages/product-detail/index?id=${p.id}${storeQuery}` });
+                }}>
+                  详情
+                </Button>
+                <Button className="btn-add" onClick={async () => {
+                  try {
+                    await addCartItem(p.id, null, 1);
+                    Taro.showToast({ title: '已加入购物车', icon: 'success' });
+                    const items = await listCart();
+                    setCartCount(Array.isArray(items) ? items.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0) : 0);
+                  } catch (e) {
+                    Taro.showToast({ title: '加入购物车失败', icon: 'none' });
+                  }
+                }}>
+                  加入购物车
+                </Button>
+              </>
+            )}
+          />
+        ))}
+      </View>
 
       {!loading && products.length === 0 && (
         <Text style={{ color: '#999' }}>暂无商品</Text>
@@ -264,6 +345,12 @@ export default function ProductList() {
       {loading && (
         <Text>加载中...</Text>
       )}
+
+      {/* 底部购物车栏 */}
+      <View className="sticky-cart-bar">
+        <Text className="summary">购物车 · {cartCount} 件</Text>
+        <Button className="btn-go-cart" onClick={() => Taro.navigateTo({ url: '/pages/cart/index' })}>去购物车</Button>
+      </View>
     </View>
   );
 }

@@ -27,7 +27,7 @@ export default function PointsPage() {
   const points = summary?.points?.balance ?? 0;
 
   return (
-    <View style={{ padding: 16 }}>
+    <View data-testid="page-points" style={{ padding: 16 }}>
       <Text style={{ fontSize: 18, fontWeight: 'bold' }}>积分中心</Text>
       {loading && <Text style={{ display: 'block', marginTop: 8 }}>加载中...</Text>}
       {!loading && (

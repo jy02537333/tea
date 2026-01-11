@@ -1,0 +1,36 @@
+.page-category {
+  padding: 12px;
+}
+
+.search-bar {
+  margin-bottom: 12px;
+}
+
+.filters {
+  margin-bottom: 16px;
+  .label { font-size: 14px; color: #666; }
+  .sublabel { font-size: 12px; color: #888; }
+  .picker { margin-top: 8px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: #fff; }
+  .picker.sm { margin-top: 6px; padding: 10px; }
+  .filters-body { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .price-range { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.card-product {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  padding: 12px;
+  .name { font-size: 15px; font-weight: 600; color: #333; }
+  .price { color: #ff6a00; font-weight: 700; margin-top: 6px; }
+  .actions { margin-top: 10px; display: flex; justify-content: flex-end; }
+  .btn-view { padding: 6px 10px; border-radius: 8px; background: #f0f0f0; }
+}
+
+.load-more { margin-top: 16px; text-align: center; }

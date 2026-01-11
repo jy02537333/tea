@@ -4,6 +4,6 @@
   "ignores": [
     "node_modules/**",
     "admin-fe/dist/**",
-    "wx-fe/dist/**"
+    "wx-fe/dist-fixed/**"
   ]
 }

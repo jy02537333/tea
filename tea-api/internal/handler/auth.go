@@ -13,6 +13,9 @@ import (
 // RegisterAuthRoutes registers authentication endpoints.
 func RegisterAuthRoutes(r *gin.RouterGroup) {
 	r.POST("/auth/login", Login)
+	// 开发/联调用途的验证码获取端点，用于前端登录页展示图形验证码
+	// 返回字段包含：captcha_id、image_base64 等
+	r.GET("/auth/captcha", AuthCaptcha)
 }
 
 // Login supports phone+code or wechat_code per PRD.

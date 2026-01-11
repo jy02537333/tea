@@ -4,23 +4,20 @@ import (
 	"fmt"
 
 	"github.com/shopspring/decimal"
+	"gorm.io/gorm"
 
 	"tea-api/internal/model"
 	"tea-api/pkg/database"
 )
 
-// SaveCommissionRecords 将内存计算的 CommissionRecord 列表持久化到数据库（事务）
-func SaveCommissionRecords(records []CommissionRecord) error {
+// SaveCommissionRecordsTx 将内存计算的 CommissionRecord 列表持久化到数据库（复用外部事务）
+func SaveCommissionRecordsTx(tx *gorm.DB, records []CommissionRecord) error {
 	if len(records) == 0 {
 		return nil
 	}
-	db := database.GetDB()
-	tx := db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
+	if tx == nil {
+		return fmt.Errorf("tx is nil")
+	}
 
 	for _, r := range records {
 		cm := model.Commission{
@@ -54,7 +51,6 @@ func SaveCommissionRecords(records []CommissionRecord) error {
 		}
 
 		if err := tx.Create(&cm).Error; err != nil {
-			tx.Rollback()
 			return fmt.Errorf("create commission failed: %w", err)
 		}
 
@@ -66,9 +62,29 @@ func SaveCommissionRecords(records []CommissionRecord) error {
 			BalanceAfter: cm.GrossAmount,
 		}
 		if err := tx.Create(&cTx).Error; err != nil {
-			tx.Rollback()
 			return fmt.Errorf("create commission tx failed: %w", err)
 		}
+	}
+
+	return nil
+}
+
+// SaveCommissionRecords 将内存计算的 CommissionRecord 列表持久化到数据库（事务）
+func SaveCommissionRecords(records []CommissionRecord) error {
+	if len(records) == 0 {
+		return nil
+	}
+	db := database.GetDB()
+	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := SaveCommissionRecordsTx(tx, records); err != nil {
+		tx.Rollback()
+		return err
 	}
 
 	return tx.Commit().Error

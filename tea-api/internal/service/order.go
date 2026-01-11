@@ -11,12 +11,28 @@ import (
 	"github.com/shopspring/decimal"
 
 	"tea-api/internal/model"
+	"tea-api/internal/service/commission"
 	"tea-api/pkg/database"
 	"tea-api/pkg/utils"
 )
 
 type OrderService struct {
 	db *gorm.DB
+}
+
+func getDirectReferrerID(tx *gorm.DB, userID uint) *uint {
+	if userID == 0 {
+		return nil
+	}
+	var rc model.ReferralClosure
+	if err := tx.Where("descendant_user_id = ? AND depth = 1", userID).First(&rc).Error; err != nil {
+		return nil
+	}
+	if rc.AncestorUserID == 0 || rc.AncestorUserID == userID {
+		return nil
+	}
+	id := rc.AncestorUserID
+	return &id
 }
 
 func NewOrderService() *OrderService {
@@ -26,7 +42,7 @@ func NewOrderService() *OrderService {
 // CreateMembershipOrder 为指定会员套餐创建一笔虚拟订单
 // 该订单不依赖购物车，也不生成实体商品明细，仅用于会员/合伙人礼包购买场景。
 // 约定：OrderType=4 表示会员订单，DeliveryType=1（自取/虚拟），StoreID=0。
-func (s *OrderService) CreateMembershipOrder(userID, packageID uint, remark string) (*model.Order, error) {
+func (s *OrderService) CreateMembershipOrder(userID, packageID uint, remark string, sharerUID uint, shareStoreID uint) (*model.Order, error) {
 	if userID == 0 || packageID == 0 {
 		return nil, errors.New("非法的用户或套餐")
 	}
@@ -43,6 +59,8 @@ func (s *OrderService) CreateMembershipOrder(userID, packageID uint, remark stri
 	order := &model.Order{
 		OrderNo:             generateOrderNo("M"),
 		UserID:              userID,
+		ReferrerID:          nil,
+		ShareStoreID:        0,
 		StoreID:             0,
 		MembershipPackageID: &packageID,
 		Status:              1, // 待付款
@@ -57,14 +75,22 @@ func (s *OrderService) CreateMembershipOrder(userID, packageID uint, remark stri
 		PayAmount:           pkg.Price,
 	}
 
-	if err := s.db.Create(order).Error; err != nil {
-		return nil, fmt.Errorf("创建会员订单失败: %w", err)
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := applyShareAttributionToOrder(tx, order, userID, 0, sharerUID, shareStoreID); err != nil {
+			return err
+		}
+		if err := tx.Create(order).Error; err != nil {
+			return fmt.Errorf("创建会员订单失败: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 	return order, nil
 }
 
 // CreateOrderFromCart 从购物车生成订单
-func (s *OrderService) CreateOrderFromCart(userID uint, deliveryType int, addressInfo, remark string, userCouponID uint, storeID uint, orderType int) (*model.Order, error) {
+func (s *OrderService) CreateOrderFromCart(userID uint, deliveryType int, addressInfo, remark string, userCouponID uint, storeID uint, orderType int, tableID uint, tableNo string, sharerUID uint, shareStoreID uint) (*model.Order, error) {
 	if deliveryType != 1 && deliveryType != 2 {
 		return nil, errors.New("非法的配送类型")
 	}
@@ -91,10 +117,42 @@ func (s *OrderService) CreateOrderFromCart(userID uint, deliveryType int, addres
 		return nil, errors.New("购物车为空")
 	}
 
+	// 防混单兜底：当用户选择了门店下单（store_id != 0）时，购物车中不得混入平台商品/其他门店商品。
+	// 这里做一次“是否已绑定该门店”的预校验，避免进入扣减库存环节后才失败。
+	if storeID != 0 {
+		ids := make([]uint, 0, len(items))
+		seen := make(map[uint]struct{}, len(items))
+		for _, it := range items {
+			if it.ProductID == 0 {
+				continue
+			}
+			if _, ok := seen[it.ProductID]; ok {
+				continue
+			}
+			seen[it.ProductID] = struct{}{}
+			ids = append(ids, it.ProductID)
+		}
+		if len(ids) > 0 {
+			var cnt int64
+			if err := s.db.Table("store_products").
+				Where("store_id = ? AND product_id IN ?", storeID, ids).
+				Count(&cnt).Error; err != nil {
+				return nil, fmt.Errorf("校验购物车门店商品失败: %w", err)
+			}
+			if cnt != int64(len(ids)) {
+				return nil, errors.New("购物车中存在平台商品或其他门店商品，请先清空购物车后再下单")
+			}
+		}
+	}
+
 	order := &model.Order{
 		OrderNo:        generateOrderNo("O"),
 		UserID:         userID,
+		ReferrerID:     nil,
+		ShareStoreID:   0,
 		StoreID:        storeID,
+		TableID:        tableID,
+		TableNo:        tableNo,
 		Status:         1, // 待付款
 		PayStatus:      1, // 未付款
 		OrderType:      orderType,
@@ -109,6 +167,9 @@ func (s *OrderService) CreateOrderFromCart(userID uint, deliveryType int, addres
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		var couponIDForUse uint = 0
+		if err := applyShareAttributionToOrder(tx, order, userID, storeID, sharerUID, shareStoreID); err != nil {
+			return err
+		}
 		// 校验门店（如传入）
 		if storeID != 0 {
 			var st model.Store
@@ -497,6 +558,63 @@ func generateOrderNo(prefix string) string {
 	return fmt.Sprintf("%s%s%s", prefix, ts, uid)
 }
 
+func decimalToCents(d decimal.Decimal) int64 {
+	return d.Mul(decimal.NewFromInt(100)).IntPart()
+}
+
+func maybeCreateStoreOrderCommissionsOnCompleted(tx *gorm.DB, order *model.Order) error {
+	if tx == nil {
+		return errors.New("tx is nil")
+	}
+	if order == nil {
+		return errors.New("order is nil")
+	}
+	// 仅门店订单结算（StoreID!=0），并且已完成+已支付
+	if order.StoreID == 0 {
+		return nil
+	}
+	if order.Status != 4 || order.PayStatus != 2 {
+		return nil
+	}
+	// 必须有冻结的分享归属，且 share_store_id 与 store_id 强一致
+	if order.ReferrerID == nil || *order.ReferrerID == 0 {
+		return nil
+	}
+	if order.ShareStoreID == 0 || order.ShareStoreID != order.StoreID {
+		return nil
+	}
+
+	// 幂等：同一订单只生成一次 direct 佣金记录
+	var cnt int64
+	if err := tx.Model(&model.Commission{}).
+		Where("order_id = ? AND commission_type = ?", order.ID, "direct").
+		Count(&cnt).Error; err != nil {
+		return err
+	}
+	if cnt > 0 {
+		return nil
+	}
+
+	// 计算并落库（最小实现：直推佣金，立即可用）
+	co := commission.Order{
+		ID:             int64(order.ID),
+		UserID:         int64(order.UserID),
+		TotalAmount:    decimalToCents(order.TotalAmount),
+		ShippingAmount: decimalToCents(order.DeliveryFee),
+		CouponAmount:   0,
+		DiscountAmount: decimalToCents(order.DiscountAmount),
+	}
+	records := commission.BuildCommissionRecords(co, int64(*order.ReferrerID), 0.30, 0, 0)
+	if err := commission.SaveCommissionRecordsTx(tx, records); err != nil {
+		return err
+	}
+	// holdPeriodDays=0 时可立即解冻
+	if _, err := commission.ReleaseFrozenCommissionsTx(tx, 10); err != nil {
+		return err
+	}
+	return nil
+}
+
 // MarkPaid 模拟支付成功：仅待付款可支付
 func (s *OrderService) MarkPaid(userID, orderID uint) error {
 	var order model.Order
@@ -539,21 +657,26 @@ func (s *OrderService) StartDelivery(userID, orderID uint) error {
 
 // Complete 完成订单：仅配送中可完成
 func (s *OrderService) Complete(userID, orderID uint) error {
-	var order model.Order
-	if err := s.db.First(&order, orderID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("订单不存在")
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var order model.Order
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&order, orderID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errors.New("订单不存在")
+			}
+			return err
 		}
-		return err
-	}
-	// 完成由具有相应权限的用户执行，不强制订单归属校验（权限由中间件控制）
-	if order.Status != 3 {
-		return errors.New("当前状态不可完成")
-	}
-	now := time.Now()
-	order.Status = 4
-	order.CompletedAt = &now
-	return s.db.Save(&order).Error
+		// 完成由具有相应权限的用户执行，不强制订单归属校验（权限由中间件控制）
+		if order.Status != 3 {
+			return errors.New("当前状态不可完成")
+		}
+		now := time.Now()
+		order.Status = 4
+		order.CompletedAt = &now
+		if err := tx.Save(&order).Error; err != nil {
+			return err
+		}
+		return maybeCreateStoreOrderCommissionsOnCompleted(tx, &order)
+	})
 }
 
 // Receive 用户确认收货/完成订单：
@@ -561,32 +684,37 @@ func (s *OrderService) Complete(userID, orderID uint) error {
 // - 自取(DeliveryType=1)：仅当状态为已付款(2)可确认
 // 仅允许订单所属用户操作
 func (s *OrderService) Receive(userID, orderID uint) error {
-	var order model.Order
-	if err := s.db.First(&order, orderID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("订单不存在")
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var order model.Order
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&order, orderID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errors.New("订单不存在")
+			}
+			return err
 		}
-		return err
-	}
-	if order.UserID != userID {
-		return errors.New("无权操作该订单")
-	}
-	switch order.DeliveryType {
-	case 2: // 配送
-		if order.Status != 3 {
-			return errors.New("当前状态不可确认收货")
+		if order.UserID != userID {
+			return errors.New("无权操作该订单")
 		}
-	case 1: // 自取
-		if order.Status != 2 {
-			return errors.New("当前状态不可确认收货")
+		switch order.DeliveryType {
+		case 2: // 配送
+			if order.Status != 3 {
+				return errors.New("当前状态不可确认收货")
+			}
+		case 1: // 自取
+			if order.Status != 2 {
+				return errors.New("当前状态不可确认收货")
+			}
+		default:
+			return errors.New("非法的配送类型")
 		}
-	default:
-		return errors.New("非法的配送类型")
-	}
-	now := time.Now()
-	order.Status = 4
-	order.CompletedAt = &now
-	return s.db.Save(&order).Error
+		now := time.Now()
+		order.Status = 4
+		order.CompletedAt = &now
+		if err := tx.Save(&order).Error; err != nil {
+			return err
+		}
+		return maybeCreateStoreOrderCommissionsOnCompleted(tx, &order)
+	})
 }
 
 // AdminRefundOrder 管理端手动退款（需权限）
@@ -769,41 +897,70 @@ type StatusCountItem struct {
 }
 
 // GetStoreOrderStats 获取指定门店的订单统计（成交额按已完成订单汇总）
+// 兼容旧逻辑：不传时间区间，统计全量。
 func (s *OrderService) GetStoreOrderStats(storeID uint) (*StoreOrderStats, error) {
+	return s.GetStoreOrderStatsWithRange(storeID, nil, nil)
+}
+
+// GetStoreOrderStatsWithRange 获取指定门店的订单统计（可选按创建时间过滤）
+func (s *OrderService) GetStoreOrderStatsWithRange(storeID uint, startTime, endTime *time.Time) (*StoreOrderStats, error) {
 	if storeID == 0 {
 		return nil, errors.New("store_id 不能为空")
 	}
+
+	baseQ := s.db.Model(&model.Order{}).Where("store_id = ?", storeID)
+	if startTime != nil {
+		baseQ = baseQ.Where("created_at >= ?", *startTime)
+	}
+	if endTime != nil {
+		baseQ = baseQ.Where("created_at <= ?", *endTime)
+	}
+
 	// 总订单数
 	var total int64
-	if err := s.db.Model(&model.Order{}).Where("store_id = ?", storeID).Count(&total).Error; err != nil {
+	if err := baseQ.Count(&total).Error; err != nil {
 		return nil, err
 	}
+
 	// 成交额（已完成）
 	var completedAmount decimal.Decimal
-	row := s.db.Model(&model.Order{}).
+	completedQ := s.db.Model(&model.Order{}).
 		Select("COALESCE(SUM(pay_amount), 0)").
-		Where("store_id = ? AND status = 4", storeID).
-		Row()
+		Where("store_id = ? AND status = 4", storeID)
+	if startTime != nil {
+		completedQ = completedQ.Where("created_at >= ?", *startTime)
+	}
+	if endTime != nil {
+		completedQ = completedQ.Where("created_at <= ?", *endTime)
+	}
+	row := completedQ.Row()
 	if err := row.Scan(&completedAmount); err != nil {
 		return nil, err
 	}
+
 	// 各状态计数
 	type sc struct {
 		Status int
 		Count  int64
 	}
 	var rows []sc
-	if err := s.db.Model(&model.Order{}).
+	statusQ := s.db.Model(&model.Order{}).
 		Select("status, COUNT(*) as count").
-		Where("store_id = ?", storeID).
-		Group("status").
-		Scan(&rows).Error; err != nil {
+		Where("store_id = ?", storeID)
+	if startTime != nil {
+		statusQ = statusQ.Where("created_at >= ?", *startTime)
+	}
+	if endTime != nil {
+		statusQ = statusQ.Where("created_at <= ?", *endTime)
+	}
+	if err := statusQ.Group("status").Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 	var statusItems []StatusCountItem
 	for _, r := range rows {
 		statusItems = append(statusItems, StatusCountItem{Status: r.Status, Count: r.Count})
 	}
+
 	return &StoreOrderStats{StoreID: storeID, TotalOrders: total, CompletedAmount: completedAmount, StatusCounts: statusItems}, nil
 }
 

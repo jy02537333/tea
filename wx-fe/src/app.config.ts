@@ -1,7 +1,9 @@
 export default {
+  entryPagePath: 'pages/index/index',
   pages: [
     'pages/login/index',
     'pages/index/index',
+     'pages/webview/index',
     'pages/activities/index',
     'pages/category/index',
     'pages/product-list/index',
@@ -26,6 +28,7 @@ export default {
     'pages/about/index',
     'pages/privacy/index',
     'pages/profile/index',
+    'pages/share/index',
     // add other pages here as needed
   ],
   window: {

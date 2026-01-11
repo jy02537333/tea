@@ -121,6 +121,122 @@ func (h *StoreHandler) DeleteAccount(c *gin.Context) {
 	response.Success(c, gin.H{"ok": true})
 }
 
+// ListTables 列出门店桌号
+// GET /api/v1/stores/:id/tables
+func (h *StoreHandler) ListTables(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil || id == 0 {
+		response.BadRequest(c, "非法ID")
+		return
+	}
+	// 确保表存在（若测试环境未迁移）
+	_ = h.svc.DB().AutoMigrate(&model.StoreTable{})
+	list, err := h.svc.ListStoreTables(uint(id))
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.Success(c, list)
+}
+
+// CreateTable 新增门店桌号
+// POST /api/v1/stores/:id/tables
+func (h *StoreHandler) CreateTable(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil || id == 0 {
+		response.BadRequest(c, "非法ID")
+		return
+	}
+	_ = h.svc.DB().AutoMigrate(&model.StoreTable{})
+	var req struct {
+		TableNo  string `json:"table_no"`
+		Capacity *int   `json:"capacity"`
+		Note     string `json:"note"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "参数错误")
+		return
+	}
+	capVal := 0
+	if req.Capacity != nil { capVal = *req.Capacity }
+	st, err := h.svc.CreateStoreTable(uint(id), req.TableNo, capVal, req.Note)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.Success(c, st)
+}
+
+// DeleteTable 删除门店桌号
+// DELETE /api/v1/stores/:id/tables/:tableId
+func (h *StoreHandler) DeleteTable(c *gin.Context) {
+	storeID64, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil || storeID64 == 0 {
+		response.BadRequest(c, "非法门店ID")
+		return
+	}
+	tableID64, err := strconv.ParseUint(c.Param("tableId"), 10, 32)
+	if err != nil || tableID64 == 0 {
+		response.BadRequest(c, "非法桌号ID")
+		return
+	}
+	_ = h.svc.DB().AutoMigrate(&model.StoreTable{})
+	if err := h.svc.DeleteStoreTable(uint(storeID64), uint(tableID64)); err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
+}
+// BindAdmin 绑定指定用户为门店管理员（如果缺少 store_admins 表会自动创建）
+// POST /api/v1/admin/stores/:id/bind-admin { user_id }
+func (h *StoreHandler) BindAdmin(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil || id == 0 {
+		response.BadRequest(c, "非法门店ID")
+		return
+	}
+
+	var req struct{
+		UserID uint `json:"user_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.UserID == 0 {
+		response.BadRequest(c, "缺少有效的 user_id")
+		return
+	}
+
+	db := h.svc.DB()
+	if db == nil {
+		response.Error(c, http.StatusInternalServerError, "数据库未初始化")
+		return
+	}
+
+	// 确保表存在（与测试环境一致的最小结构）
+	if err := db.Exec(`
+CREATE TABLE IF NOT EXISTS store_admins (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  store_id BIGINT NOT NULL,
+  created_at DATETIME NULL,
+  updated_at DATETIME NULL,
+  deleted_at DATETIME NULL
+)`).Error; err != nil {
+		response.Error(c, http.StatusInternalServerError, "创建表失败: "+err.Error())
+		return
+	}
+
+	// 先清理旧绑定，再写入新绑定
+	if err := db.Exec("DELETE FROM store_admins WHERE user_id = ?", req.UserID).Error; err != nil {
+		response.Error(c, http.StatusBadRequest, "清理旧绑定失败: "+err.Error())
+		return
+	}
+	if err := db.Exec("INSERT INTO store_admins (user_id, store_id, created_at, updated_at) VALUES (?,?, NOW(), NOW())", req.UserID, uint(id)).Error; err != nil {
+		response.Error(c, http.StatusBadRequest, "写入绑定失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, gin.H{"ok": true, "store_id": uint(id), "user_id": req.UserID})
+}
+
 func (h *StoreHandler) Create(c *gin.Context) {
 	var req struct {
 		Name          string  `json:"name" binding:"required"`
@@ -245,8 +361,23 @@ func (h *StoreHandler) OrderStats(c *gin.Context) {
 		response.BadRequest(c, "非法ID")
 		return
 	}
+
+	// 可选 days 参数：统计最近 N 天（按订单创建时间）
+	// e.g. GET /api/v1/stores/:id/orders/stats?days=7
+	daysStr := strings.TrimSpace(c.Query("days"))
+	var startTimePtr *time.Time
+	if daysStr != "" {
+		if days, errConv := strconv.Atoi(daysStr); errConv == nil && days > 0 {
+			t := time.Now().AddDate(0, 0, -days)
+			startTimePtr = &t
+		} else {
+			response.BadRequest(c, "days 必须为正整数")
+			return
+		}
+	}
+
 	ordSvc := service.NewOrderService()
-	stats, err := ordSvc.GetStoreOrderStats(uint(id))
+	stats, err := ordSvc.GetStoreOrderStatsWithRange(uint(id), startTimePtr, nil)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return

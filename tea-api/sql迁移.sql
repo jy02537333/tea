@@ -223,6 +223,8 @@ CREATE TABLE IF NOT EXISTS `orders` (
   `order_no` VARCHAR(32) NOT NULL,
   `user_id` BIGINT UNSIGNED NOT NULL,
   `store_id` BIGINT UNSIGNED DEFAULT 0,
+  `table_id` BIGINT UNSIGNED DEFAULT 0,
+  `table_no` VARCHAR(50) DEFAULT '',
   `total_amount` DECIMAL(10,2) NOT NULL,
   `pay_amount` DECIMAL(10,2) NOT NULL,
   `discount_amount` DECIMAL(10,2) DEFAULT 0,

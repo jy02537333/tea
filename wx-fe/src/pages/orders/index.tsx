@@ -69,7 +69,7 @@ export default function OrdersPage() {
   }
 
   return (
-    <View style={{ padding: 12 }}>
+    <View data-testid="page-orders" style={{ padding: 12 }}>
       {currentStore && (
         <View style={{
           marginBottom: 8,
@@ -95,7 +95,7 @@ export default function OrdersPage() {
         <Button size="mini" onClick={() => changeStatus(2)} style={{ marginLeft: 8 }}>
           已支付
         </Button>
-        <Button size="mini" onClick={() => changeStatus(3)} style={{ marginLeft: 8 }}>
+        <Button size="mini" onClick={() => changeStatus(4)} style={{ marginLeft: 8 }}>
           已完成
         </Button>
       </View>

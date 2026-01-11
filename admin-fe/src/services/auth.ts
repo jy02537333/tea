@@ -19,7 +19,7 @@ export interface CaptchaResponse {
 }
 
 export async function login(payload: PasswordLoginPayload) {
-  const res = await api.post('/api/v1/auth/login', payload);
+  const res = await api.post('/api/v1/user/login', payload);
   const data = unwrap<LoginResponse>(res);
   if (data.token) setToken(data.token);
   return data;

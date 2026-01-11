@@ -7,6 +7,7 @@ import { createUnifiedOrder, mockPayCallback } from '../../services/payments';
 import { CartItem, UserCoupon, Store } from '../../services/types';
 import { getStore } from '../../services/stores';
 import { formatAddress, loadDefaultAddress, saveDefaultAddress } from '../../utils/address';
+import { buildOrderShareAttributionParams } from '../../services/shareAttribution';
 
 export default function CheckoutPage() {
   const [items, setItems] = useState<CartItem[]>([]);
@@ -132,12 +133,22 @@ export default function CheckoutPage() {
     try {
       const storeIdRaw = Taro.getStorageSync('current_store_id');
       const maybeStoreId = storeIdRaw ? Number(storeIdRaw) : undefined;
+      const tableIdRaw = Taro.getStorageSync('current_table_id');
+      const maybeTableId = tableIdRaw ? Number(tableIdRaw) : undefined;
+      const tableNoRaw = Taro.getStorageSync('current_table_no');
+      const maybeTableNo = tableNoRaw ? String(tableNoRaw).trim() : undefined;
+      const hasTable = (!!maybeTableNo) || (!!maybeTableId && Number.isFinite(maybeTableId) && maybeTableId > 0);
+      const shareParams = buildOrderShareAttributionParams({ storeId: maybeStoreId, requireStoreId: true });
       const payload = {
-        delivery_type: 2, // 简化：2 = 配送
+        delivery_type: hasTable ? 1 : 2, // 简化：有桌号则按堂食/自取
         address_info: address || undefined,
         remark: remark || undefined,
         user_coupon_id: selectedUserCouponId,
         store_id: maybeStoreId && Number.isFinite(maybeStoreId) && maybeStoreId > 0 ? maybeStoreId : undefined,
+        order_type: hasTable ? 2 : undefined,
+        table_id: (maybeTableId && Number.isFinite(maybeTableId) && maybeTableId > 0) ? maybeTableId : undefined,
+        table_no: maybeTableNo || undefined,
+		...shareParams,
       };
       const order = await createOrderFromCart(payload as any);
       if (address.trim()) {

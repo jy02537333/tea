@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	envx "tea-test/pkg/env"
@@ -28,6 +29,38 @@ func GetWxaCode(c *gin.Context) {
     if err := c.ShouldBindJSON(&req); err != nil {
         c.JSON(http.StatusBadRequest, gin.H{"code": 4001, "message": "参数错误", "data": nil})
         return
+    }
+
+    // Local/dev convenience: allow bypassing real WeChat calls.
+    // Set WXACODE_MOCK=1 (or true/yes) to return a deterministic 1x1 PNG base64.
+    if v := strings.TrimSpace(envx.Get("WXACODE_MOCK", "")); v != "" {
+        lv := strings.ToLower(v)
+        if lv == "1" || lv == "true" || lv == "yes" {
+            // 1x1 transparent PNG
+            png := []byte{
+                0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+                0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+                0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+                0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+                0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+                0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+                0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+                0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+                0x42, 0x60, 0x82,
+            }
+            b64 := base64.StdEncoding.EncodeToString(png)
+            c.JSON(http.StatusOK, gin.H{
+                "code":    0,
+                "message": "ok",
+                "data": gin.H{
+                    "image_base64": "data:image/png;base64," + b64,
+                    "mock":        true,
+                    "scene":       req.Scene,
+                    "page":        req.Page,
+                },
+            })
+            return
+        }
     }
     appid := envx.Get("WECHAT_MINI_APPID", "")
     secret := envx.Get("WECHAT_MINI_SECRET", "")
