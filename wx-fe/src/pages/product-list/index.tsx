@@ -256,9 +256,9 @@ export default function ProductList() {
       </View>
 
       {!exclusiveMode && (
-      <View style={{ marginBottom: 16 }}>
-        <Text style={{ fontSize: 14, color: '#666' }}>筛选与排序</Text>
-        <View style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+      <View className="filters">
+        <Text className="label">筛选与排序</Text>
+        <View className="filters-body">
           {/* 产地（左右布局） */}
           <View className="filter-row">
             <Text className="row-label">产地</Text>
@@ -336,7 +336,7 @@ export default function ProductList() {
                 }}>
                   详情
                 </Button>
-                <Button className="btn-add" onClick={async () => {
+                <Button className="btn-add" style={{ marginLeft: 5 }} onClick={async () => {
                   try {
                     await addCartItem(p.id, null, 1);
                     Taro.showToast({ title: '已加入购物车', icon: 'success' });
