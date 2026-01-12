@@ -85,6 +85,33 @@ if (existingToken) {
   api.defaults.headers.common['Authorization'] = `Bearer ${existingToken}`;
 }
 
+// Allow injecting token via query parameter `tk` for local dev/testing.
+// Supports both `?tk=...` and hash-router style `#/path?tk=...`.
+try {
+  const loc: any = (globalThis as any)?.location;
+  const href: string = loc?.href || '';
+  if (href) {
+    let injected: string | null = null;
+    try {
+      const u = new URL(href);
+      injected = u.searchParams.get('tk');
+      if (!injected) {
+        const hash: string = u.hash || '';
+        const qIndex = hash.indexOf('?');
+        if (qIndex >= 0) {
+          const qs = new URLSearchParams(hash.slice(qIndex + 1));
+          injected = qs.get('tk');
+        }
+      }
+    } catch (_) {
+      // ignore URL parse errors
+    }
+    if (injected) setToken(injected);
+  }
+} catch (_) {
+  // ignore location errors
+}
+
 export default api;
 
 export function unwrapResponse<T>(res: any): T {

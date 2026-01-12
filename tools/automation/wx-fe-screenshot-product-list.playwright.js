@@ -19,11 +19,17 @@ function requirePlaywright() {
   const outPath = path.join(shotsDir, 'product-list-filters.png');
 
   const preview = process.env.PREVIEW_URL || 'http://127.0.0.1:9093';
-  const url = preview.replace(/#.*$/, '') + '/#/pages/product-list/index';
+  const tokenEnv = process.env.TOKEN || process.env.TK || '';
+  const base = preview.replace(/#.*$/, '') + '/#/pages/product-list/index';
+  const url = tokenEnv ? `${base}?tk=${encodeURIComponent(tokenEnv)}` : base;
 
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
   const context = await browser.newContext({ viewport: { width: 420, height: 880, deviceScaleFactor: 1 } });
   const page = await context.newPage();
+  if (tokenEnv) {
+    // inject token before any page scripts run
+    await page.addInitScript((t) => window.localStorage?.setItem('token', t), tokenEnv);
+  }
 
   // Basic console logging for diagnostics
   page.on('pageerror', (e) => console.error('[pageerror]', e?.message || String(e)));
