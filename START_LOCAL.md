@@ -190,6 +190,40 @@ docker run -d --name redis -p 6379:6379 redis:7.0
 
 ---
 
+## Linux/macOS 本地热部署（wx-fe H5）
+
+在类 Unix 环境下，建议使用本地热部署（HMR）进行快速前端调试：
+
+- 启动后端（统一 9292）
+
+```bash
+bash ./run-tea-api.sh
+curl -sS -i http://127.0.0.1:9292/api/v1/health
+```
+
+- 启动 wx-fe（H5 热部署，默认端口 10088）：
+
+```bash
+WX_API_BASE_URL="http://127.0.0.1:9292" pnpm -C wx-fe run dev:h5
+```
+
+- 访问入口（Hash 路由）
+  - 首页：`http://127.0.0.1:10088/`
+  - 商品列表：`http://127.0.0.1:10088/#/pages/product-list/index`
+  - 登录：`http://127.0.0.1:10088/#/pages/login/index`
+
+说明：`wx-fe/src/services/api.ts` 已对 `WX_API_BASE_URL` 做规范化与兜底（默认使用当前页面主机+9292）；设置以上环境变量可显式指向本机后端。若 10088 无法通过 `localhost` 访问，使用 CLI 输出的监听地址（例如 `http://<你的本机IP>:10088/`）。
+
+- 容器化静态预览（Nginx，端口 9093）：
+
+```bash
+bash doc/docker-file/run_wx_fe_docker.sh http://host.docker.internal:9292
+# Linux 下容器访问宿主需：--add-host=host.docker.internal:host-gateway（脚本已包含）
+# 访问：http://127.0.0.1:9093
+```
+
+---
+
 ## 8. 常见问题与排查
 
 - 后端启动失败：检查 `TEA_DSN` 是否正确，MySQL 是否可达，端口是否被占用。
