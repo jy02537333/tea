@@ -9,9 +9,29 @@
 .filters {
   margin-bottom: 16px;
   .label { font-size: 14px; color: #666; }
-  .sublabel { font-size: 12px; color: #888; }
-  .picker { margin-top: 8px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: #fff; }
-  .picker.sm { margin-top: 6px; padding: 10px; }
+
+  /* 左右布局样式，与商品列表页保持一致 */
+  .filter-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+  }
+
+  .row-label {
+    min-width: 64px;
+    font-size: 12px;
+    color: #888;
+  }
+
+  .row-control {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: #fff;
+  }
+
   .filters-body { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
   .price-range { display: flex; flex-direction: row; align-items: center; gap: 8px; }
 }

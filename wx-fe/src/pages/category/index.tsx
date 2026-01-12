@@ -274,33 +274,35 @@ export default function CategoryPage() {
       </View>
 
       <View className="filters">
-        <Text className="label">选择门店</Text>
-        <Picker mode="selector" range={storePickerRange} onChange={handleStoreChange} value={storePickerIndex}>
-          <View className="picker">
-            <Text>{storePickerRange[storePickerIndex] || '全部门店'}</Text>
-          </View>
-        </Picker>
+        <View className="filter-row">
+          <Text className="row-label">选择门店</Text>
+          <Picker mode="selector" range={storePickerRange} onChange={handleStoreChange} value={storePickerIndex}>
+            <View className="row-control">
+              <Text>{storePickerRange[storePickerIndex] || '全部门店'}</Text>
+            </View>
+          </Picker>
+        </View>
       </View>
 
-      {/* 筛选与排序区域 */}
+      {/* 筛选与排序区域（左右布局） */}
       <View className="filters">
         <Text className="label">筛选与排序</Text>
         <View className="filters-body">
-          {/* 产地 */}
-          <View>
-            <Text className="sublabel">产地</Text>
+          {/* 产地（左右布局） */}
+          <View className="filter-row">
+            <Text className="row-label">产地</Text>
             <Picker mode="selector" range={originRange} onChange={handleOriginChange} value={originPickerIndex}>
-              <View className="picker sm">
+              <View className="row-control">
                 <Text>{originRange[originPickerIndex] || '不限'}</Text>
               </View>
             </Picker>
           </View>
 
-          {/* 包装 */}
-          <View>
-            <Text className="sublabel">包装</Text>
+          {/* 包装（左右布局） */}
+          <View className="filter-row">
+            <Text className="row-label">包装</Text>
             <Picker mode="selector" range={packagingRange} onChange={handlePackagingChange} value={packagingPickerIndex}>
-              <View className="picker sm">
+              <View className="row-control">
                 <Text>{packagingRange[packagingPickerIndex] || '不限'}</Text>
               </View>
             </Picker>
@@ -319,11 +321,11 @@ export default function CategoryPage() {
             </View>
           </View>
 
-          {/* 排序 */}
-          <View>
-            <Text className="sublabel">排序</Text>
+          {/* 排序（左右布局） */}
+          <View className="filter-row">
+            <Text className="row-label">排序</Text>
             <Picker mode="selector" range={sortRange} onChange={handleSortChange} value={sortPickerIndex}>
-              <View className="picker sm">
+              <View className="row-control">
                 <Text>{sortRange[sortPickerIndex] || '默认'}</Text>
               </View>
             </Picker>
