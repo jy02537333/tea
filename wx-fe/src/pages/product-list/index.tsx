@@ -233,14 +233,16 @@ export default function ProductList() {
           )}
         </View>
       )}
-      {/* 门店选择 */}
+      {/* 门店选择（左右布局） */}
       <View className="filters">
-        <Text className="label">选择门店</Text>
-        <Picker mode="selector" range={storePickerRange} onChange={handleStoreChange} value={storePickerIndex}>
-          <View className="picker">
-            <Text>{storePickerRange[storePickerIndex] || '全部门店'}</Text>
-          </View>
-        </Picker>
+        <View className="filter-row">
+          <Text className="row-label">选择门店</Text>
+          <Picker mode="selector" range={storePickerRange} onChange={handleStoreChange} value={storePickerIndex}>
+            <View className="row-control">
+              <Text>{storePickerRange[storePickerIndex] || '全部门店'}</Text>
+            </View>
+          </Picker>
+        </View>
       </View>
       {/* 搜索与筛选条 */}
       <View style={{ marginBottom: 12 }}>
@@ -257,21 +259,21 @@ export default function ProductList() {
       <View style={{ marginBottom: 16 }}>
         <Text style={{ fontSize: 14, color: '#666' }}>筛选与排序</Text>
         <View style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-          {/* 产地 */}
-          <View>
-            <Text style={{ fontSize: 12, color: '#888' }}>产地</Text>
+          {/* 产地（左右布局） */}
+          <View className="filter-row">
+            <Text className="row-label">产地</Text>
             <Picker mode="selector" range={originRange} onChange={handleOriginChange} value={originPickerIndex}>
-              <View style={{ marginTop: 6, padding: 10, borderWidth: 1, borderStyle: 'solid', borderColor: '#ddd', borderRadius: 6 }}>
+              <View className="row-control">
                 <Text>{originRange[originPickerIndex] || '不限'}</Text>
               </View>
             </Picker>
           </View>
 
-          {/* 包装 */}
-          <View>
-            <Text style={{ fontSize: 12, color: '#888' }}>包装</Text>
+          {/* 包装（左右布局） */}
+          <View className="filter-row">
+            <Text className="row-label">包装</Text>
             <Picker mode="selector" range={packagingRange} onChange={handlePackagingChange} value={packagingPickerIndex}>
-              <View style={{ marginTop: 6, padding: 10, borderWidth: 1, borderStyle: 'solid', borderColor: '#ddd', borderRadius: 6 }}>
+              <View className="row-control">
                 <Text>{packagingRange[packagingPickerIndex] || '不限'}</Text>
               </View>
             </Picker>
@@ -290,11 +292,11 @@ export default function ProductList() {
             </View>
           </View>
 
-          {/* 排序 */}
-          <View>
-            <Text style={{ fontSize: 12, color: '#888' }}>排序</Text>
+          {/* 排序（左右布局） */}
+          <View className="filter-row">
+            <Text className="row-label">排序</Text>
             <Picker mode="selector" range={sortRange} onChange={handleSortChange} value={sortPickerIndex}>
-              <View style={{ marginTop: 6, padding: 10, borderWidth: 1, borderStyle: 'solid', borderColor: '#ddd', borderRadius: 6 }}>
+              <View className="row-control">
                 <Text>{sortRange[sortPickerIndex] || '默认'}</Text>
               </View>
             </Picker>
