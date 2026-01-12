@@ -1,5 +1,7 @@
 .page-product-list {
   padding: 12px;
+  /* 为底部固定购物车操作栏预留空间，避免内容紧贴 */
+  padding-bottom: 72px;
 }
 
 .filters {
