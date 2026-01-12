@@ -51,9 +51,10 @@
   padding: 12px;
   .name { font-size: 15px; font-weight: 600; color: #333; }
   .price { color: #ff6a00; font-weight: 700; margin-top: 6px; }
-  .actions { margin-top: 10px; display: flex; justify-content: flex-end; }
+  .actions { margin-top: 10px; display: flex; justify-content: flex-end; align-items: center; }
   .actions { gap: 8px; }
-  .btn-view { padding: 6px 10px; border-radius: 8px; background: #f0f0f0; }
+  .btn-view { padding: 6px 10px; border-radius: 8px; background: #f0f0f0; display: inline-flex; align-items: center; }
+  .btn-add { padding: 6px 10px; border-radius: 8px; background: #17a05a; color: #fff; display: inline-flex; align-items: center; }
 }
 
 .load-more { margin-top: 16px; text-align: center; }
