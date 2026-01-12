@@ -486,7 +486,7 @@ export default function IndexPage() {
   }
 
   return (
-    <View data-testid="page-index" style={{ padding: 12, backgroundColor: '#f5f6f8', minHeight: '100vh' }}>
+    <View data-testid="page-index" style={{ padding: 12, paddingBottom: 72, backgroundColor: '#f5f6f8', minHeight: '100vh' }}>
       {/* 顶部状态条：用于可视化加载与排障 */}
       <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 8, marginBottom: 12 }}>
         <Text style={{ color: '#333' }}>{loading ? '首页加载中…' : '首页就绪'}</Text>
