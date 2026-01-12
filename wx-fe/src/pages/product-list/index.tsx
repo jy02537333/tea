@@ -279,16 +279,29 @@ export default function ProductList() {
             </Picker>
           </View>
 
-          {/* 价格区间 */}
-          <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 12, color: '#888' }}>最低价</Text>
-              <Input type="number" value={priceMin} placeholder="例如 10" onConfirm={handlePriceMinConfirm} onInput={(e) => setPriceMin(String((e.detail as any).value))} />
-            </View>
-            <Text style={{ marginTop: 18 }}>-</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 12, color: '#888' }}>最高价</Text>
-              <Input type="number" value={priceMax} placeholder="例如 100" onConfirm={handlePriceMaxConfirm} onInput={(e) => setPriceMax(String((e.detail as any).value))} />
+          {/* 价格区间（左右布局） */}
+          <View className="filter-row">
+            <Text className="row-label">价格</Text>
+            <View className="row-control" style={{ padding: 8 }}>
+              <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Input
+                  type="number"
+                  value={priceMin}
+                  placeholder="例如 10"
+                  onConfirm={handlePriceMinConfirm}
+                  onInput={(e) => setPriceMin(String((e.detail as any).value))}
+                  style={{ flex: 1, backgroundColor: '#f7f7f7', borderRadius: 6, padding: 8 }}
+                />
+                <Text>-</Text>
+                <Input
+                  type="number"
+                  value={priceMax}
+                  placeholder="例如 100"
+                  onConfirm={handlePriceMaxConfirm}
+                  onInput={(e) => setPriceMax(String((e.detail as any).value))}
+                  style={{ flex: 1, backgroundColor: '#f7f7f7', borderRadius: 6, padding: 8 }}
+                />
+              </View>
             </View>
           </View>
 
