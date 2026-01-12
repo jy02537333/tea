@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Button } from '@tarojs/components';
-import Taro from '@tarojs/taro';
+import Taro, { useDidShow } from '@tarojs/taro';
 import { listCart, updateCartItem, removeCartItem } from '../../services/cart';
 import { CartItem, Product, Store } from '../../services/types';
 import { getProducts } from '../../services/products';
@@ -19,6 +19,11 @@ export default function CartPage() {
     void fetchCart();
     void loadCurrentStore();
   }, []);
+
+  // 页面再次显示时，自动刷新购物车
+  useDidShow(() => {
+    void fetchCart();
+  });
 
   async function loadCurrentStore() {
     try {

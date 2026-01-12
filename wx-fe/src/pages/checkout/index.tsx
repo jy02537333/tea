@@ -20,6 +20,7 @@ export default function CheckoutPage() {
   const [availableCoupons, setAvailableCoupons] = useState<UserCoupon[]>([]);
   const [showCouponList, setShowCouponList] = useState(false);
   const [currentStore, setCurrentStore] = useState<Store | null>(null);
+  const isStoreOrder = !!currentStore;
 
   useEffect(() => {
     void fetchCart();
@@ -141,7 +142,8 @@ export default function CheckoutPage() {
       const shareParams = buildOrderShareAttributionParams({ storeId: maybeStoreId, requireStoreId: true });
       const payload = {
         delivery_type: hasTable ? 1 : 2, // 简化：有桌号则按堂食/自取
-        address_info: address || undefined,
+        // 门店堂食/自取无需收货地址
+        address_info: isStoreOrder ? undefined : (address || undefined),
         remark: remark || undefined,
         user_coupon_id: selectedUserCouponId,
         store_id: maybeStoreId && Number.isFinite(maybeStoreId) && maybeStoreId > 0 ? maybeStoreId : undefined,
@@ -271,16 +273,23 @@ export default function CheckoutPage() {
         )}
       </View>
 
-      <View style={{ marginTop: 12 }}>
-        <Text>收货地址</Text>
-        <Input
-          type="text"
-          placeholder="请输入收货地址"
-          value={address}
-          onInput={(e) => setAddress((e.detail as any).value)}
-        />
-        <Text style={{ fontSize: 12, color: '#999' }}>可在“我的-收货地址”设置默认地址</Text>
-      </View>
+      {!isStoreOrder && (
+        <View style={{ marginTop: 12 }}>
+          <Text>收货地址</Text>
+          <Input
+            type="text"
+            placeholder="请输入收货地址"
+            value={address}
+            onInput={(e) => setAddress((e.detail as any).value)}
+          />
+          <Text style={{ fontSize: 12, color: '#999' }}>可在“我的-收货地址”设置默认地址</Text>
+        </View>
+      )}
+      {isStoreOrder && (
+        <View style={{ marginTop: 12 }}>
+          <Text style={{ fontSize: 12, color: '#389e0d' }}>门店堂食/自取，无需填写收货地址</Text>
+        </View>
+      )}
 
       <View style={{ marginTop: 12 }}>
         <Text>备注</Text>
