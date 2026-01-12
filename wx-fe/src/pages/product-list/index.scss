@@ -80,6 +80,14 @@
   }
 }
 
+/* 精准控制堂食页按钮间距为 5px（覆盖组件默认 gap） */
+.page-product-list .card-product .actions {
+  gap: 0;
+}
+.page-product-list .card-product .actions .btn-add {
+  margin-left: 5px;
+}
+
 .sticky-cart-bar {
   position: fixed;
   left: 0;
