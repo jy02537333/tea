@@ -57,3 +57,8 @@
 }
 
 .load-more { margin-top: 16px; text-align: center; }
+
+
+/* 分类页按钮间隔固定为 5px（页面级覆盖，确保跨环境一致） */
+.page-category .card-product .actions { gap: 0; }
+.page-category .card-product .actions .btn-add { margin-left: 5px; }
