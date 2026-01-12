@@ -52,6 +52,7 @@
   .name { font-size: 15px; font-weight: 600; color: #333; }
   .price { color: #ff6a00; font-weight: 700; margin-top: 6px; }
   .actions { margin-top: 10px; display: flex; justify-content: flex-end; }
+  .actions { gap: 8px; }
   .btn-view { padding: 6px 10px; border-radius: 8px; background: #f0f0f0; }
 }
 
