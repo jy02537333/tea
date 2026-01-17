@@ -50,5 +50,11 @@ admin-fe/playwright-report/
 admin-fe/test-results/
 wx-fe/dist-fixed/
 
+# Local runtime artifacts
+*.pid
+
+# Local docs/demo assets (do not commit)
+doc/demo/
+
 # Ignore local GitHub token (do not commit)
 .github_token

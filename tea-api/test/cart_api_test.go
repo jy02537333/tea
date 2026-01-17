@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"tea-api/internal/config"
@@ -182,4 +183,175 @@ func Test_Cart_Add_List_Update_Remove(t *testing.T) {
 		t.Fatalf("remove cart status: %d", resp7.StatusCode)
 	}
 	resp7.Body.Close()
+}
+
+func Test_Cart_CheckStock_OnAddAndUpdate(t *testing.T) {
+	if err := config.LoadConfig("../configs/config.yaml"); err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	database.InitDatabase()
+
+	r := router.SetupRouter()
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	// dev-login 普通用户
+	loginReq := map[string]string{"openid": "user_openid_cart_stock"}
+	b, _ := json.Marshal(loginReq)
+	resp, err := http.Post(ts.URL+"/api/v1/user/dev-login", "application/json", bytes.NewReader(b))
+	if err != nil {
+		t.Fatalf("dev-login request err: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("dev-login status: %d", resp.StatusCode)
+	}
+	var login struct {
+		Code int `json:"code"`
+		Data struct {
+			Token string `json:"token"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&login); err != nil {
+		t.Fatalf("decode login: %v", err)
+	}
+	if login.Code != 0 || login.Data.Token == "" {
+		t.Fatalf("dev-login failed: %+v", login)
+	}
+	authHeader := "Bearer " + login.Data.Token
+
+	// 创建分类
+	catReq := map[string]any{"name": "库存测试分类"}
+	cb, _ := json.Marshal(catReq)
+	req, _ := http.NewRequest("POST", ts.URL+"/api/v1/categories", bytes.NewReader(cb))
+	req.Header.Set("Authorization", authHeader)
+	req.Header.Set("Content-Type", "application/json")
+	resp2, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("create category err: %v", err)
+	}
+	if resp2.StatusCode != 200 {
+		t.Fatalf("create category status: %d", resp2.StatusCode)
+	}
+	var catResp struct {
+		Code int
+		Data struct {
+			ID uint `json:"id"`
+		}
+	}
+	if err := json.NewDecoder(resp2.Body).Decode(&catResp); err != nil {
+		t.Fatalf("decode category: %v", err)
+	}
+	resp2.Body.Close()
+	if catResp.Code != 0 || catResp.Data.ID == 0 {
+		t.Fatalf("invalid category resp: %+v", catResp)
+	}
+
+	// 创建商品：库存=1
+	prodReq := map[string]any{
+		"category_id": catResp.Data.ID,
+		"name":        "库存测试商品",
+		"description": "desc",
+		"images":      "[]",
+		"price":       "9.90",
+		"stock":       1,
+		"status":      1,
+	}
+	pb, _ := json.Marshal(prodReq)
+	req, _ = http.NewRequest("POST", ts.URL+"/api/v1/products", bytes.NewReader(pb))
+	req.Header.Set("Authorization", authHeader)
+	req.Header.Set("Content-Type", "application/json")
+	resp3, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("create product err: %v", err)
+	}
+	if resp3.StatusCode != 200 {
+		t.Fatalf("create product status: %d", resp3.StatusCode)
+	}
+	var prodResp struct {
+		Code int
+		Data struct {
+			ID uint `json:"id"`
+		}
+	}
+	if err := json.NewDecoder(resp3.Body).Decode(&prodResp); err != nil {
+		t.Fatalf("decode product: %v", err)
+	}
+	resp3.Body.Close()
+	if prodResp.Code != 0 || prodResp.Data.ID == 0 {
+		t.Fatalf("invalid product resp: %+v", prodResp)
+	}
+
+	// 超库存加购：quantity=2，预期 400
+	addReq := map[string]any{"product_id": prodResp.Data.ID, "quantity": 2}
+	ab, _ := json.Marshal(addReq)
+	req, _ = http.NewRequest("POST", ts.URL+"/api/v1/cart/items", bytes.NewReader(ab))
+	req.Header.Set("Authorization", authHeader)
+	req.Header.Set("Content-Type", "application/json")
+	resp4, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("add cart err: %v", err)
+	}
+	if resp4.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 on stock check, got %d", resp4.StatusCode)
+	}
+	var errResp struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}
+	_ = json.NewDecoder(resp4.Body).Decode(&errResp)
+	resp4.Body.Close()
+	if errResp.Code != http.StatusBadRequest || !strings.Contains(errResp.Message, "库存不足") {
+		t.Fatalf("unexpected error resp: %+v", errResp)
+	}
+
+	// 先正常加购 quantity=1
+	addReq2 := map[string]any{"product_id": prodResp.Data.ID, "quantity": 1}
+	ab2, _ := json.Marshal(addReq2)
+	req, _ = http.NewRequest("POST", ts.URL+"/api/v1/cart/items", bytes.NewReader(ab2))
+	req.Header.Set("Authorization", authHeader)
+	req.Header.Set("Content-Type", "application/json")
+	resp5, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("add cart 2 err: %v", err)
+	}
+	if resp5.StatusCode != 200 {
+		t.Fatalf("add cart 2 status: %d", resp5.StatusCode)
+	}
+	var addOK struct {
+		Code int
+		Data struct {
+			ID uint `json:"id"`
+		}
+	}
+	if err := json.NewDecoder(resp5.Body).Decode(&addOK); err != nil {
+		t.Fatalf("decode add cart 2: %v", err)
+	}
+	resp5.Body.Close()
+	if addOK.Code != 0 || addOK.Data.ID == 0 {
+		t.Fatalf("invalid add cart 2 resp: %+v", addOK)
+	}
+
+	// 更新数量到 2（增加且超库存），预期 400
+	upReq := map[string]any{"quantity": 2}
+	ub, _ := json.Marshal(upReq)
+	req, _ = http.NewRequest("PUT", ts.URL+"/api/v1/cart/items/"+fmt.Sprintf("%d", addOK.Data.ID), bytes.NewReader(ub))
+	req.Header.Set("Authorization", authHeader)
+	req.Header.Set("Content-Type", "application/json")
+	resp6, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("update cart err: %v", err)
+	}
+	if resp6.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 on stock check update, got %d", resp6.StatusCode)
+	}
+	var errResp2 struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}
+	_ = json.NewDecoder(resp6.Body).Decode(&errResp2)
+	resp6.Body.Close()
+	if errResp2.Code != http.StatusBadRequest || !strings.Contains(errResp2.Message, "库存不足") {
+		t.Fatalf("unexpected update error resp: %+v", errResp2)
+	}
 }

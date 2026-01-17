@@ -221,14 +221,10 @@ func (s *ProductService) GetProductsForStore(page, limit int, categoryID *uint, 
 		return nil, 0, errors.New("storeID 必须大于0")
 	}
 
-	// 基础查询（计算总数）
+	// 严格门店过滤：仅返回与该门店存在绑定关系的商品（包含普通绑定与特供），排除未绑定门店的“平台商品”。
+	// 说明：如仍需“平台商品 + 指定门店可见的特供商品”的宽松模式，请使用不带 store_id 的列表或专门的门店特供接口。
 	base := s.db.Table("products p").
-		Where(
-			"(NOT EXISTS (SELECT 1 FROM store_products spx WHERE spx.product_id = p.id AND spx.biz_type = ?) OR EXISTS (SELECT 1 FROM store_products spx WHERE spx.product_id = p.id AND spx.biz_type = ? AND spx.store_id = ?))",
-			storeProductBizTypeExclusive,
-			storeProductBizTypeExclusive,
-			storeID,
-		)
+		Joins("JOIN store_products sp ON sp.product_id = p.id AND sp.store_id = ?", storeID)
 	if categoryID != nil {
 		base = base.Where("p.category_id = ?", *categoryID)
 	}
@@ -238,22 +234,15 @@ func (s *ProductService) GetProductsForStore(page, limit int, categoryID *uint, 
 	if keyword != "" {
 		base = base.Where("p.name LIKE ? OR p.description LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
 	}
-	if err := base.Count(&total).Error; err != nil {
+	// 连接导致重复行，按 DISTINCT 统计商品数
+	if err := base.Distinct("p.id").Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("获取商品总数失败: %w", err)
 	}
 
-	// 具体查询（左连接门店商品）
+	// 具体查询：与该门店的绑定记录联结，携带库存与覆盖价
 	query := s.db.Table("products p").
 		Select("p.*, sp.stock AS store_stock, sp.price_override AS store_price_override").
-		Joins("LEFT JOIN store_products sp ON sp.product_id = p.id AND sp.store_id = ?", storeID)
-
-	// 门店特供商品仅在绑定门店可见
-	query = query.Where(
-		"(NOT EXISTS (SELECT 1 FROM store_products spx WHERE spx.product_id = p.id AND spx.biz_type = ?) OR EXISTS (SELECT 1 FROM store_products spx WHERE spx.product_id = p.id AND spx.biz_type = ? AND spx.store_id = ?))",
-		storeProductBizTypeExclusive,
-		storeProductBizTypeExclusive,
-		storeID,
-	)
+		Joins("JOIN store_products sp ON sp.product_id = p.id AND sp.store_id = ?", storeID)
 
 	if categoryID != nil {
 		query = query.Where("p.category_id = ?", *categoryID)
@@ -308,11 +297,27 @@ func (s *ProductService) GetProductForStore(id, storeID uint) (*ProductWithStore
 		return nil, ErrProductNotFound
 	}
 
-	p, err := s.GetProduct(id)
-	if err != nil {
-		return nil, err
+	// 严格门店过滤：详情也必须存在 store_products 绑定关系
+	var cnt int64
+	if err := s.db.Model(&model.StoreProduct{}).
+		Where("store_id = ? AND product_id = ?", storeID, id).
+		Count(&cnt).Error; err != nil {
+		return nil, fmt.Errorf("校验门店商品绑定失败: %w", err)
 	}
-	detail := &ProductWithStoreDetail{Product: *p}
+	if cnt == 0 {
+		return nil, ErrProductNotFound
+	}
+
+	// 直接查询商品本体（不走 GetProduct，以避免门店特供被默认隐藏）
+	var product model.Product
+	if err := s.db.Preload("Category").Preload("Skus").First(&product, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProductNotFound
+		}
+		return nil, fmt.Errorf("获取商品详情失败: %w", err)
+	}
+
+	detail := &ProductWithStoreDetail{Product: product}
 	// 查询门店商品绑定
 	var sp model.StoreProduct
 	if err := s.db.Where("store_id = ? AND product_id = ?", storeID, id).First(&sp).Error; err == nil {

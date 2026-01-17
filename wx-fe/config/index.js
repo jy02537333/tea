@@ -46,7 +46,7 @@ const config = {
     },
     devServer: {
       host: '0.0.0.0',
-      port: 10088,
+      port: Number(process.env.WX_FE_PORT || 9093),
       open: false,
     },
     webpackChain(chain) {

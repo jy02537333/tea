@@ -61,13 +61,13 @@ func TestProductExclusiveVisibility(t *testing.T) {
 		t.Fatalf("expected only p1 in global list, got=%v", ids(got))
 	}
 
-	// store 1 list: p1 + p2
+	// store 1 list: 仅返回与门店绑定的商品（不再包含未绑定的“平台商品”）
 	got1, _, err := svc.GetProductsForStore(1, 50, nil, "", "", 1)
 	if err != nil {
 		t.Fatalf("GetProductsForStore(1): %v", err)
 	}
-	want1 := map[uint]bool{p1.ID: true, p2.ID: true}
-	if len(got1) != 2 {
+	want1 := map[uint]bool{p2.ID: true}
+	if len(got1) != 1 {
 		t.Fatalf("expected 2 products for store1, got=%v", idsWithStore(got1))
 	}
 	for _, it := range got1 {
@@ -76,13 +76,13 @@ func TestProductExclusiveVisibility(t *testing.T) {
 		}
 	}
 
-	// store 2 list: p1 + p3
+	// store 2 list: 仅返回与门店绑定的商品
 	got2, _, err := svc.GetProductsForStore(1, 50, nil, "", "", 2)
 	if err != nil {
 		t.Fatalf("GetProductsForStore(2): %v", err)
 	}
-	want2 := map[uint]bool{p1.ID: true, p3.ID: true}
-	if len(got2) != 2 {
+	want2 := map[uint]bool{p3.ID: true}
+	if len(got2) != 1 {
 		t.Fatalf("expected 2 products for store2, got=%v", idsWithStore(got2))
 	}
 	for _, it := range got2 {

@@ -27,6 +27,9 @@ func SeedRBAC(db *gorm.DB, opts SeedOptions) error {
 		{BaseModel: model.BaseModel{UID: "perm-rbac-view"}, Name: "rbac:view", Module: "rbac", Action: "view", Resource: "*"},
 		{BaseModel: model.BaseModel{UID: "perm-rbac-manage"}, Name: "rbac:manage", Module: "rbac", Action: "manage", Resource: "*"},
 		{BaseModel: model.BaseModel{UID: "perm-order-adjust"}, Name: "order:adjust", Module: "order", Action: "adjust", Resource: "order"},
+		{BaseModel: model.BaseModel{UID: "perm-order-deliver"}, Name: "order:deliver", Module: "order", Action: "deliver", Resource: "order"},
+		{BaseModel: model.BaseModel{UID: "perm-order-complete"}, Name: "order:complete", Module: "order", Action: "complete", Resource: "order"},
+		{BaseModel: model.BaseModel{UID: "perm-order-refund"}, Name: "order:refund", Module: "order", Action: "refund", Resource: "order"},
 		{BaseModel: model.BaseModel{UID: "perm-store-excl-view"}, Name: "store:exclusive_products:view", Module: "store", Action: "view", Resource: "exclusive_products"},
 		{BaseModel: model.BaseModel{UID: "perm-store-excl-manage"}, Name: "store:exclusive_products:manage", Module: "store", Action: "manage", Resource: "exclusive_products"},
 		{BaseModel: model.BaseModel{UID: "perm-system-config-view"}, Name: "system:config:view", Module: "system", Action: "view", Resource: "config"},
@@ -67,6 +70,37 @@ func SeedRBAC(db *gorm.DB, opts SeedOptions) error {
 		var rpAdminAdjust model.RolePermission
 		_ = db.Where("role_id = ? AND permission_id = ?", adminRole.ID, pAdjust.ID).
 			FirstOrCreate(&rpAdminAdjust, &model.RolePermission{BaseModel: model.BaseModel{UID: "rp-admin-order-adjust"}, RoleID: adminRole.ID, PermissionID: pAdjust.ID}).Error
+	}
+	var pDeliver model.Permission
+	_ = db.Where("name = ?", "order:deliver").First(&pDeliver).Error
+	if adminRole.ID > 0 && pDeliver.ID > 0 {
+		var rpAdminDeliver model.RolePermission
+		_ = db.Where("role_id = ? AND permission_id = ?", adminRole.ID, pDeliver.ID).
+			FirstOrCreate(&rpAdminDeliver, &model.RolePermission{BaseModel: model.BaseModel{UID: "rp-admin-order-deliver"}, RoleID: adminRole.ID, PermissionID: pDeliver.ID}).Error
+	}
+	if storeRole.ID > 0 && pDeliver.ID > 0 {
+		var rpStoreDeliver model.RolePermission
+		_ = db.Where("role_id = ? AND permission_id = ?", storeRole.ID, pDeliver.ID).
+			FirstOrCreate(&rpStoreDeliver, &model.RolePermission{BaseModel: model.BaseModel{UID: "rp-store-order-deliver"}, RoleID: storeRole.ID, PermissionID: pDeliver.ID}).Error
+	}
+	var pComplete model.Permission
+	_ = db.Where("name = ?", "order:complete").First(&pComplete).Error
+	if adminRole.ID > 0 && pComplete.ID > 0 {
+		var rpAdminComplete model.RolePermission
+		_ = db.Where("role_id = ? AND permission_id = ?", adminRole.ID, pComplete.ID).
+			FirstOrCreate(&rpAdminComplete, &model.RolePermission{BaseModel: model.BaseModel{UID: "rp-admin-order-complete"}, RoleID: adminRole.ID, PermissionID: pComplete.ID}).Error
+	}
+	if storeRole.ID > 0 && pComplete.ID > 0 {
+		var rpStoreComplete model.RolePermission
+		_ = db.Where("role_id = ? AND permission_id = ?", storeRole.ID, pComplete.ID).
+			FirstOrCreate(&rpStoreComplete, &model.RolePermission{BaseModel: model.BaseModel{UID: "rp-store-order-complete"}, RoleID: storeRole.ID, PermissionID: pComplete.ID}).Error
+	}
+	var pRefund model.Permission
+	_ = db.Where("name = ?", "order:refund").First(&pRefund).Error
+	if adminRole.ID > 0 && pRefund.ID > 0 {
+		var rpAdminRefund model.RolePermission
+		_ = db.Where("role_id = ? AND permission_id = ?", adminRole.ID, pRefund.ID).
+			FirstOrCreate(&rpAdminRefund, &model.RolePermission{BaseModel: model.BaseModel{UID: "rp-admin-order-refund"}, RoleID: adminRole.ID, PermissionID: pRefund.ID}).Error
 	}
 	var pStoreExclusiveView model.Permission
 	_ = db.Where("name = ?", "store:exclusive_products:view").First(&pStoreExclusiveView).Error
@@ -149,7 +183,7 @@ func SeedRBAC(db *gorm.DB, opts SeedOptions) error {
 	if adminRole.ID > 0 && pRechargeManage.ID > 0 {
 		var rpAdminRechargeManage model.RolePermission
 		_ = db.Where("role_id = ? AND permission_id = ?", adminRole.ID, pRechargeManage.ID).
-			FirstOrCreate(&rpAdminRechargeManage, &model.RolePermission{BaseModel: model.BaseModel{UID: "rp-admin-marketing-recharge-manage"}, RoleID: adminRole.ID, PermissionID: pRechargeManage.ID}).Error
+			FirstOrCreate(&rpAdminRechargeManage, &model.RolePermission{BaseModel: model.BaseModel{UID: "rp-admin-mkt-recharge-manage"}, RoleID: adminRole.ID, PermissionID: pRechargeManage.ID}).Error
 	}
 
 	var pPartnerView model.Permission

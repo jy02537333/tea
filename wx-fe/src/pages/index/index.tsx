@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, Button, Swiper, SwiperItem, Image, Picker } from '@tarojs/components';
 import Taro, { useRouter } from '@tarojs/taro';
 import { getProducts } from '../../services/products';
-import { listStores } from '../../services/stores';
+import { listStores, listStoreProductsSmart } from '../../services/stores';
 import { listCategories } from '../../services/categories';
 import { Product, Store, Category } from '../../services/types';
 import { listBanners, Banner } from '../../services/banners';
@@ -51,11 +51,11 @@ export default function IndexPage() {
   }, []);
 
   useEffect(() => {
-    // 当前门店变化时，刷新本地商品
-    if (currentStoreId) {
+    // 当前门店变化时，刷新本地商品（仅在有效门店存在于列表时）
+    if (currentStoreId && stores.some((s) => s.id === currentStoreId)) {
       void fetchLocalProducts(currentStoreId);
     }
-  }, [currentStoreId]);
+  }, [currentStoreId, stores]);
 
   async function initFromParamsAndLoad() {
     const paramSidRaw = router?.params?.store_id;
@@ -194,7 +194,7 @@ export default function IndexPage() {
 
   async function fetchLocalProducts(storeId: number) {
     try {
-      const res = await getProducts({ page: 1, limit: 6, store_id: storeId });
+      const res = await listStoreProductsSmart(storeId, { page: 1, limit: 6 });
       const maybe: any = res;
       let items: Product[] = [];
       if (Array.isArray(maybe?.data)) items = maybe.data;
@@ -241,6 +241,11 @@ export default function IndexPage() {
       else if (Array.isArray(maybe?.items)) items = maybe.items;
       else if (Array.isArray(maybe)) items = maybe;
       setStores(items);
+      // 若当前选择的门店不在列表（可能已禁用），清理选择
+      if (currentStoreId && !items.some((s) => s.id === currentStoreId)) {
+        setCurrentStoreId(undefined);
+        try { Taro.removeStorageSync('current_store_id'); } catch (_) {}
+      }
       if (!currentStoreId && items.length > 0) setCurrentStoreId(items[0].id);
     } catch (e) {
       console.error('load stores failed', e);
@@ -317,7 +322,8 @@ export default function IndexPage() {
 
   function goDineIn() {
     const sid = currentStoreId;
-    if (!sid) {
+    // 必须是有效门店（在列表中存在）
+    if (!sid || !stores.some((s) => s.id === sid)) {
       Taro.showToast({ title: '请先选择门店', icon: 'none' });
       return;
     }
@@ -326,7 +332,7 @@ export default function IndexPage() {
 
   function goDelivery() {
     const sid = currentStoreId;
-    if (!sid) {
+    if (!sid || !stores.some((s) => s.id === sid)) {
       Taro.showToast({ title: '请先选择门店', icon: 'none' });
       return;
     }

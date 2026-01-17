@@ -1,4 +1,5 @@
 import api, { unwrapResponse } from './api';
+import { getProducts } from './products';
 import { Store, PaginationResponse, Product } from './types';
 
 export interface StoreFinanceQuery {
@@ -33,8 +34,18 @@ export interface StoreBankAccount {
 }
 
 export async function listStores(params: any = {}): Promise<PaginationResponse<Store>> {
-  const res = await api.get('/api/v1/stores', { params });
-  return unwrapResponse<PaginationResponse<Store>>(res);
+  // 默认仅拉取可用门店（status=1）；允许调用方显式覆盖
+  const finalParams = { status: 1, ...params };
+  const res = await api.get('/api/v1/stores', { params: finalParams });
+  const data = unwrapResponse<PaginationResponse<Store>>(res);
+  // 过滤禁用门店（status=0 不展示）
+  if (data && Array.isArray(data.data)) {
+    data.data = data.data.filter((s: any) => {
+      const st = typeof s?.status === 'number' ? s.status : undefined;
+      return st === undefined || st !== 0;
+    });
+  }
+  return data;
 }
 
 export async function getStore(id: number): Promise<Store> {
@@ -49,6 +60,24 @@ export async function listStoreExclusiveProducts(
 ): Promise<PaginationResponse<Product>> {
   const res = await api.get(`/api/v1/stores/${storeId}/exclusive-products`, { params });
   return unwrapResponse<PaginationResponse<Product>>(res);
+}
+
+// 智能拉取门店商品：优先尝试 exclusive-products；若无门店权限(code=1003/401/403)，则回退到公开商品接口 products?store_id=
+export async function listStoreProductsSmart(
+  storeId: number,
+  params: { page?: number; limit?: number; keyword?: string } = {},
+): Promise<PaginationResponse<Product>> {
+  try {
+    const res = await api.get(`/api/v1/stores/${storeId}/exclusive-products`, { params });
+    return unwrapResponse<PaginationResponse<Product>>(res);
+  } catch (e: any) {
+    const code = e?.response?.data?.code;
+    const status = e?.response?.status;
+    const noPerm = code === 1003 || status === 401 || status === 403;
+    if (!noPerm) throw e;
+    const resp = await getProducts({ page: params.page, limit: params.limit, keyword: params.keyword, store_id: storeId });
+    return resp;
+  }
 }
 
 // 门店收款账户列表

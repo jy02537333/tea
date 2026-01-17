@@ -334,6 +334,21 @@ func (h *StoreHandler) List(c *gin.Context) {
 			statusPtr = &n
 		}
 	}
+	// 兼容新参数：exclude_disabled / enabled_only，用于隐藏禁用门店（status=0）
+	// 若显式传入 status，则以 status 为准；否则当 exclude_disabled/enabled_only 为真时，等价于 status=1
+	if statusPtr == nil {
+		raw := strings.TrimSpace(c.Query("exclude_disabled"))
+		if raw == "" {
+			raw = strings.TrimSpace(c.Query("enabled_only"))
+		}
+		if raw != "" {
+			lr := strings.ToLower(raw)
+			if lr == "1" || lr == "true" || lr == "yes" { // truthy 判定
+				v := 1
+				statusPtr = &v
+			}
+		}
+	}
 	var latPtr, lngPtr *float64
 	if v := c.Query("lat"); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {

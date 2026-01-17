@@ -144,7 +144,7 @@ func Test_StoreOrderCommission_UsesFrozenSharer_NotOverriddenBinding(t *testing.
 	// 加购
 	add := map[string]any{"product_id": prodResp.Data.ID, "quantity": 1}
 	ab, _ := json.Marshal(add)
-	req, _ = http.NewRequest("POST", ts.URL+"/api/v1/cart/items", bytes.NewReader(ab))
+	req, _ = http.NewRequest("POST", fmt.Sprintf("%s/api/v1/cart/items?store_id=%d", ts.URL, storeID), bytes.NewReader(ab))
 	req.Header.Set("Authorization", buyerAuth)
 	req.Header.Set("Content-Type", "application/json")
 	addResp, err := http.DefaultClient.Do(req)

@@ -1,4 +1,4 @@
-@import './styles/theme.scss';
+@use './styles/theme.scss' as *;
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;

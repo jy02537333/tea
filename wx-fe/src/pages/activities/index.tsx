@@ -86,7 +86,12 @@ export default function ActivitiesPage() {
 	async function fetchStoreInfo(id: number) {
 		try {
 			const s = await getStore(id);
-			setCurrentStore(s as Store);
+			const st = (s as any)?.status;
+			if (typeof st === 'number' && st === 0) {
+				setCurrentStore(null);
+			} else {
+				setCurrentStore(s as Store);
+			}
 		} catch (_) {}
 	}
 

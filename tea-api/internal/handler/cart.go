@@ -26,6 +26,7 @@ type addCartItemReq struct {
 	ProductID uint  `json:"product_id" binding:"required"`
 	SkuID     *uint `json:"sku_id"`
 	Quantity  int   `json:"quantity" binding:"required"`
+	StoreID   *uint `json:"store_id"`
 }
 
 // AddItem 添加购物车条目
@@ -38,6 +39,20 @@ func (h *CartHandler) AddItem(c *gin.Context) {
 	uidVal, _ := c.Get("user_id")
 	userID := uint(uidVal.(uint))
 
+	var storeIDPtr *uint
+	if v := c.Query("store_id"); v != "" {
+		storeID64, err := strconv.ParseUint(v, 10, 64)
+		if err != nil || storeID64 == 0 {
+			response.BadRequest(c, "非法的store_id")
+			return
+		}
+		sid := uint(storeID64)
+		storeIDPtr = &sid
+	} else if req.StoreID != nil && *req.StoreID != 0 {
+		sid := *req.StoreID
+		storeIDPtr = &sid
+	}
+
 	// 门店管理员：
 	// 1) 加购时必须校验商品属于“本门店特供”(store_products.biz_type=3)
 	// 2) 购物车内不得混入平台商品/其他门店商品
@@ -49,6 +64,7 @@ func (h *CartHandler) AddItem(c *gin.Context) {
 			response.Error(c, http.StatusForbidden, err.Error())
 			return
 		}
+		storeIDPtr = &storeID
 		ok, err := h.svc.IsExclusiveProductForStore(storeID, req.ProductID)
 		if err != nil {
 			response.Error(c, http.StatusInternalServerError, err.Error())
@@ -70,7 +86,7 @@ func (h *CartHandler) AddItem(c *gin.Context) {
 		}
 	}
 
-	item, err := h.svc.AddItem(userID, req.ProductID, req.SkuID, req.Quantity)
+	item, err := h.svc.AddItem(userID, req.ProductID, req.SkuID, req.Quantity, storeIDPtr)
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, err.Error())
 		return
@@ -213,13 +229,35 @@ func (h *CartHandler) UpdateQuantity(c *gin.Context) {
 	uidVal, _ := c.Get("user_id")
 	userID := uint(uidVal.(uint))
 
+	var storeIDPtr *uint
+	roleVal, _ := c.Get("role")
+	role, _ := roleVal.(string)
+	if role == "store" {
+		storeID, err := h.resolveStoreIDForStoreAdmin(userID)
+		if err != nil {
+			response.Error(c, http.StatusForbidden, err.Error())
+			return
+		}
+		storeIDPtr = &storeID
+	} else {
+		if v := c.Query("store_id"); v != "" {
+			storeID64, err := strconv.ParseUint(v, 10, 64)
+			if err != nil || storeID64 == 0 {
+				response.BadRequest(c, "非法的store_id")
+				return
+			}
+			sid := uint(storeID64)
+			storeIDPtr = &sid
+		}
+	}
+
 	var itemID uint
 	if err := bindUintParam(c, "id", &itemID); err != nil {
 		response.BadRequest(c, "非法的ID")
 		return
 	}
 
-	if err := h.svc.UpdateItem(userID, itemID, req.Quantity); err != nil {
+	if err := h.svc.UpdateItem(userID, itemID, req.Quantity, storeIDPtr); err != nil {
 		response.Error(c, http.StatusBadRequest, err.Error())
 		return
 	}

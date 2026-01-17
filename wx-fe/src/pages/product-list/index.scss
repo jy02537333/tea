@@ -103,10 +103,12 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
 }
 
 .sticky-cart-bar .summary {
   color: #333;
+  flex: 1;
 }
 
 .sticky-cart-bar .btn-go-cart {
@@ -114,4 +116,6 @@
   color: #fff;
   padding: 10px 14px;
   border-radius: 10px;
+  flex: 1;
+  text-align: center;
 }

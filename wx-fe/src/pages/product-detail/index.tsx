@@ -35,7 +35,13 @@ export default function ProductDetail() {
       if (store_id) {
         try {
           const s = await getStore(store_id);
-          setCurrentStore(s as Store);
+          const st = (s as any)?.status;
+          // 禁用门店不展示徽章
+          if (typeof st === 'number' && st === 0) {
+            setCurrentStore(null);
+          } else {
+            setCurrentStore(s as Store);
+          }
         } catch (e) {
           // ignore store fetch errors
         }
@@ -51,7 +57,10 @@ export default function ProductDetail() {
     if (!product) return;
     setSubmitting(true);
     try {
-      await addCartItem(product.id, null, 1);
+      const router = Taro.getCurrentInstance().router;
+      const storeIdParam = router?.params?.store_id;
+      const store_id = storeIdParam ? Number(storeIdParam) : undefined;
+      await addCartItem(product.id, null, 1, store_id);
       Taro.showToast({ title: '已加入购物车', icon: 'success', duration: 1500 });
     } catch (e) {
       console.error('add to cart failed', e);

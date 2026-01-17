@@ -45,6 +45,8 @@ func (f *fakeOrderService) GetOrderAdmin(orderID uint) (*model.Order, []model.Or
 func (f *fakeOrderService) CancelOrder(userID, orderID uint, reason string) error { return nil }
 func (f *fakeOrderService) MarkPaid(userID, orderID uint) error                   { return nil }
 func (f *fakeOrderService) StartDelivery(userID, orderID uint) error              { return nil }
+func (f *fakeOrderService) DineInServe(userID, orderID uint) error                { return nil }
+func (f *fakeOrderService) TakeoutServe(userID, orderID uint) error               { return nil }
 func (f *fakeOrderService) Complete(userID, orderID uint) error                   { return nil }
 func (f *fakeOrderService) Receive(userID, orderID uint) error                    { return nil }
 func (f *fakeOrderService) AdminCancelOrder(orderID uint, reason string) error    { return nil }

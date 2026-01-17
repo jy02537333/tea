@@ -95,7 +95,11 @@ export default function SharePage() {
       if (storeId) {
         try {
           const s = await getStore(storeId);
-          storeInfo = { name: s?.name, phone: s?.phone, address: s?.address };
+          const st = (s as any)?.status;
+          // 禁用门店时，不在分享海报上展示门店信息
+          if (!(typeof st === 'number' && st === 0)) {
+            storeInfo = { name: s?.name, phone: s?.phone, address: s?.address };
+          }
         } catch (_) {}
       }
 

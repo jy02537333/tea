@@ -8,6 +8,8 @@ export interface AdminOrder {
   pay_amount: number;
   status: number;
   pay_status: number;
+  delivery_type?: number;
+  order_type?: number;
   table_id?: number;
   table_no?: string;
   created_at?: string;

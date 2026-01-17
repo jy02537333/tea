@@ -84,3 +84,11 @@ Note: As of this update, Dockerfile copies the latest build outputs from `dist` 
 The login page provides a tab switch for WeChat/Phone login. Default phone login values:
 - Mobile: 18985121575
 - Code: 000000
+
+
+pnpm -C wx-fe run build:h5
+bash doc/docker-file/run_wx_fe_docker.sh http://host.docker.internal:9292
+
+
+store001
+Store@123

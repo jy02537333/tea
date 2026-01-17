@@ -3,7 +3,7 @@ import { View, Text, ScrollView, Input, Picker } from '@tarojs/components';
 import Taro, { useRouter } from '@tarojs/taro';
 import { listCategories } from '../../services/categories';
 import { getProducts } from '../../services/products';
-import { listStores } from '../../services/stores';
+import { listStores, listStoreProductsSmart } from '../../services/stores';
 import { Category, Product, Store } from '../../services/types';
 import usePermission from '../../hooks/usePermission';
 import { PERM_HINT_STORE_MGMT_READONLY_PAGE } from '../../constants/permission';
@@ -15,6 +15,7 @@ const PAGE_SIZE = 10;
 export default function CategoryPage() {
   const router = useRouter();
   const perm = usePermission();
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>(undefined);
 
@@ -66,16 +67,16 @@ export default function CategoryPage() {
         setStorePickerIndex(index >= 0 ? index + 1 : 0);
       }
 
-      // 若路由指定 category_id，则首屏直接拉该分类；否则走默认逻辑
-      if (!Number.isNaN(paramCid) && paramCid > 0) {
-        await fetchProducts({ reset: true, overrides: { category_id: paramCid } });
-      } else {
-        await fetchProducts({ reset: true });
-      }
+      // 首屏拉取：将路由中的 category_id / store_id 一并带入，避免首次请求未带门店
+      const initOverrides: QueryOverrides = {};
+      if (!Number.isNaN(paramCid) && paramCid > 0) initOverrides.category_id = paramCid;
+      if (!Number.isNaN(paramSid) && paramSid > 0) initOverrides.store_id = paramSid;
+      await fetchProducts({ reset: true, overrides: initOverrides });
     } finally {
       setInitializing(false);
     }
   }
+  
 
   async function loadCategories() {
     try {
@@ -137,33 +138,46 @@ export default function CategoryPage() {
 
     setLoadingProducts(true);
     try {
-      const response = await getProducts({
-        page: targetPage,
-        limit: PAGE_SIZE,
-        category_id: categoryId,
-        keyword: kw ? kw.trim() : undefined,
-        store_id: storeId,
-        origin,
-        packaging,
-        min_price: minPrice,
-        max_price: maxPrice,
-        sort,
-      });
-
-      const list = Array.isArray(response?.data)
-        ? response.data
-        : Array.isArray((response as any)?.items)
-          ? (response as any).items
-          : Array.isArray((response as any))
-            ? (response as any)
-            : [];
+      let list: Product[] = [];
+      if (storeId && Number.isFinite(storeId) && storeId > 0) {
+        // 有门店 ID 时统一走 exclusive-products，避免混入平台商品
+        const resp = await listStoreProductsSmart(storeId, {
+          page: targetPage,
+          limit: PAGE_SIZE,
+          keyword: kw ? kw.trim() : undefined,
+        });
+        const maybe = resp as any;
+        list = Array.isArray(maybe?.data) ? maybe.data : Array.isArray(maybe?.items) ? maybe.items : Array.isArray(maybe) ? maybe : [];
+        // 前端按分类进行最小筛选
+        if (categoryId) list = list.filter((p) => Number((p as any).category_id) === Number(categoryId));
+      } else {
+        const response = await getProducts({
+          page: targetPage,
+          limit: PAGE_SIZE,
+          category_id: categoryId,
+          keyword: kw ? kw.trim() : undefined,
+          store_id: storeId,
+          origin,
+          packaging,
+          min_price: minPrice,
+          max_price: maxPrice,
+          sort,
+        });
+        list = Array.isArray(response?.data)
+          ? response.data
+          : Array.isArray((response as any)?.items)
+            ? (response as any).items
+            : Array.isArray((response as any))
+              ? (response as any)
+              : [];
+      }
 
       setProducts((prev) => (reset ? list : [...prev, ...list]));
       setPage(targetPage);
 
-      const total = typeof response?.total === 'number' ? response.total : undefined;
-      const limit = typeof response?.limit === 'number' ? response.limit : PAGE_SIZE;
-      setHasMore(total !== undefined ? targetPage * limit < total : list.length === limit);
+      // 简化：无统一 total 字段时按分页大小估计是否还有更多
+      const limit = PAGE_SIZE;
+      setHasMore(list.length === limit);
     } catch (error) {
       console.error('load products failed', error);
       Taro.showToast({ title: '加载商品失败', icon: 'none' });
@@ -284,7 +298,8 @@ export default function CategoryPage() {
         </View>
       </View>
 
-      {/* 筛选与排序区域（左右布局） */}
+      {/* 筛选与排序区域（左右布局）- 门店模式下隐藏避免误解 */}
+      {!selectedStoreId && (
       <View className="filters">
         <Text className="label">筛选与排序</Text>
         <View className="filters-body">
@@ -332,6 +347,7 @@ export default function CategoryPage() {
           </View>
         </View>
       </View>
+      )}
 
       <View style={{ marginBottom: 12 }}>
         <Text style={{ fontSize: 14, color: '#666' }}>商品分类</Text>

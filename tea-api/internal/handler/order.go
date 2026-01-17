@@ -28,6 +28,8 @@ type orderService interface {
 	CancelOrder(userID, orderID uint, reason string) error
 	MarkPaid(userID, orderID uint) error
 	StartDelivery(userID, orderID uint) error
+	DineInServe(userID, orderID uint) error
+	TakeoutServe(userID, orderID uint) error
 	Complete(userID, orderID uint) error
 	Receive(userID, orderID uint) error
 	AdminCancelOrder(orderID uint, reason string) error
@@ -389,6 +391,38 @@ func (h *OrderHandler) Deliver(c *gin.Context) {
 		return
 	}
 	if err := h.svc.StartDelivery(userID, uint(oid)); err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
+}
+
+// DineInServe 堂食出餐
+func (h *OrderHandler) DineInServe(c *gin.Context) {
+	uidVal, _ := c.Get("user_id")
+	userID := uint(uidVal.(uint))
+	oid, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		response.BadRequest(c, "非法的订单ID")
+		return
+	}
+	if err := h.svc.DineInServe(userID, uint(oid)); err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
+}
+
+// TakeoutServe 外卖发货（状态置为外卖出餐）
+func (h *OrderHandler) TakeoutServe(c *gin.Context) {
+	uidVal, _ := c.Get("user_id")
+	userID := uint(uidVal.(uint))
+	oid, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		response.BadRequest(c, "非法的订单ID")
+		return
+	}
+	if err := h.svc.TakeoutServe(userID, uint(oid)); err != nil {
 		response.Error(c, http.StatusBadRequest, err.Error())
 		return
 	}

@@ -161,8 +161,8 @@ export default function ProfilePage() {
         { key: 'address', title: '收货地址', desc: '管理常用地址', action: handleManageAddresses },
         {
           key: 'membership',
-          title: '会员权益',
-          desc: user ? '查看会员与权益' : '登录后可同步权益',
+          title: '会员/合伙人',
+          desc: user ? '开通/升级会员与合伙人' : '登录后可开通/升级',
           action: handleViewMembership,
         },
         { key: 'feedback', title: '意见反馈', desc: '提交工单反馈', action: handleFeedback },

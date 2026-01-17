@@ -7,9 +7,10 @@ export default function ProductCard(props: {
   product: Product;
   showCover?: boolean;
   onClick?: () => void;
+  meta?: React.ReactNode;
   extra?: React.ReactNode;
 }) {
-  const { product, showCover = true, onClick, extra } = props;
+  const { product, showCover = true, onClick, meta, extra } = props;
 
   function coverUrl(p: Product): string {
     const raw = (p as any).image_url || (p as any).cover || p.images || '';
@@ -24,6 +25,11 @@ export default function ProductCard(props: {
       )}
       <Text className="name">{product.name}</Text>
       <Text className="price">¥ {typeof product.price === 'string' ? product.price : Number(product.price).toFixed(2)}</Text>
+      {meta && (
+        <View className="meta" onClick={(e) => { e.stopPropagation?.(); }}>
+          {meta}
+        </View>
+      )}
       {extra && (
         <View className="actions" onClick={(e) => { e.stopPropagation?.(); }}>
           {extra}

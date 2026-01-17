@@ -2,7 +2,7 @@ import { createContext, PropsWithChildren, useCallback, useContext, useEffect, u
 import { devLogin as apiDevLogin, getUserInfo, login as apiLogin, PasswordLoginPayload } from '../services/auth';
 import { User } from '../types/user';
 import { setToken } from '../services/api';
-import { getUserPermissions } from '../services/users';
+import { getMyPermissions } from '../services/users';
 
 interface AuthContextValue {
   token: string | null;
@@ -24,9 +24,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [permissions, setPermissions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchPermissions = useCallback(async (userId: number) => {
+  const fetchPermissions = useCallback(async () => {
     try {
-      const list = await getUserPermissions(userId);
+      const list = await getMyPermissions();
       setPermissions(list);
     } catch (error) {
       console.warn('无法获取权限列表', error);
@@ -44,11 +44,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       try {
         const me = await getUserInfo();
         setUser(me);
-        if (me?.id) {
-          await fetchPermissions(me.id);
-        } else {
-          setPermissions([]);
-        }
+        await fetchPermissions();
       } catch (error) {
         setToken(null);
         setTokenState(null);
@@ -74,9 +70,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setTokenState(res.token);
       const me = await getUserInfo();
       setUser(me);
-      if (me?.id) {
-        await fetchPermissions(me.id);
-      }
+      await fetchPermissions();
     }
   }, [fetchPermissions]);
 
@@ -87,9 +81,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setTokenState(res.token);
       const me = await getUserInfo();
       setUser(me);
-      if (me?.id) {
-        await fetchPermissions(me.id);
-      }
+      await fetchPermissions();
     }
   }, [fetchPermissions]);
 
@@ -107,7 +99,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setPermissions([]);
       return;
     }
-    await fetchPermissions(user.id);
+    await fetchPermissions();
   }, [fetchPermissions, user?.id]);
 
   const value = useMemo(

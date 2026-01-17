@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -19,6 +20,16 @@ import (
 type OrderService struct {
 	db *gorm.DB
 }
+
+const (
+	orderStatusPendingPay   = 1
+	orderStatusPaid         = 2
+	orderStatusDelivering   = 3
+	orderStatusCompleted    = 4
+	orderStatusCancelled    = 5
+	orderStatusDineInServed = 6
+	orderStatusTakeoutServed = 7
+)
 
 func getDirectReferrerID(tx *gorm.DB, userID uint) *uint {
 	if userID == 0 {
@@ -165,6 +176,74 @@ func (s *OrderService) CreateOrderFromCart(userID uint, deliveryType int, addres
 		PayAmount:      decimal.NewFromInt(0),
 	}
 
+	adjustCartItemReservationTx := func(tx *gorm.DB, storeID uint, ci *model.CartItem, prod model.Product, sku *model.ProductSku) error {
+		delta := ci.Quantity - ci.ReservedQuantity
+		if delta == 0 {
+			return nil
+		}
+		if delta > 0 {
+			// Reserve store/platform stock
+			if storeID != 0 {
+				resSp := tx.Model(&model.StoreProduct{}).
+					Where("store_id = ? AND product_id = ? AND stock >= ?", storeID, ci.ProductID, delta).
+					Update("stock", gorm.Expr("stock - ?", delta))
+				if resSp.Error != nil {
+					return fmt.Errorf("扣减门店库存失败: %w", resSp.Error)
+				}
+				if resSp.RowsAffected == 0 {
+					return fmt.Errorf("门店库存不足: %s", prod.Name)
+				}
+			} else {
+				resP := tx.Model(&model.Product{}).
+					Where("id = ? AND stock >= ?", prod.ID, delta).
+					Update("stock", gorm.Expr("stock - ?", delta))
+				if resP.Error != nil {
+					return fmt.Errorf("扣减商品库存失败: %w", resP.Error)
+				}
+				if resP.RowsAffected == 0 {
+					return fmt.Errorf("商品库存不足: %s", prod.Name)
+				}
+			}
+			// Reserve SKU stock if applicable
+			if sku != nil {
+				resSku := tx.Model(&model.ProductSku{}).
+					Where("id = ? AND stock >= ?", sku.ID, delta).
+					Update("stock", gorm.Expr("stock - ?", delta))
+				if resSku.Error != nil {
+					return fmt.Errorf("扣减SKU库存失败: %w", resSku.Error)
+				}
+				if resSku.RowsAffected == 0 {
+					return fmt.Errorf("SKU库存不足: %s", sku.SkuName)
+				}
+			}
+			return nil
+		}
+
+		// Release
+		release := -delta
+		if storeID != 0 {
+			if err := tx.Model(&model.StoreProduct{}).
+				Where("store_id = ? AND product_id = ?", storeID, ci.ProductID).
+				Update("stock", gorm.Expr("stock + ?", release)).Error; err != nil {
+				return fmt.Errorf("回补门店库存失败: %w", err)
+			}
+		} else {
+			if err := tx.Model(&model.Product{}).
+				Where("id = ?", prod.ID).
+				Update("stock", gorm.Expr("stock + ?", release)).Error; err != nil {
+				return fmt.Errorf("回补商品库存失败: %w", err)
+			}
+		}
+		if sku != nil {
+			if err := tx.Model(&model.ProductSku{}).
+				Where("id = ?", sku.ID).
+				Update("stock", gorm.Expr("stock + ?", release)).Error; err != nil {
+				return fmt.Errorf("回补SKU库存失败: %w", err)
+			}
+		}
+		return nil
+	}
+
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		var couponIDForUse uint = 0
 		if err := applyShareAttributionToOrder(tx, order, userID, storeID, sharerUID, shareStoreID); err != nil {
@@ -184,13 +263,32 @@ func (s *OrderService) CreateOrderFromCart(userID uint, deliveryType int, addres
 			}
 		}
 
-		// 逐项校验库存与价格，并扣减库存
+		// 逐项校验与计价：库存以“购物车预占”为准；下单时不再重复扣减库存
 		var orderItems []model.OrderItem
 		total := decimal.NewFromInt(0)
 		for _, it := range items {
+			// 锁定购物车条目，确保 reserved_quantity 一致
+			var ci model.CartItem
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&ci, it.ID).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return errors.New("购物车项不存在")
+				}
+				return fmt.Errorf("获取购物车项失败: %w", err)
+			}
+			// 防混单：强制 store_id 与下单 storeID 一致
+			if storeID != 0 {
+				if ci.StoreID == nil || *ci.StoreID != storeID {
+					return errors.New("购物车中存在平台商品或其他门店商品，请先清空购物车后再下单")
+				}
+			} else {
+				if ci.StoreID != nil {
+					return errors.New("购物车中存在门店商品，请先清空购物车后再下单")
+				}
+			}
+
 			// 刷新商品/sku 以获取最新库存和价格
 			var prod model.Product
-			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&prod, it.ProductID).Error; err != nil {
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&prod, ci.ProductID).Error; err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
 					return errors.New("商品不存在")
 				}
@@ -202,9 +300,10 @@ func (s *OrderService) CreateOrderFromCart(userID uint, deliveryType int, addres
 
 			// 价格基于SKU优先
 			price := prod.Price
-			if it.SkuID != nil {
+			var skuLoaded *model.ProductSku
+			if ci.SkuID != nil {
 				var sku model.ProductSku
-				if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&sku, *it.SkuID).Error; err != nil {
+				if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&sku, *ci.SkuID).Error; err != nil {
 					if errors.Is(err, gorm.ErrRecordNotFound) {
 						return errors.New("SKU不存在")
 					}
@@ -216,68 +315,50 @@ func (s *OrderService) CreateOrderFromCart(userID uint, deliveryType int, addres
 				if sku.ProductID != prod.ID {
 					return errors.New("SKU与商品不匹配")
 				}
-				// 扣减 SKU 库存（乐观锁）
-				res := tx.Model(&model.ProductSku{}).
-					Where("id = ? AND stock >= ?", sku.ID, it.Quantity).
-					Update("stock", gorm.Expr("stock - ?", it.Quantity))
-				if res.Error != nil {
-					return fmt.Errorf("扣减SKU库存失败: %w", res.Error)
-				}
-				if res.RowsAffected == 0 {
-					return fmt.Errorf("SKU库存不足: %s", sku.SkuName)
-				}
 				price = sku.Price
+				skuLoaded = &sku
+			}
+
+			// 兜底：若历史数据未占用库存（reserved_quantity=0），下单时补占用
+			if err := adjustCartItemReservationTx(tx, storeID, &ci, prod, skuLoaded); err != nil {
+				return err
+			}
+			if ci.ReservedQuantity != ci.Quantity {
+				if err := tx.Model(&model.CartItem{}).Where("id = ?", ci.ID).
+					Update("reserved_quantity", ci.Quantity).Error; err != nil {
+					return fmt.Errorf("更新购物车占用数量失败: %w", err)
+				}
 			}
 
 			// 如指定门店，则校验并扣减门店库存，并应用可能的门店价格覆盖
 			if storeID != 0 {
 				var sp model.StoreProduct
-				if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("store_id = ? AND product_id = ?", storeID, it.ProductID).First(&sp).Error; err != nil {
+				if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("store_id = ? AND product_id = ?", storeID, ci.ProductID).First(&sp).Error; err != nil {
 					if errors.Is(err, gorm.ErrRecordNotFound) {
 						return fmt.Errorf("门店未上架该商品: %s", prod.Name)
 					}
 					return err
-				}
-				resSp := tx.Model(&model.StoreProduct{}).
-					Where("id = ? AND stock >= ?", sp.ID, it.Quantity).
-					Update("stock", gorm.Expr("stock - ?", it.Quantity))
-				if resSp.Error != nil {
-					return fmt.Errorf("扣减门店库存失败: %w", resSp.Error)
-				}
-				if resSp.RowsAffected == 0 {
-					return errors.New("门店库存不足")
 				}
 				if sp.PriceOverride.GreaterThan(decimal.Zero) {
 					price = sp.PriceOverride
 				}
 			}
 
-			// 扣减商品库存（乐观锁）
-			res2 := tx.Model(&model.Product{}).
-				Where("id = ? AND stock >= ?", prod.ID, it.Quantity).
-				Update("stock", gorm.Expr("stock - ?", it.Quantity))
-			if res2.Error != nil {
-				return fmt.Errorf("扣减商品库存失败: %w", res2.Error)
-			}
-			if res2.RowsAffected == 0 {
-				return fmt.Errorf("商品库存不足: %s", prod.Name)
-			}
-
-			qty := decimal.NewFromInt(int64(it.Quantity))
+			qty := decimal.NewFromInt(int64(ci.Quantity))
 			amount := price.Mul(qty)
 			total = total.Add(amount)
 
 			var skuName string
-			if it.SkuID != nil {
-				skuName = it.Sku.SkuName
+			if skuLoaded != nil {
+				skuName = skuLoaded.SkuName
 			}
 			oi := model.OrderItem{
 				ProductID:   prod.ID,
-				SkuID:       it.SkuID,
+				SkuID:       ci.SkuID,
 				ProductName: prod.Name,
 				SkuName:     skuName,
 				Price:       price,
-				Quantity:    it.Quantity,
+				Quantity:    ci.Quantity,
 				Amount:      amount,
 				Image:       "",
 			}
@@ -401,6 +482,23 @@ func (s *OrderService) ListOrders(userID uint, status int, page, limit int, stor
 	if err := q.Order("id desc").Limit(limit).Offset((page - 1) * limit).Find(&orders).Error; err != nil {
 		return nil, 0, err
 	}
+	if len(orders) > 0 {
+		orderIDs := make([]uint, 0, len(orders))
+		for _, o := range orders {
+			orderIDs = append(orderIDs, o.ID)
+		}
+		var items []model.OrderItem
+		if err := s.db.Where("order_id IN ?", orderIDs).Order("id asc").Find(&items).Error; err != nil {
+			return nil, 0, err
+		}
+		byOrderID := make(map[uint][]model.OrderItem, len(orders))
+		for _, it := range items {
+			byOrderID[it.OrderID] = append(byOrderID[it.OrderID], it)
+		}
+		for i := range orders {
+			orders[i].Items = byOrderID[orders[i].ID]
+		}
+	}
 	return orders, total, nil
 }
 
@@ -451,12 +549,13 @@ func (s *OrderService) CancelOrder(userID, orderID uint, reason string) error {
 				return err
 			}
 		}
-		if err := s.db.Model(&model.Product{}).Where("id = ?", it.ProductID).
-			Update("stock", gorm.Expr("stock + ?", it.Quantity)).Error; err != nil {
-			return err
-		}
-		// 如订单绑定了门店，回补门店库存
-		if order.StoreID != 0 {
+		// 平台订单回补平台库存；门店订单回补门店库存
+		if order.StoreID == 0 {
+			if err := s.db.Model(&model.Product{}).Where("id = ?", it.ProductID).
+				Update("stock", gorm.Expr("stock + ?", it.Quantity)).Error; err != nil {
+				return err
+			}
+		} else {
 			if err := s.db.Model(&model.StoreProduct{}).
 				Where("store_id = ? AND product_id = ?", order.StoreID, it.ProductID).
 				Update("stock", gorm.Expr("stock + ?", it.Quantity)).Error; err != nil {
@@ -500,11 +599,12 @@ func (s *OrderService) AdminCancelOrder(orderID uint, reason string) error {
 				return err
 			}
 		}
-		if err := s.db.Model(&model.Product{}).Where("id = ?", it.ProductID).
-			Update("stock", gorm.Expr("stock + ?", it.Quantity)).Error; err != nil {
-			return err
-		}
-		if order.StoreID != 0 {
+		if order.StoreID == 0 {
+			if err := s.db.Model(&model.Product{}).Where("id = ?", it.ProductID).
+				Update("stock", gorm.Expr("stock + ?", it.Quantity)).Error; err != nil {
+				return err
+			}
+		} else {
 			if err := s.db.Model(&model.StoreProduct{}).
 				Where("store_id = ? AND product_id = ?", order.StoreID, it.ProductID).
 				Update("stock", gorm.Expr("stock + ?", it.Quantity)).Error; err != nil {
@@ -632,9 +732,55 @@ func (s *OrderService) MarkPaid(userID, orderID uint) error {
 		return errors.New("当前状态不可支付")
 	}
 	now := time.Now()
-	order.Status = 2    // 已付款
+	order.Status = orderStatusPaid // 已付款
 	order.PayStatus = 2 // 已付款
 	order.PaidAt = &now
+	return s.db.Save(&order).Error
+}
+
+// DineInServe 堂食出餐：仅已付款可出餐，且必须有桌号
+func (s *OrderService) DineInServe(userID, orderID uint) error {
+	var order model.Order
+	if err := s.db.First(&order, orderID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("订单不存在")
+		}
+		return err
+	}
+	// 出餐由具有相应权限的用户执行，不强制订单归属校验（权限由中间件控制）
+	if order.Status != orderStatusPaid {
+		return errors.New("当前状态不可出餐")
+	}
+	if strings.TrimSpace(order.TableNo) == "" {
+		return errors.New("无桌号的订单不可堂食出餐")
+	}
+	now := time.Now()
+	order.Status = orderStatusDineInServed
+	// 复用 delivered_at 表示“已出餐/已发货”时间戳
+	order.DeliveredAt = &now
+	return s.db.Save(&order).Error
+}
+
+// TakeoutServe 外卖发货：仅已付款可操作，状态置为外卖出餐
+func (s *OrderService) TakeoutServe(userID, orderID uint) error {
+	var order model.Order
+	if err := s.db.First(&order, orderID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("订单不存在")
+		}
+		return err
+	}
+	// 发货由具有相应权限的用户执行，不强制订单归属校验（权限由中间件控制）
+	if order.Status != orderStatusPaid {
+		return errors.New("当前状态不可发货")
+	}
+	// 按需求：外卖发货。这里以 OrderType=3(外卖) 或 DeliveryType=2(配送) 作为判定。
+	if order.OrderType != 3 && order.DeliveryType != 2 {
+		return errors.New("非外卖订单不可外卖发货")
+	}
+	now := time.Now()
+	order.Status = orderStatusTakeoutServed
+	order.DeliveredAt = &now
 	return s.db.Save(&order).Error
 }
 
@@ -648,10 +794,10 @@ func (s *OrderService) StartDelivery(userID, orderID uint) error {
 		return err
 	}
 	// 发货由具有相应权限的用户执行，不强制订单归属校验（权限由中间件控制）
-	if order.Status != 2 {
+	if order.Status != orderStatusPaid {
 		return errors.New("当前状态不可发货")
 	}
-	order.Status = 3 // 配送中
+	order.Status = orderStatusDelivering // 配送中
 	return s.db.Save(&order).Error
 }
 
@@ -666,11 +812,11 @@ func (s *OrderService) Complete(userID, orderID uint) error {
 			return err
 		}
 		// 完成由具有相应权限的用户执行，不强制订单归属校验（权限由中间件控制）
-		if order.Status != 3 {
+		if order.Status != orderStatusDelivering && order.Status != orderStatusDineInServed && order.Status != orderStatusTakeoutServed {
 			return errors.New("当前状态不可完成")
 		}
 		now := time.Now()
-		order.Status = 4
+		order.Status = orderStatusCompleted
 		order.CompletedAt = &now
 		if err := tx.Save(&order).Error; err != nil {
 			return err
@@ -697,18 +843,18 @@ func (s *OrderService) Receive(userID, orderID uint) error {
 		}
 		switch order.DeliveryType {
 		case 2: // 配送
-			if order.Status != 3 {
+			if order.Status != orderStatusDelivering && order.Status != orderStatusTakeoutServed {
 				return errors.New("当前状态不可确认收货")
 			}
 		case 1: // 自取
-			if order.Status != 2 {
+			if order.Status != orderStatusPaid && order.Status != orderStatusDineInServed {
 				return errors.New("当前状态不可确认收货")
 			}
 		default:
 			return errors.New("非法的配送类型")
 		}
 		now := time.Now()
-		order.Status = 4
+		order.Status = orderStatusCompleted
 		order.CompletedAt = &now
 		if err := tx.Save(&order).Error; err != nil {
 			return err
@@ -734,11 +880,11 @@ func (s *OrderService) AdminRefundOrder(orderID uint, reason string) error {
 	if order.PayStatus != 2 {
 		return errors.New("当前支付状态不可退款")
 	}
-	if order.Status != 2 && order.Status != 3 {
+	if order.Status != orderStatusPaid && order.Status != orderStatusDelivering && order.Status != orderStatusDineInServed && order.Status != orderStatusTakeoutServed {
 		return errors.New("当前状态不可退款")
 	}
 
-	if order.Status == 2 { // 未发货，回补库存
+	if order.Status == orderStatusPaid { // 未出餐/未发货，回补库存
 		var items []model.OrderItem
 		if err := s.db.Where("order_id = ?", order.ID).Find(&items).Error; err != nil {
 			return err
@@ -750,11 +896,12 @@ func (s *OrderService) AdminRefundOrder(orderID uint, reason string) error {
 					return err
 				}
 			}
-			if err := s.db.Model(&model.Product{}).Where("id = ?", it.ProductID).
-				Update("stock", gorm.Expr("stock + ?", it.Quantity)).Error; err != nil {
-				return err
-			}
-			if order.StoreID != 0 {
+			if order.StoreID == 0 {
+				if err := s.db.Model(&model.Product{}).Where("id = ?", it.ProductID).
+					Update("stock", gorm.Expr("stock + ?", it.Quantity)).Error; err != nil {
+					return err
+				}
+			} else {
 				if err := s.db.Model(&model.StoreProduct{}).
 					Where("store_id = ? AND product_id = ?", order.StoreID, it.ProductID).
 					Update("stock", gorm.Expr("stock + ?", it.Quantity)).Error; err != nil {
@@ -766,7 +913,7 @@ func (s *OrderService) AdminRefundOrder(orderID uint, reason string) error {
 
 	// 标记为已退款+已取消
 	now := time.Now()
-	order.Status = 5
+	order.Status = orderStatusCancelled
 	order.PayStatus = 4
 	order.CancelledAt = &now
 	if reason != "" {
@@ -804,7 +951,7 @@ func (s *OrderService) AdminRefundStart(orderID uint, reason string) error {
 	if order.PayStatus != 2 {
 		return errors.New("当前支付状态不可标记退款")
 	}
-	if order.Status != 2 && order.Status != 3 {
+	if order.Status != orderStatusPaid && order.Status != orderStatusDelivering && order.Status != orderStatusDineInServed && order.Status != orderStatusTakeoutServed {
 		return errors.New("当前状态不可标记退款")
 	}
 	order.PayStatus = 3 // 退款中
@@ -826,12 +973,12 @@ func (s *OrderService) AdminRefundConfirm(orderID uint, reason string) error {
 	if order.PayStatus != 3 {
 		return errors.New("未处于退款中状态")
 	}
-	if order.Status != 2 && order.Status != 3 {
+	if order.Status != orderStatusPaid && order.Status != orderStatusDelivering && order.Status != orderStatusDineInServed && order.Status != orderStatusTakeoutServed {
 		return errors.New("当前状态不可确认退款")
 	}
 
 	// 若未发货则回补库存
-	if order.Status == 2 {
+	if order.Status == orderStatusPaid {
 		var items []model.OrderItem
 		if err := s.db.Where("order_id = ?", order.ID).Find(&items).Error; err != nil {
 			return err
@@ -843,11 +990,12 @@ func (s *OrderService) AdminRefundConfirm(orderID uint, reason string) error {
 					return err
 				}
 			}
-			if err := s.db.Model(&model.Product{}).Where("id = ?", it.ProductID).
-				Update("stock", gorm.Expr("stock + ?", it.Quantity)).Error; err != nil {
-				return err
-			}
-			if order.StoreID != 0 {
+			if order.StoreID == 0 {
+				if err := s.db.Model(&model.Product{}).Where("id = ?", it.ProductID).
+					Update("stock", gorm.Expr("stock + ?", it.Quantity)).Error; err != nil {
+					return err
+				}
+			} else {
 				if err := s.db.Model(&model.StoreProduct{}).
 					Where("store_id = ? AND product_id = ?", order.StoreID, it.ProductID).
 					Update("stock", gorm.Expr("stock + ?", it.Quantity)).Error; err != nil {
@@ -859,7 +1007,7 @@ func (s *OrderService) AdminRefundConfirm(orderID uint, reason string) error {
 
 	// 完成退款
 	now := time.Now()
-	order.Status = 5
+	order.Status = orderStatusCancelled
 	order.PayStatus = 4
 	order.CancelledAt = &now
 	if reason != "" {

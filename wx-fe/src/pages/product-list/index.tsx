@@ -3,7 +3,7 @@ import { View, Text, Button, Input, Picker } from '@tarojs/components';
 import Taro, { useRouter } from '@tarojs/taro';
 import { listProducts } from '../../services/products';
 import { Product, Store } from '../../services/types';
-import { listStores, listStoreExclusiveProducts } from '../../services/stores';
+import { listStores, listStoreProductsSmart } from '../../services/stores';
 import usePermission from '../../hooks/usePermission';
 import { PERM_HINT_STORE_MGMT_READONLY_PAGE } from '../../constants/permission';
 import { listCart, addCartItem } from '../../services/cart';
@@ -46,7 +46,6 @@ export default function ProductList() {
 
   async function bootstrap() {
     const list = await loadStores();
-
     const initial = getInitialStoreId(list);
     if (initial) {
       setSelectedStoreId(initial);
@@ -72,12 +71,19 @@ export default function ProductList() {
   function getInitialStoreId(list: Store[]): number | undefined {
     const rawParam = (router as any)?.params?.store_id;
     const fromParam = rawParam ? Number(rawParam) : NaN;
-    if (!Number.isNaN(fromParam) && fromParam > 0) return fromParam;
+    if (!Number.isNaN(fromParam) && fromParam > 0) {
+      // 仅在门店列表中存在时使用（过滤禁用门店）
+      if (list.some((s) => s.id === fromParam)) return fromParam;
+    }
 
     try {
       const raw = Taro.getStorageSync('current_store_id');
       const fromStorage = raw ? Number(raw) : NaN;
-      if (!Number.isNaN(fromStorage) && fromStorage > 0) return fromStorage;
+      if (!Number.isNaN(fromStorage) && fromStorage > 0) {
+        if (list.some((s) => s.id === fromStorage)) return fromStorage;
+        // 存储中的门店已禁用/不存在，清理掉
+        try { Taro.removeStorageSync('current_store_id'); } catch (_) {}
+      }
     } catch (_) {}
     return undefined;
   }
@@ -115,14 +121,14 @@ export default function ProductList() {
     setLoading(true);
     try {
       const kw = overrides.keyword !== undefined ? overrides.keyword : keyword;
-      const storeId = overrides.store_id !== undefined ? overrides.store_id : selectedStoreId;
-
-      if (exclusiveMode) {
-        if (!storeId) {
-          setProducts([]);
-          return;
-        }
-        const res = await listStoreExclusiveProducts(storeId, {
+      let storeId = overrides.store_id !== undefined ? overrides.store_id : selectedStoreId;
+      // 仅在门店列表中存在时才视为有效选择（过滤禁用门店）
+      if (storeId && !stores.some((s) => s.id === storeId)) {
+        storeId = undefined;
+      }
+      // 优先：只要存在具体门店，则使用门店特供商品接口，确保仅展示该门店商品
+      if (storeId) {
+        const res = await listStoreProductsSmart(storeId, {
           page: 1,
           limit: 20,
           keyword: kw ? kw.trim() : undefined,
@@ -133,6 +139,12 @@ export default function ProductList() {
         else if (Array.isArray(maybe?.items)) items = maybe.items;
         else if (Array.isArray(maybe)) items = maybe;
         setProducts(items);
+        return;
+      }
+
+      // 其次：exclusive 模式下（无门店但传入 exclusive=1），也走门店特供逻辑，但此时必须显式选择门店
+      if (exclusiveMode) {
+        setProducts([]);
         return;
       }
 
@@ -217,6 +229,12 @@ export default function ProductList() {
     void fetch({ max_price });
   }
 
+  function extractErrorMessage(err: any): string | undefined {
+    const raw = err?.response?.data?.message ?? err?.response?.data?.msg ?? err?.message;
+    if (typeof raw === 'string' && raw.trim()) return raw.trim();
+    return undefined;
+  }
+
   return (
     <View className="page-product-list">
       {!exclusiveMode && !perm.allowedStoreMgmt && (
@@ -255,7 +273,7 @@ export default function ProductList() {
         />
       </View>
 
-      {!exclusiveMode && (
+      {!exclusiveMode && !selectedStoreId && (
       <View className="filters">
         <Text className="label">筛选与排序</Text>
         <View className="filters-body">
@@ -324,6 +342,11 @@ export default function ProductList() {
             key={p.id}
             product={p}
             showCover
+            meta={(() => {
+              const stock = (p as any)?.store_stock ?? (p as any)?.stock;
+              const text = typeof stock === 'number' ? String(stock) : '-';
+              return <Text>库存：{text}</Text>;
+            })()}
             onClick={() => {
               const storeQuery = selectedStoreId ? `&store_id=${selectedStoreId}` : '';
               Taro.navigateTo({ url: `/pages/product-detail/index?id=${p.id}${storeQuery}` });
@@ -338,12 +361,17 @@ export default function ProductList() {
                 </Button>
                 <Button className="btn-add" style={{ marginLeft: 5 }} onClick={async () => {
                   try {
-                    await addCartItem(p.id, null, 1);
+                    await addCartItem(p.id, null, 1, selectedStoreId ? Number(selectedStoreId) : undefined);
                     Taro.showToast({ title: '已加入购物车', icon: 'success' });
                     const items = await listCart();
                     setCartCount(Array.isArray(items) ? items.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0) : 0);
                   } catch (e) {
-                    Taro.showToast({ title: '加入购物车失败', icon: 'none' });
+                    const msg = extractErrorMessage(e);
+                    if (msg && /库存不足/.test(msg)) {
+                      Taro.showToast({ title: msg, icon: 'none' });
+                    } else {
+                      Taro.showToast({ title: msg || '加入购物车失败', icon: 'none' });
+                    }
                   }
                 }}>
                   加入购物车

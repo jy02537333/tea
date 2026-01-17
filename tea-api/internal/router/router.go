@@ -249,6 +249,13 @@ func SetupRouter() *gin.Engine {
 		rbacGroup.POST("/user/revoke-role", middleware.RequirePermission("rbac:manage"), rbacHandler.RevokeRoleFromUser)
 	}
 
+	// RBAC（当前用户权限列表）：任何登录用户可访问
+	rbacSelfGroup := api.Group("/rbac")
+	rbacSelfGroup.Use(middleware.AuthMiddleware())
+	{
+		rbacSelfGroup.GET("/my-permissions", rbacHandler.ListMyPermissions)
+	}
+
 	// 上传相关（仅登录即可）：获取 OSS 直传策略
 	uploadGroup := api.Group("/upload")
 	uploadGroup.Use(middleware.AuthJWT())
@@ -392,6 +399,8 @@ func SetupRouter() *gin.Engine {
 		orderGroup.POST("/:id/receive", orderHandler.Receive)
 		// 下列操作仅允许具备相应权限（或admin）
 		orderGroup.POST("/:id/deliver", middleware.RequirePermission("order:deliver"), orderHandler.Deliver)
+		orderGroup.POST("/:id/dinein-serve", middleware.RequirePermission("order:deliver"), orderHandler.DineInServe)
+		orderGroup.POST("/:id/takeout-serve", middleware.RequirePermission("order:deliver"), orderHandler.TakeoutServe)
 		orderGroup.POST("/:id/complete", middleware.RequirePermission("order:complete"), orderHandler.Complete)
 		orderGroup.POST("/:id/admin-cancel", middleware.RequirePermission("order:cancel"), orderHandler.AdminCancel)
 		orderGroup.POST("/:id/adjust", middleware.RequirePermission("order:adjust"), orderHandler.AdminAdjustPayAmount)

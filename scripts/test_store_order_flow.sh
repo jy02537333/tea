@@ -122,7 +122,7 @@ USER_TOKEN=$(json_get "$USER_LOGIN" '.data.token // empty')
 _=$(curl -sS -X POST "$API_BASE/api/v1/cart/items" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $USER_TOKEN" \
-  -d "{\"product_id\":$PRODUCT_ID,\"quantity\":1}")
+  -d "{\"product_id\":$PRODUCT_ID,\"store_id\":$STORE_ID,\"quantity\":1}")
 
 ORDER_CREATE=$(curl -sS -X POST "$API_BASE/api/v1/orders/from-cart" \
   -H "Content-Type: application/json" \

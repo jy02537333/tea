@@ -1,7 +1,7 @@
 import type { PageConfig } from '@tarojs/taro';
 
 const config: PageConfig = {
-  navigationBarTitleText: '会员权益',
+  navigationBarTitleText: '会员/合伙人',
   enablePullDownRefresh: true,
 };
 

@@ -63,6 +63,8 @@ func main() {
 	scheduler.StartAccrualScheduler()
 	// 启动佣金解冻调度（若启用）
 	scheduler.StartCommissionReleaseScheduler()
+	// 启动购物车超时清理（默认开启，可通过环境变量关闭）
+	scheduler.StartCartCleanupScheduler()
 
 	fmt.Println("茶心阁小程序API服务启动成功!")
 	fmt.Printf("服务运行在: %s\n", config.Config.Server.Port)
