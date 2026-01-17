@@ -14,6 +14,11 @@ PACKAGE_ARGS ?=
 
 .PHONY: up package test test-api test-admin-fe test-wx-fe verify-sprint-a verify-sprint-a-strict verify-sprint-b verify-sprint-b-strict verify-sprint-a-e2e prepare-tokens run-min-integration verify-sprint-c
 
+.PHONY: auto-test
+auto-test:
+	@echo "[make auto-test] running one-click flow tests (backend + e2e scripts)"
+	bash scripts/auto_test.sh
+
 up:
 	@echo "[make up] starting tea-api via run-tea-api.sh"
 	bash run-tea-api.sh

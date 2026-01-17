@@ -21,7 +21,17 @@ export interface Product {
   original_price?: string | number;
   images?: string;
   stock?: number;
+  // 门店维度字段（门店特供/门店商品接口可能返回）
+  store_stock?: number;
+  store_price_override?: string;
   status?: number;
+
+  // 可选字段：后端若返回则用于首页“上新/热销”等运营位
+  created_at?: string;
+  sales?: number;
+  is_hot?: boolean;
+  is_new?: boolean;
+  is_recommend?: boolean;
 }
 
 export interface Category {
@@ -49,6 +59,8 @@ export interface Order {
   status?: number | string;
   pay_status?: number | string;
   store_id?: number;
+  table_id?: number;
+  table_no?: string;
   delivery_type?: number;
   address_info?: string | Record<string, any>;
   remark?: string;
@@ -148,6 +160,7 @@ export interface AvailableCouponsResponse {
 export interface Store {
   id: number;
   name: string;
+  status?: number;
   address?: string;
   latitude?: number;
   longitude?: number;

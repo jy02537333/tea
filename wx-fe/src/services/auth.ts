@@ -1,7 +1,11 @@
 import api, { setToken, unwrapResponse } from './api';
 import { AuthResponse, User } from './types';
 
-export async function login(payload: { code?: string; username?: string; password?: string; openid?: string }): Promise<AuthResponse> {
+// 后端 /api/v1/auth/login 参数规范：
+// - 手机登录：{ phone: string, code: string }
+// - 微信登录：{ wechat_code: string }
+// 兼容旧接口：{ openid } 或 { username, password }
+export async function login(payload: { code?: string; username?: string; password?: string; openid?: string; phone?: string; wechat_code?: string }): Promise<AuthResponse> {
   // 新接口（优先）：统一鉴权入口 /api/v1/auth/login
   try {
     const res = await api.post('/api/v1/auth/login', payload);

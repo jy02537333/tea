@@ -124,7 +124,7 @@ func Test_Store_Inventory_Order_Deduction(t *testing.T) {
 
 	// 用户加入购物车并下单（绑定门店），应按8.50计价且门店库存扣为0
 	ab, _ := json.Marshal(map[string]any{"product_id": prodResp.Data.ID, "quantity": 1})
-	req, _ = http.NewRequest("POST", ts.URL+"/api/v1/cart/items", bytes.NewReader(ab))
+	req, _ = http.NewRequest("POST", ts.URL+"/api/v1/cart/items?store_id="+jsonNumber(storeResp.Data.ID), bytes.NewReader(ab))
 	req.Header.Set("Authorization", userAuth)
 	req.Header.Set("Content-Type", "application/json")
 	if _, err := http.DefaultClient.Do(req); err != nil {
@@ -155,27 +155,22 @@ func Test_Store_Inventory_Order_Deduction(t *testing.T) {
 		t.Fatalf("pay_amount not override 8.50: %.2f", orderResp.Data.PayAmount)
 	}
 
-	// 再次下单，应因门店库存不足失败
-	req, _ = http.NewRequest("POST", ts.URL+"/api/v1/cart/items", bytes.NewReader(ab))
+	// 再次加购，应因门店库存不足失败（库存已在加购时预占）
+	req, _ = http.NewRequest("POST", ts.URL+"/api/v1/cart/items?store_id="+jsonNumber(storeResp.Data.ID), bytes.NewReader(ab))
 	req.Header.Set("Authorization", userAuth)
 	req.Header.Set("Content-Type", "application/json")
-	if _, err := http.DefaultClient.Do(req); err != nil {
+	respAdd2, err := http.DefaultClient.Do(req)
+	if err != nil {
 		t.Fatalf("add cart 2 err: %v", err)
 	}
-	req, _ = http.NewRequest("POST", ts.URL+"/api/v1/orders/from-cart", bytes.NewReader(ob))
-	req.Header.Set("Authorization", userAuth)
-	req.Header.Set("Content-Type", "application/json")
-	respO2, _ := http.DefaultClient.Do(req)
-	if respO2.StatusCode == 200 {
-		var or2 struct {
-			Code    int
-			Message string
-		}
-		json.NewDecoder(respO2.Body).Decode(&or2)
-		respO2.Body.Close()
-		if or2.Code == 0 {
-			t.Fatalf("second order unexpectedly succeeded")
-		}
+	var add2Resp struct {
+		Code    int
+		Message string
+	}
+	_ = json.NewDecoder(respAdd2.Body).Decode(&add2Resp)
+	respAdd2.Body.Close()
+	if respAdd2.StatusCode == 200 && add2Resp.Code == 0 {
+		t.Fatalf("second add-to-cart unexpectedly succeeded")
 	}
 }
 

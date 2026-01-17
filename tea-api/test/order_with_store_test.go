@@ -141,7 +141,7 @@ func Test_Order_FromCart_With_Store(t *testing.T) {
 	// 加入购物车
 	addReq := map[string]any{"product_id": prodResp.Data.ID, "quantity": 1}
 	ab, _ := json.Marshal(addReq)
-	req, _ = http.NewRequest("POST", ts.URL+"/api/v1/cart/items", bytes.NewReader(ab))
+	req, _ = http.NewRequest("POST", fmt.Sprintf("%s/api/v1/cart/items?store_id=%d", ts.URL, storeResp.Data.ID), bytes.NewReader(ab))
 	req.Header.Set("Authorization", auth)
 	req.Header.Set("Content-Type", "application/json")
 	respAdd, err := http.DefaultClient.Do(req)

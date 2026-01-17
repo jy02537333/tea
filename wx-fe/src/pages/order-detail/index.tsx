@@ -15,6 +15,8 @@ const STATUS_TEXT: Record<number, string> = {
   3: '配送中',
   4: '已完成',
   5: '已取消',
+  6: '已堂食',
+  7: '外卖出餐',
 };
 
 const PAY_STATUS_TEXT: Record<number, string> = {
@@ -107,7 +109,12 @@ export default function OrderDetail({ id }: { id?: number }) {
     (async () => {
       try {
         const s = await getStore(sid);
-        setCurrentStore(s as Store);
+        const st = (s as any)?.status;
+        if (typeof st === 'number' && st === 0) {
+          setCurrentStore(null);
+        } else {
+          setCurrentStore(s as Store);
+        }
       } catch (_) {
         // ignore store load error
       }

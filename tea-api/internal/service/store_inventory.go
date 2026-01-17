@@ -50,7 +50,7 @@ func (s *StoreInventoryService) Upsert(storeID, productID uint, stock int, price
 	return &out, nil
 }
 
-func (s *StoreInventoryService) List(storeID uint, page, limit int, bizType *int) ([]model.StoreProduct, int64, error) {
+func (s *StoreInventoryService) List(storeID uint, page, limit int, bizType *int, status *int) ([]model.StoreProduct, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -61,12 +61,16 @@ func (s *StoreInventoryService) List(storeID uint, page, limit int, bizType *int
 	if bizType != nil && *bizType > 0 {
 		q = q.Where("biz_type = ?", *bizType)
 	}
+	if status != nil {
+		// 通过商品状态过滤（0草稿/1上架/2下架等）
+		q = q.Joins("JOIN products ON products.id = store_products.product_id").Where("products.status = ?", *status)
+	}
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	var list []model.StoreProduct
-	if err := q.Order("id desc").Limit(limit).Offset((page - 1) * limit).Find(&list).Error; err != nil {
+	if err := q.Preload("Product").Order("id desc").Limit(limit).Offset((page - 1) * limit).Find(&list).Error; err != nil {
 		return nil, 0, err
 	}
 	return list, total, nil

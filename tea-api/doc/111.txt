@@ -1,0 +1,14 @@
+管理员的登录
+admin
+Admin@123
+
+
+
+
+
+管理员类型: 门店管理员（store）
+登录入口: http://127.0.0.1:9094/login
+账号: store001
+密码: Store@123
+绑定门店: 演示门店A（变量 STORE_ID）
+登录后：会自动进入门店视图（Store Home/Orders/Finance 等），并被锁定到自己的门店。

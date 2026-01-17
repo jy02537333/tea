@@ -20,6 +20,81 @@ type RefundHandler struct{}
 
 func NewRefundHandler() *RefundHandler { return &RefundHandler{} }
 
+// GET /api/v1/stores/:id/refunds
+// 门店侧退款记录列表（需登录+锁店），按门店筛选，支持查询参数：order_id, refund_no(模糊), status, start(创建时间), end(创建时间), page, limit
+func (h *RefundHandler) ListStoreRefunds(c *gin.Context) {
+	sidStr := strings.TrimSpace(c.Param("id"))
+	if sidStr == "" {
+		utils.InvalidParam(c, "store id missing")
+		return
+	}
+	sid64, err := strconv.ParseUint(sidStr, 10, 64)
+	if err != nil || sid64 == 0 {
+		utils.InvalidParam(c, "store id invalid")
+		return
+	}
+	storeID := uint(sid64)
+
+	orderID := strings.TrimSpace(c.Query("order_id"))
+	refundNo := strings.TrimSpace(c.Query("refund_no"))
+	status := strings.TrimSpace(c.Query("status"))
+	start := strings.TrimSpace(c.Query("start"))
+	end := strings.TrimSpace(c.Query("end"))
+
+	page := toIntRef(c.DefaultQuery("page", "1"))
+	size := toIntRef(c.DefaultQuery("limit", "20"))
+	if page < 1 {
+		page = 1
+	}
+	if size <= 0 || size > 200 {
+		size = 20
+	}
+
+	db := database.GetDB()
+	q := db.Model(&model.Refund{}).
+		Joins("JOIN orders ON orders.id = refunds.order_id").
+		Where("orders.store_id = ?", storeID).
+		Preload("Order").Preload("Payment")
+
+	if orderID != "" {
+		if oid, err := strconv.ParseUint(orderID, 10, 64); err == nil {
+			q = q.Where("refunds.order_id = ?", uint(oid))
+		} else {
+			utils.InvalidParam(c, "order_id 参数非法")
+			return
+		}
+	}
+	if refundNo != "" {
+		q = q.Where("refunds.refund_no LIKE ?", "%"+refundNo+"%")
+	}
+	if status != "" {
+		if st, err := strconv.ParseInt(status, 10, 64); err == nil {
+			q = q.Where("refunds.status = ?", int(st))
+		} else {
+			utils.InvalidParam(c, "status 参数非法")
+			return
+		}
+	}
+	if start != "" {
+		q = q.Where("refunds.created_at >= ?", start)
+	}
+	if end != "" {
+		q = q.Where("refunds.created_at <= ?", end)
+	}
+
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		utils.Error(c, utils.CodeError, err.Error())
+		return
+	}
+	var list []model.Refund
+	if err := q.Order("refunds.id desc").Limit(size).Offset((page - 1) * size).Find(&list).Error; err != nil {
+		utils.Error(c, utils.CodeError, err.Error())
+		return
+	}
+	utils.PageSuccess(c, list, total, page, size)
+}
+
 // GET /api/v1/admin/refunds
 // 支持查询参数：order_id, payment_id, refund_no(模糊), status, start(创建时间), end(创建时间), page, limit
 func (h *RefundHandler) ListRefunds(c *gin.Context) {

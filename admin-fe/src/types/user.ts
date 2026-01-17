@@ -3,4 +3,5 @@ export interface User {
   username?: string;
   nickname?: string;
   role?: string;
+  store_id?: number;
 }

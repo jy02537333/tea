@@ -1,0 +1,65 @@
+.page-category {
+  padding: 12px;
+  /* 为底部固定操作栏或页面末尾留白预留空间 */
+  padding-bottom: 72px;
+}
+
+.search-bar {
+  margin-bottom: 12px;
+}
+
+.filters {
+  margin-bottom: 16px;
+  .label { font-size: 14px; color: #666; }
+
+  /* 左右布局样式，与商品列表页保持一致 */
+  .filter-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+  }
+
+  .row-label {
+    min-width: 64px;
+    font-size: 12px;
+    color: #888;
+  }
+
+  .row-control {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: #fff;
+  }
+
+  .filters-body { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .price-range { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.card-product {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  padding: 12px;
+  .name { font-size: 15px; font-weight: 600; color: #333; }
+  .price { color: #ff6a00; font-weight: 700; margin-top: 6px; }
+  .actions { margin-top: 10px; display: flex; justify-content: flex-end; align-items: center; }
+  .actions { gap: 8px; }
+  .btn-view { padding: 6px 10px; border-radius: 8px; background: #f0f0f0; display: inline-flex; align-items: center; }
+  .btn-add { padding: 6px 10px; border-radius: 8px; background: #17a05a; color: #fff; display: inline-flex; align-items: center; }
+}
+
+.load-more { margin-top: 16px; text-align: center; }
+
+
+/* 分类页按钮间隔固定为 5px（页面级覆盖，确保跨环境一致） */
+.page-category .card-product .actions { gap: 0; }
+.page-category .card-product .actions .btn-add { margin-left: 5px; }

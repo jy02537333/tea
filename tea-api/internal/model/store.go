@@ -23,3 +23,13 @@ type StoreBankAccount struct {
 	BankName    string `gorm:"type:varchar(128)" json:"bank_name"`
 	IsDefault   bool   `gorm:"default:false" json:"is_default"`
 }
+
+// StoreTable 门店桌号（堂食台位/桌位管理）
+type StoreTable struct {
+	BaseModel
+	StoreID  uint   `gorm:"index;not null" json:"store_id"`
+	TableNo  string `gorm:"type:varchar(50);not null" json:"table_no"`
+	Capacity int    `gorm:"type:int;default:0" json:"capacity"`
+	Status   int    `gorm:"type:tinyint;default:1" json:"status"` // 1启用 2停用
+	Note     string `gorm:"type:varchar(200);default:''" json:"note"`
+}

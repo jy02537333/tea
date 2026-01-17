@@ -10,4 +10,5 @@ type StoreProduct struct {
 	Stock         int             `gorm:"not null;default:0" json:"stock"`
 	PriceOverride decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"price_override"`
 	BizType       int             `gorm:"type:tinyint;not null;default:1" json:"biz_type"` // 1:服务 2:外卖 3:其他
+	Product       *Product        `gorm:"foreignKey:ProductID" json:"product,omitempty"`
 }

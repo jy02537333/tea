@@ -49,6 +49,17 @@ admin-fe/dist/
 admin-fe/playwright-report/
 admin-fe/test-results/
 wx-fe/dist/
+wx-fe/dist-fixed/
+
+# Local runtime artifacts
+*.pid
+
+# Local docs/demo assets (do not commit)
+doc/demo/
 
 # Ignore local GitHub token (do not commit)
 .github_token
+
+# pnpm local store / accidental backups (do not commit)
+**/.pnpm-store/
+**/node_modules.root_owned_backup_*/

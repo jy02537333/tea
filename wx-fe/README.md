@@ -34,6 +34,81 @@ npm run dev
 
 - 开发阶段调用后端接口时，确保后端可达（或在 `.env`/运行时配置中设置 API 基地址）。
 
+## H5 启动方式（当前）
+
+- 推荐一键验收（Docker 构建 + 静态预览 + Playwright 验收，默认端口 10088；若端口被占用会自动清理占用容器/进程）：
+
+```bash
+AUTO_VERIFY=1 bash scripts/wx-fe_h5_in_docker.sh preview
+```
+
+- 本机开发（Vite/DevServer）：
+
+```bash
+pnpm -C wx-fe run dev:h5
+```
+
+- Docker 开发（热更新，端口 10088，自动映射后端到宿主 9292）：
+
+```bash
+docker run --rm -it \
+	-p 10088:10088 \
+	--add-host=host.docker.internal:host-gateway \
+	-e WX_API_BASE_URL=http://host.docker.internal:9292 \
+	-e CHOKIDAR_USEPOLLING=1 \
+	-v "$PWD/wx-fe:/app/wx-fe" \
+	-w /app/wx-fe \
+	node:18-alpine sh -lc "apk add --no-cache git && npm i -g pnpm && pnpm install && pnpm run dev:h5"
+```
+
+- Docker 静态预览（更稳定：构建后用 `serve -s dist` 提供 SPA）：
+
+```bash
+docker run --rm -it \
+	-p 10088:10088 \
+	--add-host=host.docker.internal:host-gateway \
+	-e WX_API_BASE_URL=http://host.docker.internal:9292 \
+	-v "$PWD/wx-fe:/app/wx-fe" \
+	-w /app/wx-fe \
+	node:18-alpine sh -lc '
+		apk add --no-cache git && npm i -g pnpm && pnpm install && \
+		pnpm run build:h5 && \
+				npx --yes serve -s dist -l 10088
+	'
+
+### Nginx 运行时（端口 9093）
+
+- 说明：Dockerfile 现已复制最新构建输出目录 `dist` 到 Nginx；运行时通过 `WX_API_BASE_URL` 注入后端地址。
+- 构建并启动（使用 Nginx 提供 H5，端口 9093）：
+
+```bash
+chmod +x doc/docker-file/run_wx_fe_docker.sh
+./doc/docker-file/run_wx_fe_docker.sh http://host.docker.internal:9292
+# 访问：
+open http://127.0.0.1:9093
+```
+
+- 快速启动（基于已构建的 `wx-fe:latest`）：
+
+```bash
+chmod +x doc/docker-file/start_wx_fe_quick.sh
+./doc/docker-file/start_wx_fe_quick.sh http://host.docker.internal:9292 9093
+```
+
+- 提示：Linux 下容器访问宿主后端需 `--add-host=host.docker.internal:host-gateway`（脚本已添加）。
+```
+
+- 访问入口（Hash 路由）：
+	- 首页：`http://127.0.0.1:10088/`
+	- 登录：`http://127.0.0.1:10088/#/pages/login/index`
+	- 我的：`http://127.0.0.1:10088/#/pages/profile/index`
+
+说明与排查：
+
+- 若访问出现目录列表或空白，多为 `dist/index.html` 未生成。确保存在 `wx-fe/src/index.html`（本仓已补齐），然后执行 `pnpm run build:h5` 再用静态预览方式启动。
+- Linux 下容器访问宿主后端需 `--add-host=host.docker.internal:host-gateway`，并将 `WX_API_BASE_URL` 指向 `http://host.docker.internal:9292`。
+- 如本机直接构建报 `EACCES: permission denied`（node_modules 权限被 root 写入导致），可优先使用 Docker 构建，或在宿主机修复权限：`sudo chown -R "$USER":"$USER" wx-fe/node_modules` 后重试。
+
 ### API_BASE 配置（.env）
 
 - 本项目在 `config/index.js` 中通过 `defineConstants` 注入 `WX_API_BASE_URL`：

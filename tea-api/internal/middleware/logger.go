@@ -45,6 +45,9 @@ func AccessLogMiddleware() gin.HandlerFunc {
 			}
 
 			db := database.GetDB()
+			if db == nil {
+				return
+			}
 			if err := db.Create(accessLog).Error; err != nil {
 				// 记录错误日志
 				zap.L().Error("Failed to create access log", zap.Error(err))
@@ -102,8 +105,10 @@ func DetailedAccessLogMiddleware() gin.HandlerFunc {
 			}
 
 			db := database.GetDB()
-			if err := db.Create(accessLog).Error; err != nil {
+			if db != nil {
+				if err := db.Create(accessLog).Error; err != nil {
 				zap.L().Error("Failed to create detailed access log", zap.Error(err))
+				}
 			}
 			// 结构化日志输出到 Zap
 			logUserID := uint(0)

@@ -1,9 +1,8 @@
 package service
-package service
 
 import (
-    "context"
-    "testing"
+	"context"
+	"testing"
 )
 
 // fake repos for unit tests

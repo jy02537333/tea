@@ -18,6 +18,9 @@ export default function SettingsPage() {
   function gotoTerms() {
     Taro.navigateTo({ url: '/pages/terms/index' }).catch(() => {});
   }
+  function gotoFeedback() {
+    Taro.navigateTo({ url: '/pages/feedback/index' }).catch(() => {});
+  }
 
   function clearCache() {
     try {
@@ -57,6 +60,9 @@ export default function SettingsPage() {
 
       <View style={{ background: '#fff', borderRadius: 12, padding: 16, marginTop: 16 }}>
         <Text style={{ fontSize: 16, fontWeight: 'bold' }}>其他</Text>
+        <Button style={{ marginTop: 12 }} size="mini" onClick={gotoFeedback}>
+          意见反馈
+        </Button>
         <Button style={{ marginTop: 12 }} size="mini" onClick={clearCache}>
           清除缓存
         </Button>

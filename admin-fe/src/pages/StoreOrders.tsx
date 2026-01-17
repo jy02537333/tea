@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AdminOrder, getAdminStoreOrders, postOrderAction } from '../services/orders';
+import { AdminOrder, getAdminStoreOrders, getStoreOrders, postOrderAction } from '../services/orders';
 import { useAuthContext } from '../hooks/useAuth';
 
 const { Title, Text } = Typography;
@@ -13,6 +13,8 @@ const ORDER_STATUS_OPTIONS = [
   { label: '待付款', value: 1 },
   { label: '已付款', value: 2 },
   { label: '配送中', value: 3 },
+  { label: '已堂食', value: 6 },
+  { label: '外卖出餐', value: 7 },
   { label: '已完成', value: 4 },
   { label: '已取消', value: 5 },
 ];
@@ -23,6 +25,8 @@ const ORDER_STATUS_MAP: Record<number, { label: string; color: string }> = {
   3: { label: '配送中', color: 'purple' },
   4: { label: '已完成', color: 'green' },
   5: { label: '已取消', color: 'red' },
+  6: { label: '已堂食', color: 'purple' },
+  7: { label: '外卖出餐', color: 'purple' },
 };
 
 const PAY_STATUS_MAP: Record<number, { label: string; color: string }> = {
@@ -41,14 +45,27 @@ interface FilterValues {
 
 export default function StoreOrdersPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const params = useParams();
   const storeId = Number(params.id || 0);
   const queryClient = useQueryClient();
-  const { hasPermission } = useAuthContext();
+  const { hasPermission, user } = useAuthContext();
 
   const [filters, setFilters] = useState<FilterValues>({});
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20 });
   const [filterForm] = Form.useForm<FilterValues>();
+
+  // 支持从 Header 搜索跳转：/stores/:id/orders?orderNo=...
+  useEffect(() => {
+    const sp = new URLSearchParams(location.search);
+    const orderNo = sp.get('orderNo');
+    if (!orderNo) return;
+    const keyword = String(orderNo).trim();
+    if (!keyword) return;
+    filterForm.setFieldsValue({ order_no: keyword });
+    setFilters((prev) => ({ ...prev, order_no: keyword }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   const listParams = useMemo(
     () => ({
@@ -61,7 +78,7 @@ export default function StoreOrdersPage() {
 
   const ordersQuery = useQuery({
     queryKey: ['storeOrders', storeId, listParams.page, listParams.page_size, listParams.status ?? 'all'],
-    queryFn: () => getAdminStoreOrders(storeId, listParams),
+    queryFn: () => (user?.role === 'store' ? getStoreOrders(storeId, listParams) : getAdminStoreOrders(storeId, listParams)),
     enabled: storeId > 0,
     placeholderData: keepPreviousData,
   });
@@ -79,6 +96,8 @@ export default function StoreOrdersPage() {
   const [reasonModalOpen, setReasonModalOpen] = useState(false);
   const [reasonTarget, setReasonTarget] = useState<{ id: number; action: string } | null>(null);
   const [reasonText, setReasonText] = useState('');
+
+  // 按 PRD：订单中的桌号不可编辑，移除相关弹窗与操作
 
   const actionMutation = useMutation({
     mutationFn: async ({ id, action, reason }: { id: number; action: string; reason?: string }) => {
@@ -106,6 +125,7 @@ export default function StoreOrdersPage() {
   const columns: ColumnsType<AdminOrder> = [
     { title: 'ID', dataIndex: 'id', width: 80 },
     { title: '订单号', dataIndex: 'order_no', width: 200 },
+    { title: '桌号', dataIndex: 'table_no', width: 100, render: (val?: string) => val || '-' },
     { title: '用户ID', dataIndex: 'user_id', width: 100 },
     {
       title: '金额',
@@ -143,15 +163,21 @@ export default function StoreOrdersPage() {
       width: 420,
       render: (_, record) => (
         <Space wrap>
+                    {/* 订单桌号不可编辑（按 PRD） */}
           <Button type="link" onClick={() => navigate(`/orders?orderId=${record.id}&storeId=${storeId}`)}>
             在订单操作区打开
           </Button>
-          {record.status === 2 && hasPermission('order:deliver') && (
-            <Popconfirm title="确认发货该订单？" onConfirm={() => actionMutation.mutate({ id: record.id, action: 'deliver' })}>
-              <Button type="link" disabled={actionMutation.isPending}>发货</Button>
+          {record.status === 2 && hasPermission('order:deliver') && !!String(record.table_no || '').trim() && (
+            <Popconfirm title="确认堂食出餐该订单？" onConfirm={() => actionMutation.mutate({ id: record.id, action: 'dinein-serve' })}>
+              <Button type="link" disabled={actionMutation.isPending}>堂食出餐</Button>
             </Popconfirm>
           )}
-          {record.status === 3 && hasPermission('order:complete') && (
+          {record.status === 2 && hasPermission('order:deliver') && (record.order_type === 3 || record.delivery_type === 2) && (
+            <Popconfirm title="确认外卖发货该订单？" onConfirm={() => actionMutation.mutate({ id: record.id, action: 'takeout-serve' })}>
+              <Button type="link" disabled={actionMutation.isPending}>外卖发货</Button>
+            </Popconfirm>
+          )}
+          {(record.status === 3 || record.status === 6 || record.status === 7) && hasPermission('order:complete') && (
             <Popconfirm title="确认标记订单完成？" onConfirm={() => actionMutation.mutate({ id: record.id, action: 'complete' })}>
               <Button type="link" style={{ fontWeight: 600 }} disabled={actionMutation.isPending}>完成</Button>
             </Popconfirm>
@@ -302,6 +328,8 @@ export default function StoreOrdersPage() {
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* 订单桌号不可编辑，移除相关弹窗 */}
 
       <Modal
         title={reasonTarget ? `填写原因 · #${reasonTarget.id}` : '填写原因'}

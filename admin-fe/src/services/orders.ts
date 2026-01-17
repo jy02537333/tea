@@ -8,6 +8,10 @@ export interface AdminOrder {
   pay_amount: number;
   status: number;
   pay_status: number;
+  delivery_type?: number;
+  order_type?: number;
+  table_id?: number;
+  table_no?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -87,4 +91,23 @@ export async function getAdminStoreOrders(
 ): Promise<PaginatedResult<AdminOrder>> {
   const res = await api.get(`/api/v1/admin/stores/${storeId}/orders`, { params });
   return unwrapPagination<AdminOrder>(res);
+}
+
+// 门店后台：门店维度订单列表（门店管理员使用）
+export async function getStoreOrders(
+  storeId: number,
+  params: StoreOrderListParams
+): Promise<PaginatedResult<AdminOrder>> {
+  const res = await api.get(`/api/v1/stores/${storeId}/orders`, { params });
+  return unwrapPagination<AdminOrder>(res);
+}
+
+// 门店后台：设置订单桌号
+export async function setStoreOrderTable(
+  storeId: number,
+  orderId: number,
+  payload: { table_id?: number; table_no?: string; reason?: string }
+) {
+  const res = await api.post(`/api/v1/stores/${storeId}/orders/${orderId}/set-table`, payload);
+  return unwrap(res);
 }

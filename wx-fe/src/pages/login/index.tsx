@@ -10,6 +10,46 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [fetchingProfile, setFetchingProfile] = useState(false);
+  const [mode, setMode] = useState<'wx' | 'phone'>('phone');
+  const [phone, setPhone] = useState<string>('18985121575');
+  const [smsCode, setSmsCode] = useState<string>('000000');
+
+  function getRedirectTarget(): string {
+    try {
+      const router = Taro.getCurrentInstance().router as any;
+      const raw = router?.params?.redirect;
+      if (!raw) return '';
+      const decoded = (() => {
+        try {
+          return decodeURIComponent(String(raw));
+        } catch (_) {
+          return String(raw);
+        }
+      })();
+      const cleaned = decoded.startsWith('/') ? decoded : `/${decoded}`;
+      if (!cleaned.startsWith('/pages/')) return '';
+      return cleaned;
+    } catch (_) {
+      return '';
+    }
+  }
+
+  async function navigateAfterLogin() {
+    const target = getRedirectTarget();
+    if (target) {
+      // tabBar 页面必须用 switchTab，且不支持携带 query
+      const pathOnly = target.split('?')[0] || target;
+      const isTab = pathOnly === '/pages/index/index' || pathOnly === '/pages/cart/index' || pathOnly === '/pages/profile/index';
+      if (isTab) {
+        await Taro.switchTab({ url: pathOnly });
+        return;
+      }
+      await Taro.redirectTo({ url: target });
+      return;
+    }
+
+    await Taro.switchTab({ url: '/pages/index/index' }).catch(() => Taro.redirectTo({ url: '/pages/index/index' }));
+  }
 
   useEffect(() => {
     void fetchProfile();
@@ -32,13 +72,31 @@ export default function LoginPage() {
     try {
       const res = await Taro.login();
       if (!res.code) throw new Error('未获取到微信 code');
-      await login({ code: res.code });
+      await login({ wechat_code: res.code });
       await fetchProfile();
       Taro.showToast({ title: '登录成功', icon: 'success', duration: 1200 });
       setTimeout(() => {
-        Taro.switchTab({ url: '/pages/index/index' }).catch(() => {
-          Taro.redirectTo({ url: '/pages/index/index' });
-        });
+        void navigateAfterLogin();
+      }, 500);
+    } catch (err: any) {
+      Taro.showToast({ title: err?.message || '登录失败', icon: 'none', duration: 1500 });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handlePhoneLogin() {
+    if (!phone || !smsCode) {
+      Taro.showToast({ title: '请输入手机号与验证码', icon: 'none' });
+      return;
+    }
+    setLoading(true);
+    try {
+      await login({ phone, code: smsCode });
+      await fetchProfile();
+      Taro.showToast({ title: '登录成功', icon: 'success', duration: 1200 });
+      setTimeout(() => {
+        void navigateAfterLogin();
       }, 500);
     } catch (err: any) {
       Taro.showToast({ title: err?.message || '登录失败', icon: 'none', duration: 1500 });
@@ -57,6 +115,9 @@ export default function LoginPage() {
       await login({ openid: devOpenId });
       await fetchProfile();
       Taro.showToast({ title: 'Dev 登录成功', icon: 'success', duration: 1200 });
+      setTimeout(() => {
+        void navigateAfterLogin();
+      }, 300);
     } catch (err: any) {
       Taro.showToast({ title: err?.message || 'Dev 登录失败', icon: 'none' });
     } finally {
@@ -80,18 +141,62 @@ export default function LoginPage() {
         <Text style={{ fontSize: 20, fontWeight: 'bold' }}>{user ? user.nickname || '微信用户' : '请登录'}</Text>
         {user?.phone && <Text style={{ display: 'block', marginTop: 6, color: '#666' }}>{user.phone}</Text>}
       </View>
-
-      <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 20, marginBottom: 20 }}>
-        <Text style={{ fontSize: 16, fontWeight: 'bold' }}>微信一键登录</Text>
-        <Text style={{ display: 'block', marginTop: 6, color: '#666' }}>授权后即可同步订单、优惠券等数据</Text>
+      {/* 登录方式 Tab */}
+      <View style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
         <Button
-          style={{ marginTop: 16, backgroundColor: '#07c160', color: '#fff' }}
-          loading={loading}
-          onClick={handleWxLogin}
+          style={{ flex: 1, backgroundColor: mode === 'phone' ? '#1677ff' : '#f2f3f5', color: mode === 'phone' ? '#fff' : '#333' }}
+          onClick={() => setMode('phone')}
         >
-          使用微信授权登录
+          手机号登录
+        </Button>
+        <Button
+          style={{ flex: 1, backgroundColor: mode === 'wx' ? '#07c160' : '#f2f3f5', color: mode === 'wx' ? '#fff' : '#333' }}
+          onClick={() => setMode('wx')}
+        >
+          微信登录
         </Button>
       </View>
+
+      {mode === 'phone' && (
+        <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 20, marginBottom: 20 }}>
+          <Text style={{ fontSize: 16, fontWeight: 'bold' }}>手机号 + 验证码登录</Text>
+          <Text style={{ display: 'block', marginTop: 6, color: '#666' }}>在桌面浏览器无法获取微信 code 时使用</Text>
+          <Input
+            type="number"
+            placeholder="请输入手机号"
+            value={phone}
+            onInput={(e) => setPhone((e.detail as any).value)}
+            style={{ marginTop: 12, backgroundColor: '#f7f7f7', borderRadius: 6, padding: 8 }}
+          />
+          <Input
+            type="number"
+            placeholder="请输入验证码"
+            value={smsCode}
+            onInput={(e) => setSmsCode((e.detail as any).value)}
+            style={{ marginTop: 12, backgroundColor: '#f7f7f7', borderRadius: 6, padding: 8 }}
+          />
+          <View style={{ marginTop: 8, color: '#999' }}>
+            <Text>默认示例：手机号 18985121575 验证码 000000</Text>
+          </View>
+          <Button style={{ marginTop: 12, backgroundColor: '#1677ff', color: '#fff' }} loading={loading} onClick={handlePhoneLogin}>
+            使用手机号登录
+          </Button>
+        </View>
+      )}
+
+      {mode === 'wx' && (
+        <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 20, marginBottom: 20 }}>
+          <Text style={{ fontSize: 16, fontWeight: 'bold' }}>微信一键登录</Text>
+          <Text style={{ display: 'block', marginTop: 6, color: '#666' }}>授权后即可同步订单、优惠券等数据</Text>
+          <Button
+            style={{ marginTop: 16, backgroundColor: '#07c160', color: '#fff' }}
+            loading={loading}
+            onClick={handleWxLogin}
+          >
+            使用微信授权登录
+          </Button>
+        </View>
+      )}
 
       <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 20, marginBottom: 20 }}>
         <Text style={{ fontSize: 16, fontWeight: 'bold' }}>开发者 OpenID 登录</Text>

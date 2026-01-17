@@ -56,7 +56,7 @@ export default function PartnerWithdrawalsPage() {
       <Table rowKey="id" columns={columns} dataSource={data?.list} loading={isLoading}
         pagination={{ current: data?.page || page, pageSize: data?.limit || limit, total: data?.total || 0, onChange: (p, ps) => { setPage(p); setLimit(ps || limit); } }} />
 
-      <Modal title={selected ? `审核提现 ${selected.withdraw_no}` : '审核'} visible={selected !== null} onCancel={() => setSelected(null)} footer={null}>
+      <Modal title={selected ? `审核提现 ${selected.withdraw_no}` : '审核'} open={selected !== null} onCancel={() => setSelected(null)} footer={null} destroyOnClose>
         {selected && (
           <div>
             <p>用户ID：{selected.user_id}</p>

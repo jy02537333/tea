@@ -1,17 +1,27 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, Button, Input, Picker } from '@tarojs/components';
-import Taro from '@tarojs/taro';
+import Taro, { useRouter } from '@tarojs/taro';
 import { listProducts } from '../../services/products';
 import { Product, Store } from '../../services/types';
-import { listStores } from '../../services/stores';
+import { listStores, listStoreProductsSmart } from '../../services/stores';
 import usePermission from '../../hooks/usePermission';
 import { PERM_HINT_STORE_MGMT_READONLY_PAGE } from '../../constants/permission';
+import { listCart, addCartItem } from '../../services/cart';
+import './index.scss';
+import ProductCard from '../../components/ProductCard';
 
 export default function ProductList() {
+  const router = useRouter();
   const perm = usePermission();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
+  const [cartCount, setCartCount] = useState(0);
+
+  const exclusiveMode = useMemo(() => {
+    const v = (router as any)?.params?.exclusive;
+    return v === '1' || v === 'true' || v === 1 || v === true;
+  }, [router]);
 
   // 门店选择（与分类页保持一致）
   const [stores, setStores] = useState<Store[]>([]);
@@ -35,11 +45,50 @@ export default function ProductList() {
   }, []);
 
   async function bootstrap() {
-    await loadStores();
-    await fetch();
+    const list = await loadStores();
+    const initial = getInitialStoreId(list);
+    if (initial) {
+      setSelectedStoreId(initial);
+      const idx = list.findIndex((s) => s.id === initial);
+      setStorePickerIndex(idx >= 0 ? idx + 1 : 0);
+    }
+
+    // 特供模式必须选择门店；未选门店时不自动拉取
+    if (exclusiveMode && !initial) {
+      setProducts([]);
+      return;
+    }
+
+    await fetch({ store_id: initial });
+
+    // 购物车汇总（仅显示条数，避免复杂汇总）
+    try {
+      const items = await listCart();
+      setCartCount(Array.isArray(items) ? items.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0) : 0);
+    } catch (_) {}
   }
 
-  async function loadStores() {
+  function getInitialStoreId(list: Store[]): number | undefined {
+    const rawParam = (router as any)?.params?.store_id;
+    const fromParam = rawParam ? Number(rawParam) : NaN;
+    if (!Number.isNaN(fromParam) && fromParam > 0) {
+      // 仅在门店列表中存在时使用（过滤禁用门店）
+      if (list.some((s) => s.id === fromParam)) return fromParam;
+    }
+
+    try {
+      const raw = Taro.getStorageSync('current_store_id');
+      const fromStorage = raw ? Number(raw) : NaN;
+      if (!Number.isNaN(fromStorage) && fromStorage > 0) {
+        if (list.some((s) => s.id === fromStorage)) return fromStorage;
+        // 存储中的门店已禁用/不存在，清理掉
+        try { Taro.removeStorageSync('current_store_id'); } catch (_) {}
+      }
+    } catch (_) {}
+    return undefined;
+  }
+
+  async function loadStores(): Promise<Store[]> {
     try {
       const res = await listStores({ page: 1, limit: 50 });
       const list = Array.isArray(res?.data)
@@ -50,9 +99,11 @@ export default function ProductList() {
             ? (res as any)
             : [];
       setStores(list);
+      return list;
     } catch (error) {
       console.error('load stores failed', error);
       Taro.showToast({ title: '加载门店失败', icon: 'none' });
+      return [];
     }
   }
 
@@ -70,7 +121,33 @@ export default function ProductList() {
     setLoading(true);
     try {
       const kw = overrides.keyword !== undefined ? overrides.keyword : keyword;
-      const storeId = overrides.store_id !== undefined ? overrides.store_id : selectedStoreId;
+      let storeId = overrides.store_id !== undefined ? overrides.store_id : selectedStoreId;
+      // 仅在门店列表中存在时才视为有效选择（过滤禁用门店）
+      if (storeId && !stores.some((s) => s.id === storeId)) {
+        storeId = undefined;
+      }
+      // 优先：只要存在具体门店，则使用门店特供商品接口，确保仅展示该门店商品
+      if (storeId) {
+        const res = await listStoreProductsSmart(storeId, {
+          page: 1,
+          limit: 20,
+          keyword: kw ? kw.trim() : undefined,
+        });
+        const maybe = res as any;
+        let items: Product[] = [];
+        if (Array.isArray(maybe?.data)) items = maybe.data;
+        else if (Array.isArray(maybe?.items)) items = maybe.items;
+        else if (Array.isArray(maybe)) items = maybe;
+        setProducts(items);
+        return;
+      }
+
+      // 其次：exclusive 模式下（无门店但传入 exclusive=1），也走门店特供逻辑，但此时必须显式选择门店
+      if (exclusiveMode) {
+        setProducts([]);
+        return;
+      }
+
       const origin = overrides.origin !== undefined ? overrides.origin : originPickerIndex > 0 ? originRange[originPickerIndex] : undefined;
       const packaging = overrides.packaging !== undefined ? overrides.packaging : packagingPickerIndex > 0 ? packagingRange[packagingPickerIndex] : undefined;
       const minPrice = overrides.min_price !== undefined ? overrides.min_price : priceMin ? Number(priceMin) : undefined;
@@ -152,13 +229,19 @@ export default function ProductList() {
     void fetch({ max_price });
   }
 
+  function extractErrorMessage(err: any): string | undefined {
+    const raw = err?.response?.data?.message ?? err?.response?.data?.msg ?? err?.message;
+    if (typeof raw === 'string' && raw.trim()) return raw.trim();
+    return undefined;
+  }
+
   return (
-    <View style={{ padding: 12 }}>
-      {!perm.allowedStoreMgmt && (
+    <View className="page-product-list">
+      {!exclusiveMode && !perm.allowedStoreMgmt && (
         <Text style={{ color: '#999', marginBottom: 8 }}>{PERM_HINT_STORE_MGMT_READONLY_PAGE}</Text>
       )}
       {/* 管理快捷入口（仅有权限且已选择具体门店时显示） */}
-      {selectedStoreId && (
+      {!exclusiveMode && selectedStoreId && (
         <View style={{ marginBottom: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {perm.allowedStoreAccounts && (
             <Button size="mini" onClick={() => Taro.navigateTo({ url: `/pages/store-accounts/index?store_id=${selectedStoreId}` })}>管理收款账户</Button>
@@ -168,23 +251,16 @@ export default function ProductList() {
           )}
         </View>
       )}
-      {/* 门店选择 */}
-      <View style={{ marginBottom: 16 }}>
-        <Text style={{ fontSize: 14, color: '#666' }}>选择门店</Text>
-        <Picker mode="selector" range={storePickerRange} onChange={handleStoreChange} value={storePickerIndex}>
-          <View
-            style={{
-              marginTop: 8,
-              padding: 12,
-              borderWidth: 1,
-              borderStyle: 'solid',
-              borderColor: '#ddd',
-              borderRadius: 6,
-            }}
-          >
-            <Text>{storePickerRange[storePickerIndex] || '全部门店'}</Text>
-          </View>
-        </Picker>
+      {/* 门店选择（左右布局） */}
+      <View className="filters">
+        <View className="filter-row">
+          <Text className="row-label">选择门店</Text>
+          <Picker mode="selector" range={storePickerRange} onChange={handleStoreChange} value={storePickerIndex}>
+            <View className="row-control">
+              <Text>{storePickerRange[storePickerIndex] || '全部门店'}</Text>
+            </View>
+          </Picker>
+        </View>
       </View>
       {/* 搜索与筛选条 */}
       <View style={{ marginBottom: 12 }}>
@@ -197,66 +273,114 @@ export default function ProductList() {
         />
       </View>
 
-      <View style={{ marginBottom: 16 }}>
-        <Text style={{ fontSize: 14, color: '#666' }}>筛选与排序</Text>
-        <View style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-          {/* 产地 */}
-          <View>
-            <Text style={{ fontSize: 12, color: '#888' }}>产地</Text>
+      {!exclusiveMode && !selectedStoreId && (
+      <View className="filters">
+        <Text className="label">筛选与排序</Text>
+        <View className="filters-body">
+          {/* 产地（左右布局） */}
+          <View className="filter-row">
+            <Text className="row-label">产地</Text>
             <Picker mode="selector" range={originRange} onChange={handleOriginChange} value={originPickerIndex}>
-              <View style={{ marginTop: 6, padding: 10, borderWidth: 1, borderStyle: 'solid', borderColor: '#ddd', borderRadius: 6 }}>
+              <View className="row-control">
                 <Text>{originRange[originPickerIndex] || '不限'}</Text>
               </View>
             </Picker>
           </View>
 
-          {/* 包装 */}
-          <View>
-            <Text style={{ fontSize: 12, color: '#888' }}>包装</Text>
+          {/* 包装（左右布局） */}
+          <View className="filter-row">
+            <Text className="row-label">包装</Text>
             <Picker mode="selector" range={packagingRange} onChange={handlePackagingChange} value={packagingPickerIndex}>
-              <View style={{ marginTop: 6, padding: 10, borderWidth: 1, borderStyle: 'solid', borderColor: '#ddd', borderRadius: 6 }}>
+              <View className="row-control">
                 <Text>{packagingRange[packagingPickerIndex] || '不限'}</Text>
               </View>
             </Picker>
           </View>
 
-          {/* 价格区间 */}
-          <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 12, color: '#888' }}>最低价</Text>
-              <Input type="number" value={priceMin} placeholder="例如 10" onConfirm={handlePriceMinConfirm} onInput={(e) => setPriceMin(String((e.detail as any).value))} />
-            </View>
-            <Text style={{ marginTop: 18 }}>-</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 12, color: '#888' }}>最高价</Text>
-              <Input type="number" value={priceMax} placeholder="例如 100" onConfirm={handlePriceMaxConfirm} onInput={(e) => setPriceMax(String((e.detail as any).value))} />
+          {/* 价格区间（左右布局） */}
+          <View className="filter-row">
+            <Text className="row-label">价格</Text>
+            <View className="row-control" style={{ padding: 8 }}>
+              <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Input
+                  type="number"
+                  value={priceMin}
+                  placeholder="例如 10"
+                  onConfirm={handlePriceMinConfirm}
+                  onInput={(e) => setPriceMin(String((e.detail as any).value))}
+                  style={{ flex: 1, backgroundColor: '#f7f7f7', borderRadius: 6, padding: 8 }}
+                />
+                <Text>-</Text>
+                <Input
+                  type="number"
+                  value={priceMax}
+                  placeholder="例如 100"
+                  onConfirm={handlePriceMaxConfirm}
+                  onInput={(e) => setPriceMax(String((e.detail as any).value))}
+                  style={{ flex: 1, backgroundColor: '#f7f7f7', borderRadius: 6, padding: 8 }}
+                />
+              </View>
             </View>
           </View>
 
-          {/* 排序 */}
-          <View>
-            <Text style={{ fontSize: 12, color: '#888' }}>排序</Text>
+          {/* 排序（左右布局） */}
+          <View className="filter-row">
+            <Text className="row-label">排序</Text>
             <Picker mode="selector" range={sortRange} onChange={handleSortChange} value={sortPickerIndex}>
-              <View style={{ marginTop: 6, padding: 10, borderWidth: 1, borderStyle: 'solid', borderColor: '#ddd', borderRadius: 6 }}>
+              <View className="row-control">
                 <Text>{sortRange[sortPickerIndex] || '默认'}</Text>
               </View>
             </Picker>
           </View>
         </View>
       </View>
+      )}
 
-      {products.map((p) => (
-        <View key={p.id} style={{ marginBottom: 12, borderBottomWidth: 1, borderColor: '#eee', paddingBottom: 8 }}>
-          <Text style={{ fontSize: 16, fontWeight: 'bold' }}>{p.name}</Text>
-          <Text>价格: {p.price}</Text>
-          <Button onClick={() => {
-            const storeQuery = selectedStoreId ? `&store_id=${selectedStoreId}` : '';
-            Taro.navigateTo({ url: `/pages/product-detail/index?id=${p.id}${storeQuery}` });
-          }}>
-            查看详情
-          </Button>
-        </View>
-      ))}
+      <View className="grid">
+        {products.map((p) => (
+          <ProductCard
+            key={p.id}
+            product={p}
+            showCover
+            meta={(() => {
+              const stock = (p as any)?.store_stock ?? (p as any)?.stock;
+              const text = typeof stock === 'number' ? String(stock) : '-';
+              return <Text>库存：{text}</Text>;
+            })()}
+            onClick={() => {
+              const storeQuery = selectedStoreId ? `&store_id=${selectedStoreId}` : '';
+              Taro.navigateTo({ url: `/pages/product-detail/index?id=${p.id}${storeQuery}` });
+            }}
+            extra={(
+              <>
+                <Button className="btn-view" onClick={() => {
+                  const storeQuery = selectedStoreId ? `&store_id=${selectedStoreId}` : '';
+                  Taro.navigateTo({ url: `/pages/product-detail/index?id=${p.id}${storeQuery}` });
+                }}>
+                  详情
+                </Button>
+                <Button className="btn-add" style={{ marginLeft: 5 }} onClick={async () => {
+                  try {
+                    await addCartItem(p.id, null, 1, selectedStoreId ? Number(selectedStoreId) : undefined);
+                    Taro.showToast({ title: '已加入购物车', icon: 'success' });
+                    const items = await listCart();
+                    setCartCount(Array.isArray(items) ? items.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0) : 0);
+                  } catch (e) {
+                    const msg = extractErrorMessage(e);
+                    if (msg && /库存不足/.test(msg)) {
+                      Taro.showToast({ title: msg, icon: 'none' });
+                    } else {
+                      Taro.showToast({ title: msg || '加入购物车失败', icon: 'none' });
+                    }
+                  }
+                }}>
+                  加入购物车
+                </Button>
+              </>
+            )}
+          />
+        ))}
+      </View>
 
       {!loading && products.length === 0 && (
         <Text style={{ color: '#999' }}>暂无商品</Text>
@@ -264,6 +388,12 @@ export default function ProductList() {
       {loading && (
         <Text>加载中...</Text>
       )}
+
+      {/* 底部购物车栏 */}
+      <View className="sticky-cart-bar">
+        <Text className="summary">购物车 · {cartCount} 件</Text>
+        <Button className="btn-go-cart" onClick={() => Taro.navigateTo({ url: '/pages/cart/index' })}>去购物车</Button>
+      </View>
     </View>
   );
 }

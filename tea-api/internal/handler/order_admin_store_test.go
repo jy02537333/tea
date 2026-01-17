@@ -26,9 +26,10 @@ type fakeOrderService struct {
 	errToReturn    error
 }
 
-func (f *fakeOrderService) CreateOrderFromCart(userID uint, deliveryType int, addressInfo, remark string, userCouponID uint, storeID uint, orderType int) (*model.Order, error) {
-	return nil, nil
+func (f *fakeOrderService) CreateOrderFromCart(userID uint, deliveryType int, addressInfo, remark string, userCouponID uint, storeID uint, orderType int, tableID uint, tableNo string, sharerUID uint, shareStoreID uint) (*model.Order, error) {
+	return &model.Order{}, nil
 }
+
 func (f *fakeOrderService) ListOrders(userID uint, status int, page, limit int, storeID uint) ([]model.Order, int64, error) {
 	return nil, 0, nil
 }
@@ -44,6 +45,8 @@ func (f *fakeOrderService) GetOrderAdmin(orderID uint) (*model.Order, []model.Or
 func (f *fakeOrderService) CancelOrder(userID, orderID uint, reason string) error { return nil }
 func (f *fakeOrderService) MarkPaid(userID, orderID uint) error                   { return nil }
 func (f *fakeOrderService) StartDelivery(userID, orderID uint) error              { return nil }
+func (f *fakeOrderService) DineInServe(userID, orderID uint) error                { return nil }
+func (f *fakeOrderService) TakeoutServe(userID, orderID uint) error               { return nil }
 func (f *fakeOrderService) Complete(userID, orderID uint) error                   { return nil }
 func (f *fakeOrderService) Receive(userID, orderID uint) error                    { return nil }
 func (f *fakeOrderService) AdminCancelOrder(orderID uint, reason string) error    { return nil }

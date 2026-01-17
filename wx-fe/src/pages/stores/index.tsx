@@ -27,7 +27,9 @@ export default function StoresPage() {
         : Array.isArray(maybe)
         ? maybe
         : [];
-      setStores(items);
+      // 过滤禁用门店（status=0 不展示，容错无 status 字段）
+      const visible = items.filter((s) => (typeof (s as any)?.status === 'number' ? (s as any).status !== 0 : true));
+      setStores(visible);
     } catch (e) {
       console.error('load stores failed', e);
       Taro.showToast({ title: '加载门店失败', icon: 'none' });

@@ -1,8 +1,8 @@
 import api, { unwrapResponse } from './api';
 import { CartItem } from './types';
 
-export async function listCart(): Promise<CartItem[]> {
-  const res = await api.get('/api/v1/cart');
+export async function listCart(params?: { store_id?: number }): Promise<CartItem[]> {
+  const res = await api.get('/api/v1/cart', { params });
   return unwrapResponse<CartItem[]>(res);
 }
 

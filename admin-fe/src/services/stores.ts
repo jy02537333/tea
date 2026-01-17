@@ -95,6 +95,7 @@ export interface StoreProductListParams {
   page?: number;
   limit?: number;
   biz_type?: number;
+  status?: number;
 }
 
 export interface StoreActivity {
@@ -265,6 +266,12 @@ export async function getStoreOrderStats(id: number) {
   return unwrap<StoreOrderStats>(res);
 }
 
+// 门店后台：门店维度订单统计（支持 days 参数）
+export async function getStoreOrderStatsScoped(id: number, params?: { days?: number }) {
+  const res = await api.get(`/api/v1/stores/${id}/orders/stats`, { params });
+  return unwrap<StoreOrderStats>(res);
+}
+
 export async function getStoreWallet(id: number) {
   const res = await api.get(`/api/v1/stores/${id}/wallet`);
   return unwrap<StoreWalletSummary>(res);
@@ -282,6 +289,12 @@ export async function applyStoreWithdraw(id: number, payload: { amount: number; 
 
 export async function listStoreProducts(id: number, params: StoreProductListParams) {
   const res = await api.get(`/api/v1/admin/stores/${id}/products`, { params });
+  return unwrapPagination<StoreProduct>(res);
+}
+
+// 门店后台：门店维度商品列表（门店管理员使用）
+export async function listStoreProductsScoped(id: number, params: StoreProductListParams) {
+  const res = await api.get(`/api/v1/stores/${id}/products`, { params });
   return unwrapPagination<StoreProduct>(res);
 }
 
@@ -321,8 +334,23 @@ export async function upsertStoreProduct(
   return unwrap<StoreProduct>(res);
 }
 
+// 门店后台：门店维度商品绑定/编辑（门店管理员使用）
+export async function upsertStoreProductScoped(
+  id: number,
+  payload: { product_id: number; stock: number; price_override?: string; biz_type?: number }
+) {
+  const res = await api.post(`/api/v1/stores/${id}/products`, payload);
+  return unwrap<StoreProduct>(res);
+}
+
 export async function deleteStoreProduct(id: number, productId: number) {
   const res = await api.delete(`/api/v1/admin/stores/${id}/products/${productId}`);
+  return unwrap(res);
+}
+
+// 门店后台：门店维度商品解绑（门店管理员使用）
+export async function deleteStoreProductScoped(id: number, productId: number) {
+  const res = await api.delete(`/api/v1/stores/${id}/products/${productId}`);
   return unwrap(res);
 }
 
@@ -345,4 +373,48 @@ export async function exportStoreFinanceTransactions(
     responseType: 'blob',
   });
   return res.data as Blob;
+}
+
+// 门店桌号管理
+export interface StoreTable {
+  id: number;
+  store_id: number;
+  table_no: string;
+  capacity?: number;
+  status?: number;
+  note?: string;
+  created_at?: string;
+}
+
+export async function listStoreTables(id: number) {
+  const res = await api.get(`/api/v1/stores/${id}/tables`);
+  return unwrap<StoreTable[]>(res);
+}
+
+export async function createStoreTable(id: number, payload: { table_no: string; capacity?: number; note?: string }) {
+  const res = await api.post(`/api/v1/stores/${id}/tables`, payload);
+  return unwrap<StoreTable>(res);
+}
+
+export async function deleteStoreTable(id: number, tableId: number) {
+  const res = await api.delete(`/api/v1/stores/${id}/tables/${tableId}`);
+  return unwrap(res);
+}
+
+// 门店自有商品创建（特供，仅该门店可用）
+export async function createStoreExclusiveProduct(
+  id: number,
+  payload: { name: string; category_id: number; price: number; description?: string; images?: string; stock?: number; price_override?: number }
+) {
+  const body = {
+    name: payload.name,
+    category_id: payload.category_id,
+    price: payload.price.toFixed(2),
+    description: payload.description ?? '',
+    images: payload.images ?? '',
+    stock: payload.stock ?? 0,
+    price_override: payload.price_override != null ? payload.price_override.toFixed(2) : '',
+  };
+  const res = await api.post(`/api/v1/stores/${id}/exclusive-products/new`, body);
+  return unwrap<StoreProduct>(res);
 }

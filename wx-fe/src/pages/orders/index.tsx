@@ -1,15 +1,42 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, Button } from '@tarojs/components';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, Button, Image } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import { listOrders } from '../../services/orders';
 import { Order, Store } from '../../services/types';
 import { getStore } from '../../services/stores';
+
+const STATUS_TEXT: Record<number, string> = {
+  1: '待支付',
+  2: '已付款',
+  3: '配送中',
+  4: '已完成',
+  5: '已取消',
+  6: '已堂食',
+  7: '外卖出餐',
+};
+
+function toNumber(value?: number | string): number | undefined {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = parseInt(value, 10);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  }
+  return undefined;
+}
+
+function getStatusText(status?: number | string): string {
+  const n = toNumber(status);
+  if (!n) return '--';
+  return STATUS_TEXT[n] || '--';
+}
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<number | undefined>(undefined);
   const [currentStore, setCurrentStore] = useState<Store | null>(null);
+
+  const hasAnyDineIn = useMemo(() => orders.some((o) => (o.table_no || '').trim()), [orders]);
 
   useEffect(() => {
     void loadCurrentStore();
@@ -25,7 +52,12 @@ export default function OrdersPage() {
       const storeId = storeIdRaw ? Number(storeIdRaw) : NaN;
       if (!Number.isNaN(storeId) && storeId > 0) {
         const s = await getStore(storeId);
-        setCurrentStore(s as Store);
+        const st = (s as any)?.status;
+        if (typeof st === 'number' && st === 0) {
+          setCurrentStore(null);
+        } else {
+          setCurrentStore(s as Store);
+        }
       }
     } catch (_) {
       // ignore
@@ -69,7 +101,7 @@ export default function OrdersPage() {
   }
 
   return (
-    <View style={{ padding: 12 }}>
+    <View data-testid="page-orders" style={{ padding: 12 }}>
       {currentStore && (
         <View style={{
           marginBottom: 8,
@@ -95,7 +127,7 @@ export default function OrdersPage() {
         <Button size="mini" onClick={() => changeStatus(2)} style={{ marginLeft: 8 }}>
           已支付
         </Button>
-        <Button size="mini" onClick={() => changeStatus(3)} style={{ marginLeft: 8 }}>
+        <Button size="mini" onClick={() => changeStatus(4)} style={{ marginLeft: 8 }}>
           已完成
         </Button>
       </View>
@@ -103,6 +135,16 @@ export default function OrdersPage() {
       {loading && <Text>加载中...</Text>}
       {!loading && !orders.length && <Text>暂无订单</Text>}
       {orders.map((o) => (
+        (() => {
+          const items = Array.isArray(o.items) ? o.items : [];
+          const first = items[0];
+          const productName = (first?.product_name || first?.sku_name || '').trim() || '商品';
+          const extraCount = items.length > 1 ? items.length - 1 : 0;
+          const title = extraCount > 0 ? `${productName} 等${items.length}件` : productName;
+          const imageUrl = (first?.image || '').trim();
+          const tableNo = (o.table_no || '').trim();
+          const statusText = getStatusText(o.status);
+          return (
         <View
           key={o.id}
           style={{
@@ -113,13 +155,43 @@ export default function OrdersPage() {
             paddingBottom: 8,
           }}
         >
-          <Text>订单号: {o.order_no}</Text>
-          <Text> 金额: {o.pay_amount}</Text>
-          <Text> 状态: {o.status}</Text>
+          <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }}>
+            {imageUrl ? (
+              <Image
+                src={imageUrl}
+                mode="aspectFill"
+                style={{ width: 56, height: 56, marginRight: 10, borderRadius: 6, backgroundColor: '#f5f5f5' }}
+              />
+            ) : (
+              <View style={{ width: 56, height: 56, marginRight: 10, borderRadius: 6, backgroundColor: '#f5f5f5' }} />
+            )}
+
+            <View style={{ flex: 1 }}>
+              <View>
+                <Text>{title}</Text>
+              </View>
+              {hasAnyDineIn && (
+                <View style={{ marginTop: 2 }}>
+                  <Text>桌号: {tableNo || '--'}</Text>
+                </View>
+              )}
+              <View style={{ marginTop: 2 }}>
+                <Text>状态: {statusText}</Text>
+              </View>
+              <View style={{ marginTop: 2 }}>
+                <Text>订单号: {o.order_no}</Text>
+              </View>
+              <View style={{ marginTop: 2 }}>
+                <Text>金额: {o.pay_amount}</Text>
+              </View>
+            </View>
+          </View>
           <Button size="mini" style={{ marginTop: 4 }} onClick={() => goDetail(o.id)}>
             查看详情
           </Button>
         </View>
+          );
+        })()
       ))}
     </View>
   );

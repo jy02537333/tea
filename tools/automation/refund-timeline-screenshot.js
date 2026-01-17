@@ -4,7 +4,8 @@ const path = require('path');
 const { chromium } = require('playwright');
 
 async function main() {
-  const dist = path.resolve(__dirname, '../../wx-fe/dist');
+  const outputRoot = 'dist-fixed';
+  const dist = path.resolve(__dirname, `../../wx-fe/${outputRoot}`);
   const serverScript = path.resolve(__dirname, './static-server.js');
   const screenshotDir = path.resolve(__dirname, '../../build-ci-logs/screenshots');
   if (!fs.existsSync(screenshotDir)) fs.mkdirSync(screenshotDir, { recursive: true });

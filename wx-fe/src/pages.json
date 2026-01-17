@@ -4,6 +4,7 @@
     "pages/index/index",
     "pages/product-list/index",
     "pages/product-detail/index",
+    "pages/webview/index",
     "pages/order-detail/index",
     "pages/cart/index",
     "pages/checkout/index",

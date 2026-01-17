@@ -55,16 +55,38 @@ type CreateAdminUserInput struct {
 // UserInfo 用户信息
 type UserInfo struct {
 	ID                      uint       `json:"id"`
+	Username                string     `json:"username,omitempty"`
 	UID                     string     `json:"uid"`
 	OpenID                  string     `json:"open_id"`
 	Nickname                string     `json:"nickname"`
 	Avatar                  string     `json:"avatar"`
 	Phone                   string     `json:"phone"`
 	Gender                  int        `json:"gender"`
+	Role                    string     `json:"role,omitempty"`
+	StoreID                 *uint      `json:"store_id,omitempty"`
 	Balance                 float64    `json:"balance"`
 	Points                  int        `json:"points"`
 	DefaultAddress          string     `json:"default_address"`
 	DefaultAddressUpdatedAt *time.Time `json:"default_address_updated_at"`
+}
+
+type storeAdminRow struct {
+	StoreID uint `gorm:"column:store_id"`
+}
+
+func (s *UserService) resolveStoreIDForStoreAdmin(userID uint) (*uint, error) {
+	var rows []storeAdminRow
+	if err := s.db.Table("store_admins").Select("store_id").Where("user_id = ?", userID).Order("id desc").Limit(1).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	sid := rows[0].StoreID
+	if sid == 0 {
+		return nil, nil
+	}
+	return &sid, nil
 }
 
 // Login 微信登录
@@ -131,16 +153,27 @@ func (s *UserService) Login(code string) (*LoginResponse, error) {
 	// 构造响应
 	userInfo := UserInfo{
 		ID:                      user.ID,
+		Username:                "",
 		UID:                     user.UID,
 		OpenID:                  user.OpenID,
 		Nickname:                user.Nickname,
 		Avatar:                  user.Avatar,
 		Phone:                   user.Phone,
 		Gender:                  user.Gender,
+		Role:                    user.Role,
+		StoreID:                 nil,
 		Balance:                 toFloat(user.Balance),
 		Points:                  user.Points,
 		DefaultAddress:          user.DefaultAddress,
 		DefaultAddressUpdatedAt: user.DefaultAddressUpdatedAt,
+	}
+	if user.Username != nil {
+		userInfo.Username = *user.Username
+	}
+	if user.Role == "store" {
+		if sid, err := s.resolveStoreIDForStoreAdmin(user.ID); err == nil {
+			userInfo.StoreID = sid
+		}
 	}
 
 	return &LoginResponse{
@@ -218,12 +251,15 @@ func (s *UserService) LoginByOpenID(openID string) (*LoginResponse, error) {
 		Token: token,
 		UserInfo: UserInfo{
 			ID:                      user.ID,
+			Username:                func() string { if user.Username != nil { return *user.Username }; return "" }(),
 			UID:                     user.UID,
 			OpenID:                  user.OpenID,
 			Nickname:                user.Nickname,
 			Avatar:                  user.Avatar,
 			Phone:                   user.Phone,
 			Gender:                  user.Gender,
+			Role:                    user.Role,
+			StoreID:                 func() *uint { if user.Role != "store" { return nil }; sid, err := s.resolveStoreIDForStoreAdmin(user.ID); if err != nil { return nil }; return sid }(),
 			Balance:                 toFloat(user.Balance),
 			Points:                  user.Points,
 			DefaultAddress:          user.DefaultAddress,
@@ -269,19 +305,31 @@ func (s *UserService) LoginByUsername(username, password string) (*LoginResponse
 		return nil, err
 	}
 
-	return &LoginResponse{Token: token, UserInfo: UserInfo{
+	info := UserInfo{
 		ID:                      user.ID,
+		Username:                "",
 		UID:                     user.UID,
 		OpenID:                  user.OpenID,
 		Nickname:                user.Nickname,
 		Avatar:                  user.Avatar,
 		Phone:                   user.Phone,
 		Gender:                  user.Gender,
+		Role:                    user.Role,
+		StoreID:                 nil,
 		Balance:                 toFloat(user.Balance),
 		Points:                  user.Points,
 		DefaultAddress:          user.DefaultAddress,
 		DefaultAddressUpdatedAt: user.DefaultAddressUpdatedAt,
-	}}, nil
+	}
+	if user.Username != nil {
+		info.Username = *user.Username
+	}
+	if user.Role == "store" {
+		if sid, err := s.resolveStoreIDForStoreAdmin(user.ID); err == nil {
+			info.StoreID = sid
+		}
+	}
+	return &LoginResponse{Token: token, UserInfo: info}, nil
 
 }
 
@@ -301,19 +349,31 @@ func (s *UserService) GetUserInfo(userID uint) (*UserInfo, error) {
 		return nil, err
 	}
 
-	return &UserInfo{
+	info := &UserInfo{
 		ID:                      user.ID,
+		Username:                "",
 		UID:                     user.UID,
 		OpenID:                  user.OpenID,
 		Nickname:                user.Nickname,
 		Avatar:                  user.Avatar,
 		Phone:                   user.Phone,
 		Gender:                  user.Gender,
+		Role:                    user.Role,
+		StoreID:                 nil,
 		Balance:                 toFloat(user.Balance),
 		Points:                  user.Points,
 		DefaultAddress:          user.DefaultAddress,
 		DefaultAddressUpdatedAt: user.DefaultAddressUpdatedAt,
-	}, nil
+	}
+	if user.Username != nil {
+		info.Username = *user.Username
+	}
+	if user.Role == "store" {
+		if sid, err := s.resolveStoreIDForStoreAdmin(user.ID); err == nil {
+			info.StoreID = sid
+		}
+	}
+	return info, nil
 }
 
 // UpdateUserInfo 更新用户信息

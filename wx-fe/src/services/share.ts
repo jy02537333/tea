@@ -1,5 +1,13 @@
 import api, { unwrapResponse } from './api';
 
+export interface SharePosterTemplate {
+  id: string;
+  title?: string;
+  image_url: string;
+  sort?: number;
+  status?: number;
+}
+
 export async function bindReferral(referrerId: number): Promise<void> {
   try {
     const res = await api.post('/api/v1/referrals/bind', { referrer_id: referrerId });
@@ -22,4 +30,10 @@ export async function getWxaCode(params: { scene: string; page: string; width?: 
   const res = await api.post('/api/v1/wx/wxacode', params);
   const data = unwrapResponse<{ image_base64?: string }>(res);
   return data?.image_base64 || '';
+}
+
+export async function listSharePosterTemplates(): Promise<SharePosterTemplate[]> {
+  const res = await api.get('/api/v1/share/posters');
+  const data = unwrapResponse<{ list?: SharePosterTemplate[] }>(res);
+  return data?.list || [];
 }

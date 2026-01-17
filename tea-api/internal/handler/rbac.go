@@ -59,14 +59,50 @@ func (h *RBACHandler) ListUserPermissions(c *gin.Context) {
 	}
 	db := database.GetDB()
 	type row struct{ Name string }
-	var names []row
+	var rows []row
 	if err := db.Table("permissions").
 		Select("permissions.name as name").
 		Joins("JOIN role_permissions rp ON rp.permission_id = permissions.id").
 		Joins("JOIN user_roles ur ON ur.role_id = rp.role_id").
-		Where("ur.user_id = ?", uid).Scan(&names).Error; err != nil {
+		Where("ur.user_id = ?", uid).Scan(&rows).Error; err != nil {
 		utils.Error(c, utils.CodeError, err.Error())
 		return
+	}
+	names := make([]string, 0, len(rows))
+	for i := range rows {
+		names = append(names, rows[i].Name)
+	}
+	utils.Success(c, names)
+}
+
+// GET /api/v1/rbac/my-permissions
+// 返回当前登录用户的权限列表（string[]）。用于门店等非 admin 账号在前端做按钮控制。
+func (h *RBACHandler) ListMyPermissions(c *gin.Context) {
+	uidAny, ok := c.Get("user_id")
+	if !ok {
+		utils.Unauthorized(c, "请先登录")
+		return
+	}
+	uid, ok := uidAny.(uint)
+	if !ok || uid == 0 {
+		utils.Unauthorized(c, "请先登录")
+		return
+	}
+
+	db := database.GetDB()
+	type row struct{ Name string }
+	var rows []row
+	if err := db.Table("permissions").
+		Select("permissions.name as name").
+		Joins("JOIN role_permissions rp ON rp.permission_id = permissions.id").
+		Joins("JOIN user_roles ur ON ur.role_id = rp.role_id").
+		Where("ur.user_id = ?", uid).Scan(&rows).Error; err != nil {
+		utils.Error(c, utils.CodeError, err.Error())
+		return
+	}
+	names := make([]string, 0, len(rows))
+	for i := range rows {
+		names = append(names, rows[i].Name)
 	}
 	utils.Success(c, names)
 }

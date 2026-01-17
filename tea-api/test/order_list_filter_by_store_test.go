@@ -168,7 +168,7 @@ func Test_Order_List_Filter_By_Store(t *testing.T) {
 	// 下单到门店1
 	add := map[string]any{"product_id": prodResp.Data.ID, "quantity": 1}
 	ab, _ := json.Marshal(add)
-	req, _ = http.NewRequest("POST", ts.URL+"/api/v1/cart/items", bytes.NewReader(ab))
+	req, _ = http.NewRequest("POST", fmt.Sprintf("%s/api/v1/cart/items?store_id=%d", ts.URL, s1), bytes.NewReader(ab))
 	req.Header.Set("Authorization", auth)
 	req.Header.Set("Content-Type", "application/json")
 	if _, err := http.DefaultClient.Do(req); err != nil {
@@ -196,7 +196,7 @@ func Test_Order_List_Filter_By_Store(t *testing.T) {
 
 	// 下单到门店2
 	ab2, _ := json.Marshal(add)
-	req, _ = http.NewRequest("POST", ts.URL+"/api/v1/cart/items", bytes.NewReader(ab2))
+	req, _ = http.NewRequest("POST", fmt.Sprintf("%s/api/v1/cart/items?store_id=%d", ts.URL, s2), bytes.NewReader(ab2))
 	req.Header.Set("Authorization", auth)
 	req.Header.Set("Content-Type", "application/json")
 	if _, err := http.DefaultClient.Do(req); err != nil {

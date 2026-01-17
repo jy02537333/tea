@@ -211,9 +211,11 @@ func (h *ActivityHandler) RegisterActivityWithOrder(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Name  string  `json:"name"`
-		Phone string  `json:"phone"`
-		Fee   float64 `json:"fee"`
+		Name         string  `json:"name"`
+		Phone        string  `json:"phone"`
+		Fee          float64 `json:"fee"`
+		SharerUID    uint    `json:"sharer_uid"`
+		ShareStoreID uint    `json:"share_store_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "参数错误")
@@ -238,7 +240,7 @@ func (h *ActivityHandler) RegisterActivityWithOrder(c *gin.Context) {
 		return
 	}
 	feeDec := decimal.NewFromFloat(req.Fee)
-	reg, order, err := h.svc.RegisterActivityWithOrder(activityID, userID, req.Name, req.Phone, feeDec)
+	reg, order, err := h.svc.RegisterActivityWithOrder(activityID, userID, req.Name, req.Phone, feeDec, req.SharerUID, req.ShareStoreID)
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, err.Error())
 		return

@@ -12,14 +12,20 @@ type Order struct {
 	BaseModel
 	OrderNo string `gorm:"type:varchar(32);uniqueIndex;not null" json:"order_no"`
 	UserID  uint   `gorm:"index;not null" json:"user_id"`
+	// ReferrerID 下单当时冻结的直推推荐人（用于防止后续推荐关系覆盖影响历史订单归属）
+	ReferrerID *uint `gorm:"index" json:"referrer_id"`
+	// ShareStoreID 下单当时冻结的分享门店ID（门店商品分享场景下应与订单 StoreID 一致）
+	ShareStoreID uint `gorm:"index;default:0" json:"share_store_id"`
 	StoreID uint   `gorm:"index;default:0" json:"store_id"`
+	TableID uint   `gorm:"index;default:0" json:"table_id"`
+	TableNo string `gorm:"type:varchar(50);default:''" json:"table_no"`
 	// MembershipPackageID 若非空则表示会员/合伙人礼包订单
 	MembershipPackageID *uint           `gorm:"index" json:"membership_package_id"`
 	TotalAmount         decimal.Decimal `gorm:"type:decimal(10,2);not null" json:"total_amount"`
 	PayAmount           decimal.Decimal `gorm:"type:decimal(10,2);not null" json:"pay_amount"`
 	DiscountAmount      decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"discount_amount"`
 	DeliveryFee         decimal.Decimal `gorm:"type:decimal(10,2);default:0" json:"delivery_fee"`
-	Status              int             `gorm:"type:tinyint;default:1" json:"status"`        // 1:待付款 2:已付款 3:配送中 4:已完成 5:已取消
+	Status              int             `gorm:"type:tinyint;default:1" json:"status"`        // 1:待付款 2:已付款 3:配送中 4:已完成 5:已取消 6:已堂食 7:外卖出餐
 	PayStatus           int             `gorm:"type:tinyint;default:1" json:"pay_status"`    // 1:未付款 2:已付款 3:退款中 4:已退款
 	OrderType           int             `gorm:"type:tinyint;default:1" json:"order_type"`    // 1:商城 2:堂食 3:外卖 4:会员订单
 	DeliveryType        int             `gorm:"type:tinyint;default:1" json:"delivery_type"` // 1:自取 2:配送
@@ -31,6 +37,9 @@ type Order struct {
 	CompletedAt         *time.Time      `json:"completed_at"`
 	CancelledAt         *time.Time      `json:"cancelled_at"`
 	CancelReason        string          `gorm:"type:varchar(200)" json:"cancel_reason"`
+
+	// Items is a non-persistent field for API responses.
+	Items []OrderItem `gorm:"-" json:"items,omitempty"`
 
 	User User `gorm:"foreignKey:UserID"`
 }
@@ -73,7 +82,12 @@ type CartItem struct {
 	CartID    uint  `gorm:"index;not null" json:"cart_id"`
 	ProductID uint  `gorm:"index;not null" json:"product_id"`
 	SkuID     *uint `gorm:"index" json:"sku_id"`
+	// StoreID 表示该购物车条目属于哪个门店维度（门店商品/门店库存）。为空表示平台商品。
+	StoreID *uint `gorm:"index" json:"store_id,omitempty"`
 	Quantity  int   `gorm:"not null" json:"quantity"`
+	// ReservedQuantity 表示当前条目已占用（冻结）的库存数量。
+	// 下单时不会再次扣减库存；删除/减数量/超时清理时会按该字段回补库存。
+	ReservedQuantity int `gorm:"not null;default:0" json:"reserved_quantity"`
 
 	Cart    Cart       `gorm:"foreignKey:CartID"`
 	Product Product    `gorm:"foreignKey:ProductID"`

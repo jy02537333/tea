@@ -6,6 +6,7 @@ import type { Store } from '../services/stores';
 import { StoreCouponPayload, createStoreCoupon, getStores, listStoreCoupons, updateStoreCoupon } from '../services/stores';
 import type { Coupon } from '../services/types';
 import dayjs from 'dayjs';
+import { useAuthContext } from '../hooks/useAuth';
 
 const COUPON_TYPE_LABELS: Record<number, string> = {
   1: '满减券',
@@ -19,6 +20,10 @@ const COUPON_STATUS_COLORS: Record<number, string> = {
 };
 
 export default function StoreCouponsPage() {
+  const { user } = useAuthContext();
+  const isStoreAdmin = user?.role === 'store';
+  const lockedStoreId = user?.store_id;
+
   const queryClient = useQueryClient();
   const [selectedStoreId, setSelectedStoreId] = useState<number | undefined>(undefined);
   const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined);
@@ -30,6 +35,7 @@ export default function StoreCouponsPage() {
     queryKey: ['stores-for-coupons'],
     queryFn: () => getStores({ page: 1, limit: 200 }),
     placeholderData: keepPreviousData,
+    enabled: !isStoreAdmin,
   });
 
   const storeOptions = useMemo(
@@ -42,10 +48,16 @@ export default function StoreCouponsPage() {
   );
 
   useEffect(() => {
+    if (isStoreAdmin) {
+      if (lockedStoreId && lockedStoreId !== selectedStoreId) {
+        setSelectedStoreId(lockedStoreId);
+      }
+      return;
+    }
     if (!selectedStoreId && storeOptions.length === 1) {
       setSelectedStoreId(storeOptions[0].value);
     }
-  }, [selectedStoreId, storeOptions]);
+  }, [isStoreAdmin, lockedStoreId, selectedStoreId, storeOptions]);
 
   const couponsQuery = useQuery<Coupon[]>({
     queryKey: ['store-coupons', selectedStoreId, statusFilter ?? 'all'],
@@ -182,16 +194,22 @@ export default function StoreCouponsPage() {
       <Card>
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <Space wrap>
-            <Typography.Text>选择门店：</Typography.Text>
-            <Select
-              style={{ minWidth: 240 }}
-              placeholder="请选择门店"
-              loading={storesQuery.isLoading}
-              options={storeOptions}
-              value={selectedStoreId}
-              onChange={(val) => setSelectedStoreId(val)}
-              allowClear
-            />
+            <Typography.Text>门店：</Typography.Text>
+            {isStoreAdmin ? (
+              <Typography.Text type={lockedStoreId ? undefined : 'danger'}>
+                {lockedStoreId ? `已锁定门店 #${lockedStoreId}` : '未绑定门店（store_admins）'}
+              </Typography.Text>
+            ) : (
+              <Select
+                style={{ minWidth: 240 }}
+                placeholder="请选择门店"
+                loading={storesQuery.isLoading}
+                options={storeOptions}
+                value={selectedStoreId}
+                onChange={(val) => setSelectedStoreId(val)}
+                allowClear
+              />
+            )}
             <Select
               allowClear
               placeholder="全部状态"
@@ -204,8 +222,9 @@ export default function StoreCouponsPage() {
               ]}
             />
           </Space>
-          {storesQuery.isError && <Alert type="error" message="无法获取门店列表" showIcon />}
-          {!selectedStoreId && !storesQuery.isLoading && (
+          {!isStoreAdmin && storesQuery.isError && <Alert type="error" message="无法获取门店列表" showIcon />}
+          {isStoreAdmin && !lockedStoreId && <Alert type="error" message="门店管理员未绑定门店，无法管理优惠券" showIcon />}
+          {!selectedStoreId && !(isStoreAdmin && !lockedStoreId) && !storesQuery.isLoading && (
             <Typography.Text type="secondary">请选择要查看的门店，以查看该门店配置的优惠券。</Typography.Text>
           )}
         </Space>

@@ -20,6 +20,10 @@
   },
   "scripts": {
     "screenshot:activities": "node tools/automation/preview-activities-screenshot.js",
-    "screenshot:activities:pw": "node tools/automation/preview-activities-screenshot.playwright.js"
+    "screenshot:activities:pw": "node tools/automation/preview-activities-screenshot.playwright.js",
+    "verify:wxfe": "node tools/automation/wx-fe-verify.playwright.js",
+    "token:get": "node tools/automation/get-token.js",
+    "user:register": "node tools/automation/register-user.js",
+    "rbac:setup-store-manager": "node tools/automation/setup-store-manager.js"
   }
 }

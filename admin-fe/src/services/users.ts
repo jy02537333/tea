@@ -47,6 +47,12 @@ export async function getUserPermissions(userId: number) {
   return unwrap<string[]>(res);
 }
 
+// 当前登录用户的权限列表（门店/非 admin 账号可用）
+export async function getMyPermissions() {
+  const res = await api.get('/api/v1/rbac/my-permissions');
+  return unwrap<string[]>(res);
+}
+
 export async function createAdminUser(payload: CreateAdminUserPayload) {
   const res = await api.post('/api/v1/admin/users', payload);
   return unwrap<AdminUser>(res);

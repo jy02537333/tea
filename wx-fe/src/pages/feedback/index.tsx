@@ -1,108 +1,83 @@
 import React, { useState } from 'react';
-import { Button, Textarea, View, Input, Picker } from '@tarojs/components';
-import Taro, { useRouter } from '@tarojs/taro';
-import { createTicket } from '../../services/tickets';
-
-const TYPES = [
-  { label: '意见反馈', value: 'consult' },
-  { label: '订单问题', value: 'order' },
-  { label: '投诉建议', value: 'complaint' },
-];
+import { View, Text, Input, Textarea, Picker, Button } from '@tarojs/components';
+import Taro from '@tarojs/taro';
+import { createFeedback } from '../../services/feedback';
 
 export default function FeedbackPage() {
-  const router = useRouter();
-  const orderIdParam = router.params.orderId ? Number(router.params.orderId) : undefined;
-
-  const [typeIndex, setTypeIndex] = useState(0);
-  const [title, setTitle] = useState('');
+  const categories = ['咨询', '投诉', '建议'];
+  const [categoryIndex, setCategoryIndex] = useState(0);
+  const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit() {
-    if (!title.trim() || !content.trim()) {
-      Taro.showToast({ title: '请填写标题和内容', icon: 'none' });
+    if (!subject.trim() || !content.trim()) {
+      Taro.showToast({ title: '请填写标题与内容', icon: 'none' });
       return;
     }
-    const type = TYPES[typeIndex]?.value || 'consult';
     setSubmitting(true);
     try {
-      await createTicket({
-        type,
-        source: orderIdParam ? 'miniapp_order' : 'miniapp_feedback',
-        order_id: orderIdParam,
-        title: title.trim(),
-        content: content.trim(),
-      });
-      Taro.showToast({ title: '已提交，我们会尽快处理', icon: 'none' });
+      const cat = categoryIndex === 0 ? 'consult' : categoryIndex === 1 ? 'complaint' : 'suggest';
+      const resp = await createFeedback({ category: cat as any, subject: subject.trim(), content: content.trim() });
+      const ticketId = (resp as any)?.id;
+      if (ticketId) {
+        try {
+          await Taro.showModal({ title: '提交成功', content: `工单编号：#${ticketId}`, showCancel: false, confirmText: '好的' });
+        } catch (_) {}
+      } else {
+        Taro.showToast({ title: '提交成功', icon: 'success' });
+      }
       setTimeout(() => {
-        Taro.navigateBack().catch(() => {
-          Taro.switchTab({ url: '/pages/profile/index' }).catch(() => {});
-        });
+        try { Taro.navigateBack({ delta: 1 }); } catch (_) {}
       }, 500);
-    } catch (error: any) {
-      Taro.showToast({ title: error?.message || '提交失败，请稍后重试', icon: 'none' });
+    } catch (e: any) {
+      Taro.showToast({ title: e?.message || '提交失败', icon: 'none' });
     } finally {
       setSubmitting(false);
     }
   }
 
-  function handleTypeChange(e: any) {
-    const idx = Number(e.detail.value || 0);
-    setTypeIndex(idx);
+  function onCategoryChange(e: any) {
+    const idx = Number(e?.detail?.value ?? 0);
+    setCategoryIndex(idx);
   }
 
   return (
     <View style={{ padding: 16 }}>
-      <View style={{ marginBottom: 12 }}>
-        <View>问题类型</View>
-        <Picker mode="selector" range={TYPES} rangeKey="label" onChange={handleTypeChange} value={typeIndex}>
-          <View
-            style={{
-              padding: 12,
-              borderRadius: 8,
-              border: '1px solid #ddd',
-              marginTop: 8,
-            }}
-          >
-            {TYPES[typeIndex]?.label}
+      <Text style={{ fontSize: 18, fontWeight: 'bold' }}>意见反馈</Text>
+      <View style={{ marginTop: 12 }}>
+        <Text style={{ fontSize: 14, color: '#666' }}>类型</Text>
+        <Picker mode="selector" range={categories} value={categoryIndex} onChange={onCategoryChange}>
+          <View style={{ marginTop: 6, padding: 10, borderWidth: 1, borderStyle: 'solid', borderColor: '#ddd', borderRadius: 6 }}>
+            <Text>{categories[categoryIndex]}</Text>
           </View>
         </Picker>
       </View>
 
-      <View style={{ marginBottom: 12 }}>
-        <View>标题</View>
+      <View style={{ marginTop: 12 }}>
+        <Text style={{ fontSize: 14, color: '#666' }}>标题</Text>
         <Input
-          style={{
-            marginTop: 8,
-            padding: 8,
-            borderRadius: 8,
-            border: '1px solid #ddd',
-          }}
-          placeholder="请简单描述您的问题"
-          value={title}
-          onInput={(e) => setTitle(e.detail.value)}
+          type="text"
+          placeholder="请简要描述问题或建议"
+          value={subject}
+          onInput={(e) => setSubject(String((e.detail as any)?.value || ''))}
         />
       </View>
 
-      <View style={{ marginBottom: 12 }}>
-        <View>详细描述</View>
+      <View style={{ marginTop: 12 }}>
+        <Text style={{ fontSize: 14, color: '#666' }}>内容</Text>
         <Textarea
-          style={{
-            marginTop: 8,
-            minHeight: 120,
-            padding: 8,
-            borderRadius: 8,
-            border: '1px solid #ddd',
-          }}
-          placeholder="请详细描述您遇到的问题或建议"
+          style={{ minHeight: '120px' }}
+          placeholder="请详细描述问题、复现步骤或建议"
           value={content}
-          onInput={(e) => setContent(e.detail.value)}
+          onInput={(e) => setContent(String((e.detail as any)?.value || ''))}
         />
+        <Text style={{ display: 'block', marginTop: 6, color: '#999' }}>为提高效率，请尽量提供相关订单号或页面截图说明（后续版本将支持图片上传）。</Text>
       </View>
 
-      <Button type="primary" onClick={handleSubmit} loading={submitting} disabled={submitting}>
-        提交
-      </Button>
+      <View style={{ marginTop: 16 }}>
+        <Button type="primary" loading={submitting} disabled={submitting} onClick={handleSubmit}>提交反馈</Button>
+      </View>
     </View>
   );
 }

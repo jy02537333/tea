@@ -1,17 +1,21 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { Button, Drawer, Form, Input, InputNumber, Popconfirm, Select, Space, Switch, Table, Tag, Upload, message } from 'antd';
+import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
+import { Button, Drawer, Form, Input, InputNumber, Popconfirm, Select, Space, Switch, Table, Tabs, Tag, Upload, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadProps } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import ReactQuill from 'react-quill';
+const ReactQuill = lazy(() => import('react-quill'));
 import 'react-quill/dist/quill.snow.css';
 import { Product, ProductPayload, ProductListParams, createProduct, deleteProduct, getProducts, updateProduct } from '../services/products';
 import { Category, getCategories } from '../services/categories';
-import { uploadMedia } from '../services/upload';
+import { getOssPolicy } from '../services/upload';
+
+const CategoriesPage = lazy(() => import('./Categories'));
 
 const STATUS_OPTIONS: { label: string; value?: number }[] = [
   { label: '全部', value: undefined },
+  { label: '草稿', value: 0 },
   { label: '上架', value: 1 },
   { label: '下架', value: 2 },
 ];
@@ -21,6 +25,7 @@ const STATUS_VALUE_OPTIONS = STATUS_OPTIONS.filter(
 );
 
 const statusTag = (status: number) => {
+  if (status === 0) return <Tag>草稿</Tag>;
   if (status === 1) return <Tag color="green">上架</Tag>;
   if (status === 2) return <Tag color="red">下架</Tag>;
   return <Tag>未知</Tag>;
@@ -53,6 +58,8 @@ const parseImageList = (images?: string): string[] => {
 };
 
 export default function ProductsPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<FilterState>({});
   const [pagination, setPagination] = useState({ page: 1, limit: 20 });
@@ -62,7 +69,50 @@ export default function ProductsPage() {
   const [form] = Form.useForm<ProductFormValues>();
   const [imageUploading, setImageUploading] = useState(false);
   const descriptionValue = Form.useWatch('description', form);
-  const quillRef = useRef<ReactQuill | null>(null);
+  const quillRef = useRef<any | null>(null);
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const initialTab = searchParams.get('tab') || 'all';
+  const initialKeyword = searchParams.get('keyword') || '';
+  const [activeTab, setActiveTab] = useState<string>(initialTab);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  useEffect(() => {
+    if (initialKeyword) {
+      filterForm.setFieldsValue({ keyword: initialKeyword });
+      setFilters((prev) => ({ ...prev, keyword: initialKeyword }));
+      setPagination((prev) => ({ ...prev, page: 1 }));
+    }
+    // 仅在 URL keyword 变化时同步
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialKeyword]);
+
+  useEffect(() => {
+    // tab -> 预置状态筛选
+    const nextStatus =
+      activeTab === 'on' ? 1 :
+      activeTab === 'off' ? 2 :
+      activeTab === 'draft' ? 0 :
+      activeTab === 'all' ? undefined :
+      undefined;
+
+    if (activeTab === 'create') {
+      openDrawer();
+      return;
+    }
+
+    // categories tab 不改动当前 filters，避免跳回时丢失筛选
+    if (activeTab === 'categories') {
+      return;
+    }
+
+    filterForm.setFieldsValue({ status: nextStatus });
+    setFilters((prev) => ({ ...prev, status: nextStatus }));
+    setPagination((prev) => ({ ...prev, page: 1 }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
   const closeDrawer = () => {
     setDrawerOpen(false);
     setEditing(null);
@@ -85,10 +135,22 @@ export default function ProductsPage() {
       const { file, onError, onSuccess } = options;
       try {
         setImageUploading(true);
-        const response = await uploadMedia(file as File);
-        appendImageUrl(response.url);
+        const policy = await getOssPolicy();
+        const f = file as File;
+        const key = `${policy.dir}${Date.now()}-${encodeURIComponent(f.name)}`;
+        const formData = new FormData();
+        formData.append('key', key);
+        formData.append('policy', policy.policy);
+        formData.append('OSSAccessKeyId', policy.accessid);
+        formData.append('signature', policy.signature);
+        formData.append('success_action_status', '200');
+        formData.append('file', f);
+        const resp = await fetch(policy.host, { method: 'POST', body: formData });
+        if (!resp.ok) throw new Error(`OSS 上传失败: ${resp.status}`);
+        const url = `${policy.host}/${key}`;
+        appendImageUrl(url);
         message.success('图片上传成功');
-        onSuccess?.(response as any);
+        onSuccess?.({ url } as any);
       } catch (error: any) {
         message.error(error?.message || '图片上传失败');
         onError?.(error as Error);
@@ -108,12 +170,23 @@ export default function ProductsPage() {
       const file = files[0];
       try {
         setImageUploading(true);
-        const response = await uploadMedia(file);
+        const policy = await getOssPolicy();
+        const key = `${policy.dir}${Date.now()}-${encodeURIComponent(file.name)}`;
+        const formData = new FormData();
+        formData.append('key', key);
+        formData.append('policy', policy.policy);
+        formData.append('OSSAccessKeyId', policy.accessid);
+        formData.append('signature', policy.signature);
+        formData.append('success_action_status', '200');
+        formData.append('file', file);
+        const resp = await fetch(policy.host, { method: 'POST', body: formData });
+        if (!resp.ok) throw new Error(`OSS 上传失败: ${resp.status}`);
+        const url = `${policy.host}/${key}`;
         const quill = quillRef.current?.getEditor();
         if (quill) {
           const range = quill.getSelection(true);
           const insertIndex = range ? range.index : quill.getLength();
-          quill.insertEmbed(insertIndex, 'image', response.url, 'user');
+          quill.insertEmbed(insertIndex, 'image', url, 'user');
           quill.setSelection(insertIndex + 1, 0, 'user');
         }
         message.success('图片已插入描述');
@@ -316,7 +389,7 @@ export default function ProductsPage() {
     }
   };
 
-  return (
+  const listContent = (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>
         <Form layout="inline" form={filterForm} onFinish={handleFilter}>
@@ -362,6 +435,47 @@ export default function ProductsPage() {
           showSizeChanger: true,
           onChange: (page, pageSize) => setPagination({ page, limit: pageSize || pagination.limit }),
         }}
+      />
+    </Space>
+  );
+
+  return (
+    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <Tabs
+        activeKey={activeTab}
+        onChange={(key) => {
+          setActiveTab(key);
+          const params = new URLSearchParams(location.search);
+          if (key === 'all') params.delete('tab');
+          else params.set('tab', key);
+          navigate({ search: params.toString() ? `?${params.toString()}` : '' }, { replace: true });
+        }}
+        items={[
+          {
+            key: 'categories',
+            label: '分类',
+            children: (
+              <Suspense fallback={<div style={{ padding: 8 }}>加载中...</div>}>
+                <CategoriesPage />
+              </Suspense>
+            ),
+          },
+          { key: 'on', label: '上架中', children: listContent },
+          { key: 'off', label: '已下架', children: listContent },
+          { key: 'draft', label: '草稿', children: listContent },
+          {
+            key: 'create',
+            label: '新增',
+            children: (
+              <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                <Button type="primary" onClick={() => openDrawer()}>
+                  新增商品
+                </Button>
+              </Space>
+            ),
+          },
+          { key: 'all', label: '全部', children: listContent },
+        ]}
       />
 
       <Drawer
@@ -424,16 +538,18 @@ export default function ProductsPage() {
             </Upload>
           </Form.Item>
           <Form.Item label="商品描述" name="description" rules={[{ required: true, message: '请输入商品描述' }]}>
-            <ReactQuill
-              ref={quillRef}
-              theme="snow"
-              value={descriptionValue}
-              onChange={(content) => form.setFieldsValue({ description: content })}
-              modules={quillModules}
-              formats={quillFormats}
-              placeholder="支持图文混排，可直接上传图片插入内容"
-              style={{ height: 260, marginBottom: 48 }}
-            />
+            <Suspense fallback={<div style={{ padding: 8 }}>编辑器加载中...</div>}>
+              <ReactQuill
+                ref={quillRef}
+                theme="snow"
+                value={descriptionValue}
+                onChange={(content) => form.setFieldsValue({ description: content })}
+                modules={quillModules}
+                formats={quillFormats}
+                placeholder="支持图文混排，可直接上传图片插入内容"
+                style={{ height: 260, marginBottom: 48 }}
+              />
+            </Suspense>
           </Form.Item>
           <Form.Item label="标签">
             <Space>

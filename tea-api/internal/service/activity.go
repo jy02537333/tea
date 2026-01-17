@@ -169,7 +169,7 @@ func (s *ActivityService) RefundActivityRegistration(storeID, activityID, regID 
 }
 
 // RegisterActivityWithOrder 用户报名并生成订单（用于需要支付的活动报名场景）
-func (s *ActivityService) RegisterActivityWithOrder(activityID, userID uint, name, phone string, fee decimal.Decimal) (*model.ActivityRegistration, *model.Order, error) {
+func (s *ActivityService) RegisterActivityWithOrder(activityID, userID uint, name, phone string, fee decimal.Decimal, sharerUID uint, shareStoreID uint) (*model.ActivityRegistration, *model.Order, error) {
 	if activityID == 0 || userID == 0 {
 		return nil, nil, errors.New("无效的活动或用户ID")
 	}
@@ -204,9 +204,11 @@ func (s *ActivityService) RegisterActivityWithOrder(activityID, userID uint, nam
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		// 创建一个简化订单，金额即为报名费用
 		order = model.Order{
-			OrderNo:        "", // 由数据库或后续逻辑填充，如需可接入统一订单号生成器
+			OrderNo:        generateOrderNo("O"),
 			UserID:         userID,
 			StoreID:        *act.StoreID,
+			ReferrerID:     nil,
+			ShareStoreID:   0,
 			TotalAmount:    fee,
 			PayAmount:      fee,
 			DiscountAmount: decimal.NewFromInt(0),
@@ -215,6 +217,9 @@ func (s *ActivityService) RegisterActivityWithOrder(activityID, userID uint, nam
 			PayStatus:      1,
 			OrderType:      1,
 			DeliveryType:   1,
+		}
+		if err := applyShareAttributionToOrder(tx, &order, userID, *act.StoreID, sharerUID, shareStoreID); err != nil {
+			return err
 		}
 		if err := tx.Create(&order).Error; err != nil {
 			return err

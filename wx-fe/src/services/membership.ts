@@ -32,6 +32,8 @@ export async function listMembershipPackages(
 export interface CreateMembershipOrderPayload {
   package_id: number;
   remark?: string;
+  sharer_uid?: number;
+  share_store_id?: number;
 }
 
 export interface CreateMembershipOrderResult {

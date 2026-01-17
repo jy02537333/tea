@@ -11,6 +11,7 @@ import {
   listStoreAccounts,
   updateStoreAccount,
 } from '../services/stores';
+import { useAuthContext } from '../hooks/useAuth';
 
 interface StoreAccountFormValues {
   account_type?: string;
@@ -27,6 +28,10 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function StoreAccountsPage() {
+  const { user } = useAuthContext();
+  const isStoreAdmin = user?.role === 'store';
+  const lockedStoreId = user?.store_id;
+
   const queryClient = useQueryClient();
   const [selectedStoreId, setSelectedStoreId] = useState<number | undefined>(undefined);
   const [form] = Form.useForm<StoreAccountFormValues>();
@@ -38,6 +43,7 @@ export default function StoreAccountsPage() {
     queryKey: ['stores-for-accounts'],
     queryFn: () => getStores({ page: 1, limit: 200 }),
     placeholderData: keepPreviousData,
+    enabled: !isStoreAdmin,
   });
 
   const storeOptions = useMemo(
@@ -50,10 +56,16 @@ export default function StoreAccountsPage() {
   );
 
   useEffect(() => {
+    if (isStoreAdmin) {
+      if (lockedStoreId && lockedStoreId !== selectedStoreId) {
+        setSelectedStoreId(lockedStoreId);
+      }
+      return;
+    }
     if (!selectedStoreId && storeOptions.length === 1) {
       setSelectedStoreId(storeOptions[0].value);
     }
-  }, [selectedStoreId, storeOptions]);
+  }, [isStoreAdmin, lockedStoreId, selectedStoreId, storeOptions]);
 
   const accountsQuery = useQuery<StoreBankAccount[]>({
     queryKey: ['store-accounts', selectedStoreId],
@@ -184,19 +196,26 @@ export default function StoreAccountsPage() {
       <Card>
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <Space wrap>
-            <Typography.Text>选择门店：</Typography.Text>
-            <Select
-              style={{ minWidth: 240 }}
-              placeholder="请选择门店"
-              loading={storesQuery.isLoading}
-              options={storeOptions}
-              value={selectedStoreId}
-              onChange={(val) => setSelectedStoreId(val)}
-              allowClear
-            />
+            <Typography.Text>门店：</Typography.Text>
+            {isStoreAdmin ? (
+              <Typography.Text type={lockedStoreId ? undefined : 'danger'}>
+                {lockedStoreId ? `已锁定门店 #${lockedStoreId}` : '未绑定门店（store_admins）'}
+              </Typography.Text>
+            ) : (
+              <Select
+                style={{ minWidth: 240 }}
+                placeholder="请选择门店"
+                loading={storesQuery.isLoading}
+                options={storeOptions}
+                value={selectedStoreId}
+                onChange={(val) => setSelectedStoreId(val)}
+                allowClear
+              />
+            )}
           </Space>
-          {storesQuery.isError && <Alert type="error" message="无法获取门店列表" showIcon />}
-          {!selectedStoreId && !storesQuery.isLoading && (
+          {!isStoreAdmin && storesQuery.isError && <Alert type="error" message="无法获取门店列表" showIcon />}
+          {isStoreAdmin && !lockedStoreId && <Alert type="error" message="门店管理员未绑定门店，无法管理收款账户" showIcon />}
+          {!selectedStoreId && !(isStoreAdmin && !lockedStoreId) && !storesQuery.isLoading && (
             <Typography.Text type="secondary">请选择要管理的门店，以查看和维护其收款账户。</Typography.Text>
           )}
         </Space>

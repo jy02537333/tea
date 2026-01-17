@@ -23,8 +23,15 @@ export default function StoreDetailPage() {
     setLoading(true);
     try {
       const s = await getStore(id);
-      setStore(s as Store);
-      try { Taro.setStorageSync('current_store_id', String(id)); } catch (_) {}
+      // 若门店为禁用状态（status=0），不展示并提示
+      const st = (s as any)?.status;
+      if (typeof st === 'number' && st === 0) {
+        Taro.showToast({ title: '该门店不可用', icon: 'none' });
+        setStore(null);
+      } else {
+        setStore(s as Store);
+        try { Taro.setStorageSync('current_store_id', String(id)); } catch (_) {}
+      }
     } catch (e) {
       console.error('load store failed', e);
       Taro.showToast({ title: '门店加载失败', icon: 'none' });
@@ -87,7 +94,7 @@ export default function StoreDetailPage() {
   }
 
   if (loading && !store) return <Text>加载中...</Text>;
-  if (!store) return <Text>未找到门店信息</Text>;
+  if (!store) return <Text>门店不可用或不存在</Text>;
 
   return (
     <View style={{ padding: 12 }}>

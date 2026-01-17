@@ -3,4 +3,4 @@
 // without rebuilding the frontend bundle.
 window.__TEA_RUNTIME_CONFIG__ = window.__TEA_RUNTIME_CONFIG__ || {};
 window.__TEA_RUNTIME_CONFIG__.apiBaseUrl =
-  window.__TEA_RUNTIME_CONFIG__.apiBaseUrl || 'http://192.168.3.82:9292';
+  window.__TEA_RUNTIME_CONFIG__.apiBaseUrl || 'http://127.0.0.1:9292';
