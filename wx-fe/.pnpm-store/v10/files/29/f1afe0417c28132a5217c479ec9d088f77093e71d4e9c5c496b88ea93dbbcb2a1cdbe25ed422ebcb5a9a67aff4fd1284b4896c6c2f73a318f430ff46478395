@@ -1,1 +1,0 @@
-export{C as taro_contact_button_core}from"./p-36e83be9.js";import"./p-f72fcd8c.js";import"./p-dbdb9de9.js";import"@tarojs/taro";

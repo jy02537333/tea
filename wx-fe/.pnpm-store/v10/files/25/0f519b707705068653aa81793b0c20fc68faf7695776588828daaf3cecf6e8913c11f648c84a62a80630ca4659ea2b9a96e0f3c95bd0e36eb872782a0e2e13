@@ -1,1 +1,0 @@
-import{r,h as s,H as o}from"./p-f72fcd8c.js";import{n}from"./p-dbdb9de9.js";const t=class{constructor(s){r(this,s)}componentDidLoad(){n("ChannelLive",this)}render(){return s(o,null)}};export{t as C}

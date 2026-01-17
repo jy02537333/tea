@@ -58,3 +58,7 @@ doc/demo/
 
 # Ignore local GitHub token (do not commit)
 .github_token
+
+# pnpm local store / accidental backups (do not commit)
+**/.pnpm-store/
+**/node_modules.root_owned_backup_*/

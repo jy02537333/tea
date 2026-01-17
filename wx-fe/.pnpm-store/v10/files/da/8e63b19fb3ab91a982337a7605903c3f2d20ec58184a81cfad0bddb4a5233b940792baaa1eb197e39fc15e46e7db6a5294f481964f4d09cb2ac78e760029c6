@@ -1,1 +1,0 @@
-import{r as s,h as r,H as o}from"./p-f72fcd8c.js";import{n as t}from"./p-dbdb9de9.js";const n=class{constructor(r){s(this,r)}componentDidLoad(){t("ListView",this)}render(){return r(o,null)}};export{n as L}

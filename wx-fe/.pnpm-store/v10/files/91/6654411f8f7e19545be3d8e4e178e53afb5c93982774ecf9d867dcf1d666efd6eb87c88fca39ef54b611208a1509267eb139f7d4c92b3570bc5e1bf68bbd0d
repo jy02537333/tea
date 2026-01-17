@@ -1,1 +1,0 @@
-"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.coolAppSdk=void 0;var coolAppSdk=require("./coolAppSdk");exports.coolAppSdk=coolAppSdk;

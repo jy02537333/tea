@@ -1,1 +1,0 @@
-import{r,h as s,H as o}from"./p-f72fcd8c.js";import{n as t}from"./p-dbdb9de9.js";const e=class{constructor(s){r(this,s)}componentDidLoad(){t("NestedScrollHeader",this)}render(){return s(o,null)}};export{e as N}

@@ -1,1 +1,0 @@
-"use strict";var dd=require("../core");require("../platform/android"),require("../platform/ios"),require("../platform/harmony"),module.exports=dd;

@@ -1,1 +1,0 @@
-export{T as taro_tap_gesture_handler_core}from"./p-5bd1aed9.js";import"./p-f72fcd8c.js";import"./p-dbdb9de9.js";import"@tarojs/taro";

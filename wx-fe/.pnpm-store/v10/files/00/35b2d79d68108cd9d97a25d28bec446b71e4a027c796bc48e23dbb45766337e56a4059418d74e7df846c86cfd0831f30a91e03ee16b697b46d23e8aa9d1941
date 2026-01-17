@@ -1,1 +1,0 @@
-"use strict";var ddWithoutApi=require("./entry/union"),apiObj_1=require("./api/apiObj"),plugin=require("./plugin"),dd=Object.assign(ddWithoutApi,apiObj_1.apiObj,{plugin:plugin});module.exports=dd;
