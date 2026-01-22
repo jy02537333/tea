@@ -1,181 +1,199 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, Button, Image } from '@tarojs/components';
-import Taro, { useRouter } from '@tarojs/taro';
-import { getStore } from '../../services/stores';
-import { Store } from '../../services/types';
-import usePermission from '../../hooks/usePermission';
-import { PERM_TOAST_NO_STORE_FINANCE } from '../../constants/permission';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text } from '@tarojs/components';
+import Taro from '@tarojs/taro';
+import { mockStores, StoreService } from '../../services/mockData';
+import './index.scss';
 
 export default function StoreDetailPage() {
-  const router = useRouter();
-  const [store, setStore] = useState<Store | null>(null);
-  const [loading, setLoading] = useState(false);
-  const perm = usePermission();
+  const [currentStoreName, setCurrentStoreName] = useState('');
+  const router = Taro.getCurrentInstance().router;
+  const storeIdParam = router?.params?.store_id;
+  const storeNameParam = router?.params?.store_name;
 
   useEffect(() => {
-    void loadStore();
+    try {
+      const raw = Taro.getStorageSync('current_store_name');
+      let saved = '';
+      if (typeof raw === 'string') {
+        saved = raw;
+        if (raw.trim().startsWith('{')) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed.data === 'string') saved = parsed.data;
+          } catch (_) {}
+        }
+      } else if (raw && typeof raw === 'object' && typeof (raw as any).data === 'string') {
+        saved = String((raw as any).data);
+      }
+      saved = String(saved || '').trim();
+      if (saved) setCurrentStoreName(saved);
+    } catch (_) {}
   }, []);
 
-  async function loadStore() {
-    const rawId = router?.params?.store_id;
-    const id = rawId ? Number(rawId) : NaN;
-    if (Number.isNaN(id) || id <= 0) return;
-    setLoading(true);
-    try {
-      const s = await getStore(id);
-      // 若门店为禁用状态（status=0），不展示并提示
-      const st = (s as any)?.status;
-      if (typeof st === 'number' && st === 0) {
-        Taro.showToast({ title: '该门店不可用', icon: 'none' });
-        setStore(null);
-      } else {
-        setStore(s as Store);
-        try { Taro.setStorageSync('current_store_id', String(id)); } catch (_) {}
-      }
-    } catch (e) {
-      console.error('load store failed', e);
-      Taro.showToast({ title: '门店加载失败', icon: 'none' });
-    } finally {
-      setLoading(false);
+  const currentStore = useMemo(() => {
+    if (storeIdParam) {
+      const byId = mockStores.find((store) => store.id === String(storeIdParam));
+      if (byId) return byId;
     }
-  }
-
-  const allowedAccounts = perm.allowedStoreAccounts;
-  const allowedFinance = perm.allowedStoreFinance;
-
-  function goNavigate() {
-    if (!store) return;
-    const lat = store.latitude;
-    const lng = store.longitude;
-    if (typeof lat === 'number' && typeof lng === 'number') {
-      Taro.openLocation({ latitude: lat, longitude: lng, name: store.name, address: store.address || '' }).catch(() => {
-        Taro.showToast({ title: '导航打开失败', icon: 'none' });
-      });
-    } else {
-      Taro.showToast({ title: '该门店暂未提供定位信息', icon: 'none' });
+    if (storeNameParam) {
+      const byName = mockStores.find((store) => store.name === String(storeNameParam));
+      if (byName) return byName;
     }
-  }
-
-  function goStoreProducts() {
-    if (!store) return;
-    const sid = store.id;
-    Taro.navigateTo({ url: `/pages/category/index?store_id=${sid}` });
-  }
-
-  function goDial() {
-    if (!store?.phone) {
-      Taro.showToast({ title: '暂无联系电话', icon: 'none' });
-      return;
+    if (currentStoreName) {
+      const byStorage = mockStores.find((store) => store.name === currentStoreName);
+      if (byStorage) return byStorage;
     }
-    Taro.makePhoneCall({ phoneNumber: store.phone }).catch(() => {
-      Taro.showToast({ title: '拨号失败', icon: 'none' });
-    });
-  }
+    return mockStores[0];
+  }, [storeIdParam, storeNameParam, currentStoreName]);
 
-  function getLicenseUrls(): string[] {
-    if (!store) return [];
-    const urls: string[] = [];
-    if (Array.isArray(store.licenses)) {
-      for (const item of store.licenses) {
-        if (typeof item === 'string') urls.push(item);
-        else if (item && typeof item.url === 'string') urls.push(item.url);
-      }
-    }
-    if (Array.isArray(store.license_images)) {
-      for (const u of store.license_images) if (typeof u === 'string') urls.push(u);
-    }
-    return urls;
-  }
+  const serviceFilters = useMemo(() => {
+    const types = Array.from(new Set(currentStore.services.map((s) => s.type)));
+    const labelMap: Record<StoreService['type'], string> = {
+      tea: '茶席',
+      space: '空间',
+      facility: '设施',
+      office: '办公'
+    };
+    return [
+      { id: 'all', label: '全部' },
+      ...types.map((type) => ({ id: type, label: labelMap[type] }))
+    ];
+  }, [currentStore.services]);
 
-  function previewLicense(url: string) {
-    const urls = getLicenseUrls();
-    if (!urls.length) return;
-    Taro.previewImage({ current: url, urls }).catch(() => {});
-  }
+  const [activeServiceFilter, setActiveServiceFilter] = useState('all');
 
-  if (loading && !store) return <Text>加载中...</Text>;
-  if (!store) return <Text>门店不可用或不存在</Text>;
+  useEffect(() => {
+    setActiveServiceFilter('all');
+  }, [currentStore.id]);
+
+  const filteredServices = useMemo(() => {
+    if (activeServiceFilter === 'all') return currentStore.services;
+    return currentStore.services.filter((service) => service.type === activeServiceFilter);
+  }, [activeServiceFilter, currentStore.services]);
+
+  const isCurrent = currentStoreName && currentStore.name === currentStoreName;
+  const statusText = currentStore.status === 'open' ? '营业中' : currentStore.status === 'busy' ? '繁忙中' : '休息中';
+  const statusTagClass = currentStore.status === 'closed' ? 'store-tag-pill--closed' : 'store-tag-pill--status';
 
   return (
-    <View style={{ padding: 12 }}>
-      <View style={{
-        marginBottom: 8,
-        padding: '6px 10px',
-        borderWidth: 1,
-        borderStyle: 'solid',
-        borderColor: '#07c160',
-        borderRadius: 16,
-        display: 'inline-block',
-        backgroundColor: '#f6ffed',
-      }}>
-        <Text style={{ color: '#389e0d' }}>当前门店：{store.name}</Text>
-      </View>
-
-      <View style={{ marginTop: 8 }}>
-        <Text style={{ display: 'block' }}>地址：{store.address || '未设置'}</Text>
-        <Text style={{ display: 'block', color: '#999', fontSize: 12 }}>如提供定位信息，可一键导航</Text>
-      </View>
-
-      <Text style={{ display: 'block', color: '#999', fontSize: 12, marginTop: 6 }}>
-        提示：可通过右上角入口查看财务流水或管理收款账户
-      </Text>
-
-      {store.phone && (
-        <View style={{ marginTop: 8 }}>
-          <Text style={{ display: 'block' }}>联系电话：{store.phone}</Text>
-          <Text style={{ display: 'block', color: '#999', fontSize: 12 }}>可直接拨打联系门店</Text>
+    <View className="page-store-detail">
+      <View className="app">
+        <View className="nav-bar">
+          <View className="nav-left">
+            <View className="nav-back"><Text>‹</Text></View>
+            <Text className="nav-title">门店详情</Text>
+          </View>
+          <Text className="nav-right">{currentStore.name}</Text>
         </View>
-      )}
 
-      <View style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <Button size="mini" type="primary" onClick={goNavigate}>导航到门店</Button>
-        <Button size="mini" onClick={goDial}>拨打电话</Button>
-        <Button size="mini" onClick={goStoreProducts}>查看本店商品</Button>
-        {store && (
-          <Button size="mini" onClick={() => Taro.navigateTo({ url: `/pages/activities/index?store_id=${store.id}` })}>查看活动/报名</Button>
-        )}
-        {allowedAccounts && store && (
-          <>
-            <Button size="mini" onClick={() => Taro.navigateTo({ url: `/pages/store-accounts/index?store_id=${store.id}` })}>管理收款账户</Button>
-          </>
-        )}
-        {store && (
-          <>
-            <Button
-              size="mini"
-              onClick={() => {
-                if (!allowedFinance) {
-                  Taro.showToast({ title: PERM_TOAST_NO_STORE_FINANCE, icon: 'none' });
-                  return;
-                }
-                Taro.navigateTo({ url: `/pages/store-finance/index?store_id=${store.id}` });
-              }}
-            >
-              查看财务流水
-            </Button>
-            {!allowedFinance && (
-              <Text style={{ color: '#999', fontSize: 12 }}>（需权限）</Text>
+        <View className="scroll">
+          <View className="store-header-card">
+            <View className="store-header-top">
+              <View>
+                <Text className="store-name">{currentStore.name}</Text>
+                <Text className="store-distance">{currentStore.distance} · {currentStore.meta}</Text>
+              </View>
+              <View className="store-tags">
+                <Text className={`store-tag-pill ${statusTagClass}`}>{statusText}</Text>
+                {isCurrent && <Text className="store-tag-pill">当前门店</Text>}
+                {currentStore.supports.pickup && <Text className="store-tag-pill">支持自提</Text>}
+                {currentStore.supports.takeout && <Text className="store-tag-pill">支持外卖</Text>}
+                {currentStore.supports.member && <Text className="store-tag-pill">可享平台年卡</Text>}
+              </View>
+            </View>
+            <View className="store-ops">
+              <View
+                className="btn-small"
+                onClick={() => Taro.navigateTo({ url: '/pages/stores/index' }).catch(() => {})}
+              >
+                <Text>切换门店</Text>
+              </View>
+              <View className="btn-small btn-small--primary">
+                <Text>呼叫门店</Text>
+              </View>
+            </View>
+          </View>
+
+          <View className="map-card">
+            <View className="map-placeholder">
+              <View className="map-pin"><Text>📍</Text></View>
+            </View>
+            <View className="map-footer">
+              <View className="map-footer-main">
+                <Text className="map-footer-title">{currentStore.mapTitle}</Text>
+                <Text className="map-footer-sub">{currentStore.mapSub}</Text>
+              </View>
+              <View className="map-footer-btn"><Text>在地图中查看</Text></View>
+            </View>
+          </View>
+
+          <View className="info-card">
+            <View className="info-title-row">
+              <Text className="info-title">营业时间</Text>
+              <Text className="info-sub">Business Hours</Text>
+            </View>
+            <Text className="info-line"><Text className="info-label">营业时间</Text>{currentStore.businessHours}</Text>
+            <Text className="info-line"><Text className="info-label">节假日</Text>{currentStore.holidayNote}</Text>
+          </View>
+
+          <View className="info-card">
+            <View className="info-title-row">
+              <Text className="info-title">门店地址</Text>
+              <Text className="info-sub">Address</Text>
+            </View>
+            <Text className="info-line">{currentStore.address}</Text>
+            {currentStore.addressHint && (
+              <Text className="info-line"><Text className="info-label">停车</Text>{currentStore.addressHint}</Text>
             )}
-          </>
-        )}
-      </View>
+          </View>
 
-      {(() => {
-        const licenseUrls = getLicenseUrls();
-        if (!licenseUrls.length) return null;
-        return (
-          <View style={{ marginTop: 16 }}>
-            <Text style={{ display: 'block', fontWeight: 'bold' }}>门店证照</Text>
-            <View style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {licenseUrls.map((u, idx) => (
-                <View key={`${u}-${idx}`} onClick={() => previewLicense(u)}>
-                  <Image src={u} style={{ width: '120px', height: '90px', borderRadius: 6 }} mode="aspectFill" />
-                </View>
+          <View className="info-card">
+            <View className="info-title-row">
+              <Text className="info-title">联系方式</Text>
+              <Text className="info-sub">Contact</Text>
+            </View>
+            <Text className="info-line"><Text className="info-label">门店电话</Text>{currentStore.phone}</Text>
+            <Text className="info-line"><Text className="info-label">微信客服</Text>可在「我的 - 联系客服」中与茶心君聊聊</Text>
+          </View>
+
+          <View className="info-card">
+            <View className="info-title-row">
+              <Text className="info-title">门店服务</Text>
+              <Text className="info-sub">Services</Text>
+            </View>
+            <View className="filter-row">
+              {serviceFilters.map((filter) => (
+                <Text
+                  key={filter.id}
+                  className={`filter-pill ${activeServiceFilter === filter.id ? 'filter-pill--active' : ''}`}
+                  onClick={() => setActiveServiceFilter(filter.id)}
+                >
+                  {filter.label}
+                </Text>
+              ))}
+            </View>
+            <View className="service-tags">
+              {filteredServices.map((service) => (
+                <Text className="service-tag" key={service.label}>{service.label}</Text>
               ))}
             </View>
           </View>
-        );
-      })()}
+
+          <View className="info-card">
+            <View className="info-title-row">
+              <Text className="info-title">温馨提示</Text>
+              <Text className="info-sub">Notice</Text>
+            </View>
+            <Text className="notice-text">
+              {currentStore.notices.map((note) => `· ${note}`).join('\n')}
+            </Text>
+          </View>
+        </View>
+
+        <View className="footer">
+          <Text>茶心阁 · 小程序「门店详情」页面静态稿 · 仅作示意</Text>
+        </View>
+      </View>
     </View>
   );
 }

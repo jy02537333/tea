@@ -1,198 +1,165 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, Button, Image } from '@tarojs/components';
+import { View, Text, ScrollView } from '@tarojs/components';
 import Taro from '@tarojs/taro';
-import { listOrders } from '../../services/orders';
-import { Order, Store } from '../../services/types';
-import { getStore } from '../../services/stores';
-
-const STATUS_TEXT: Record<number, string> = {
-  1: '待支付',
-  2: '已付款',
-  3: '配送中',
-  4: '已完成',
-  5: '已取消',
-  6: '已堂食',
-  7: '外卖出餐',
-};
-
-function toNumber(value?: number | string): number | undefined {
-  if (typeof value === 'number') return value;
-  if (typeof value === 'string') {
-    const parsed = parseInt(value, 10);
-    return Number.isNaN(parsed) ? undefined : parsed;
-  }
-  return undefined;
-}
-
-function getStatusText(status?: number | string): string {
-  const n = toNumber(status);
-  if (!n) return '--';
-  return STATUS_TEXT[n] || '--';
-}
+import { mockOrders } from '../../services/mockData';
+import './index.scss';
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState<number | undefined>(undefined);
-  const [currentStore, setCurrentStore] = useState<Store | null>(null);
-
-  const hasAnyDineIn = useMemo(() => orders.some((o) => (o.table_no || '').trim()), [orders]);
+  const [activeTab, setActiveTab] = useState<'all' | 'ongoing' | 'done' | 'canceled'>('all');
+  const [currentStoreName, setCurrentStoreName] = useState('');
 
   useEffect(() => {
-    void loadCurrentStore();
+    try {
+      const raw = Taro.getStorageSync('current_store_name');
+      let saved = '';
+      if (typeof raw === 'string') {
+        saved = raw;
+        if (raw.trim().startsWith('{')) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed.data === 'string') saved = parsed.data;
+          } catch (_) {}
+        }
+      } else if (raw && typeof raw === 'object' && typeof (raw as any).data === 'string') {
+        saved = String((raw as any).data);
+      }
+      saved = String(saved || '').trim();
+      if (saved) setCurrentStoreName(saved.replace(' · 本店', ''));
+    } catch (_) {}
   }, []);
 
-  useEffect(() => {
-    void fetchOrders();
-  }, [status, currentStore?.id]);
+  const filteredOrders = useMemo(() => {
+    if (activeTab === 'all') return mockOrders;
+    if (activeTab === 'ongoing') return mockOrders.filter((order) => order.status === 'making' || order.status === 'pending');
+    if (activeTab === 'done') return mockOrders.filter((order) => order.status === 'done');
+    return mockOrders.filter((order) => order.status === 'canceled');
+  }, [activeTab]);
 
-  async function loadCurrentStore() {
-    try {
-      const storeIdRaw = Taro.getStorageSync('current_store_id');
-      const storeId = storeIdRaw ? Number(storeIdRaw) : NaN;
-      if (!Number.isNaN(storeId) && storeId > 0) {
-        const s = await getStore(storeId);
-        const st = (s as any)?.status;
-        if (typeof st === 'number' && st === 0) {
-          setCurrentStore(null);
-        } else {
-          setCurrentStore(s as Store);
-        }
-      }
-    } catch (_) {
-      // ignore
-    }
+  function renderStatus(orderStatus: string) {
+    if (orderStatus === 'pending') return { label: '待支付', className: 'order-status order-status--pending' };
+    if (orderStatus === 'done') return { label: '已完成', className: 'order-status order-status--done' };
+    if (orderStatus === 'canceled') return { label: '已取消', className: 'order-status order-status--canceled' };
+    return { label: '制作中', className: 'order-status' };
   }
 
-  async function fetchOrders() {
-    setLoading(true);
-    try {
-      const sid = currentStore?.id;
-      const params: { page?: number; limit?: number; status?: number; store_id?: number } = { page: 1, limit: 20 };
-      if (typeof status === 'number') params.status = status;
-      if (sid && Number.isFinite(sid) && sid > 0) params.store_id = sid;
-      const res = await listOrders(params);
-      const maybe: any = res;
-      const data: Order[] = Array.isArray(maybe?.data)
-        ? maybe.data
-        : Array.isArray(maybe?.items)
-        ? maybe.items
-        : Array.isArray(maybe)
-        ? maybe
-        : [];
-      setOrders(data);
-    } catch (e) {
-      console.error('load orders failed', e);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function changeStatus(s?: number) {
-    setStatus(s);
-  }
-
-  function goDetail(id: number) {
-    const sid = currentStore?.id;
-    const url = sid && sid > 0
-      ? `/pages/order-detail/index?id=${id}&store_id=${sid}`
-      : `/pages/order-detail/index?id=${id}`;
-    Taro.navigateTo({ url });
+  function goOrderDetail(id: string) {
+    Taro.navigateTo({ url: `/pages/order-detail/index?id=${encodeURIComponent(id)}` }).catch(() => {});
   }
 
   return (
-    <View data-testid="page-orders" style={{ padding: 12 }}>
-      {currentStore && (
-        <View style={{
-          marginBottom: 8,
-          padding: '6px 10px',
-          borderWidth: 1,
-          borderStyle: 'solid',
-          borderColor: '#07c160',
-          borderRadius: 16,
-          display: 'inline-block',
-          backgroundColor: '#f6ffed',
-        }}>
-          <Text style={{ color: '#389e0d' }}>当前门店：{currentStore.name}</Text>
+    <View className="page-orders">
+      <View className="app">
+        <View className="nav-bar">
+          <View className="nav-left">
+            <View className="nav-back">‹</View>
+            <Text className="nav-title">订单列表</Text>
+          </View>
+          <Text className="nav-right">茶心君 · 我的订单</Text>
         </View>
-      )}
-      {/* 状态切换 Tab（简化版） */}
-      <View style={{ marginBottom: 12, display: 'flex', flexDirection: 'row' }}>
-        <Button size="mini" onClick={() => changeStatus(undefined)}>
-          全部
-        </Button>
-        <Button size="mini" onClick={() => changeStatus(1)} style={{ marginLeft: 8 }}>
-          待支付
-        </Button>
-        <Button size="mini" onClick={() => changeStatus(2)} style={{ marginLeft: 8 }}>
-          已支付
-        </Button>
-        <Button size="mini" onClick={() => changeStatus(4)} style={{ marginLeft: 8 }}>
-          已完成
-        </Button>
-      </View>
 
-      {loading && <Text>加载中...</Text>}
-      {!loading && !orders.length && <Text>暂无订单</Text>}
-      {orders.map((o) => (
-        (() => {
-          const items = Array.isArray(o.items) ? o.items : [];
-          const first = items[0];
-          const productName = (first?.product_name || first?.sku_name || '').trim() || '商品';
-          const extraCount = items.length > 1 ? items.length - 1 : 0;
-          const title = extraCount > 0 ? `${productName} 等${items.length}件` : productName;
-          const imageUrl = (first?.image || '').trim();
-          const tableNo = (o.table_no || '').trim();
-          const statusText = getStatusText(o.status);
-          return (
-        <View
-          key={o.id}
-          style={{
-            marginBottom: 12,
-            borderBottomWidth: 1,
-            borderStyle: 'solid',
-            borderColor: '#eee',
-            paddingBottom: 8,
-          }}
-        >
-          <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center' }}>
-            {imageUrl ? (
-              <Image
-                src={imageUrl}
-                mode="aspectFill"
-                style={{ width: 56, height: 56, marginRight: 10, borderRadius: 6, backgroundColor: '#f5f5f5' }}
-              />
-            ) : (
-              <View style={{ width: 56, height: 56, marginRight: 10, borderRadius: 6, backgroundColor: '#f5f5f5' }} />
-            )}
-
-            <View style={{ flex: 1 }}>
-              <View>
-                <Text>{title}</Text>
-              </View>
-              {hasAnyDineIn && (
-                <View style={{ marginTop: 2 }}>
-                  <Text>桌号: {tableNo || '--'}</Text>
-                </View>
-              )}
-              <View style={{ marginTop: 2 }}>
-                <Text>状态: {statusText}</Text>
-              </View>
-              <View style={{ marginTop: 2 }}>
-                <Text>订单号: {o.order_no}</Text>
-              </View>
-              <View style={{ marginTop: 2 }}>
-                <Text>金额: {o.pay_amount}</Text>
-              </View>
+        <View className="tabs">
+          <View className="tabs-left">
+            <View className={`tab ${activeTab === 'all' ? 'tab--active' : ''}`} onClick={() => setActiveTab('all')}>
+              <Text>全部</Text>
+            </View>
+            <View className={`tab ${activeTab === 'ongoing' ? 'tab--active' : ''}`} onClick={() => setActiveTab('ongoing')}>
+              <Text>进行中</Text>
+            </View>
+            <View className={`tab ${activeTab === 'done' ? 'tab--active' : ''}`} onClick={() => setActiveTab('done')}>
+              <Text>已完成</Text>
+            </View>
+            <View className={`tab ${activeTab === 'canceled' ? 'tab--active' : ''}`} onClick={() => setActiveTab('canceled')}>
+              <Text>已取消</Text>
             </View>
           </View>
-          <Button size="mini" style={{ marginTop: 4 }} onClick={() => goDetail(o.id)}>
-            查看详情
-          </Button>
+          <Text className="tabs-right">近三个月</Text>
         </View>
-          );
-        })()
-      ))}
+
+        <ScrollView className="scroll" scrollY enhanced>
+          {filteredOrders.map((order) => {
+            const status = renderStatus(order.status);
+            const itemsText = order.items.map((item) => `${item.name} x${item.quantity}`).join(' ｜ ');
+            const isCurrentStore = currentStoreName && order.storeName.includes(currentStoreName);
+            return (
+              <View className="order-card" key={order.id}>
+                <View className="order-header">
+                  <View className="order-store-row">
+                    <Text className="order-store">{order.storeName}</Text>
+                    {isCurrentStore && <Text className="order-store-badge">当前门店</Text>}
+                  </View>
+                  <Text className={status.className}>{status.label}</Text>
+                </View>
+                <View className="order-meta-row">
+                  <Text>{order.time} · {order.pickupType}</Text>
+                  <Text># {order.id}</Text>
+                </View>
+                <Text className="order-items">{itemsText}</Text>
+                <View className="order-total-row">
+                  <View>
+                    <Text className="order-total-label">{order.totalLabel}</Text>
+                    {typeof order.totalValue === 'number' && (
+                      <Text className="order-total-value">¥ {order.totalValue}</Text>
+                    )}
+                  </View>
+                  <View className="order-actions">
+                    {order.actions.map((action) => (
+                      <View
+                        key={action}
+                        className={action === '催一催' || action === '去支付' ? 'btn-primary' : 'btn-ghost'}
+                        onClick={() => {
+                          if (action === '订单详情') goOrderDetail(order.id);
+                        }}
+                      >
+                        {action}
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            );
+          })}
+
+          {filteredOrders.length === 0 && (
+            <View className="empty-tip">
+              <Text className="empty-main">没有更多订单啦～</Text>
+              <Text>可前往首页继续下单体验新茶款</Text>
+            </View>
+          )}
+        </ScrollView>
+
+        <View className="tab-bar">
+          <View className="tab-bar__item">
+            <View className="tab-bar__link" onClick={() => Taro.navigateTo({ url: '/pages/home/index' }).catch(() => {})}>
+              <View className="tab-bar__icon"><Text>🏠</Text></View>
+              <Text className="tab-bar__label">首页</Text>
+            </View>
+          </View>
+          <View className="tab-bar__item">
+            <View className="tab-bar__link" onClick={() => Taro.navigateTo({ url: '/pages/menu/index' }).catch(() => {})}>
+              <View className="tab-bar__icon"><Text>🍵</Text></View>
+              <Text className="tab-bar__label">点单</Text>
+            </View>
+          </View>
+          <View className="tab-bar__item">
+            <View className="tab-bar__link" onClick={() => Taro.navigateTo({ url: '/pages/discover/index' }).catch(() => {})}>
+              <View className="tab-bar__icon"><Text>🧭</Text></View>
+              <Text className="tab-bar__label">发现</Text>
+            </View>
+          </View>
+          <View className="tab-bar__item tab-bar__item--active">
+            <View className="tab-bar__link">
+              <View className="tab-bar__icon"><Text>📄</Text></View>
+              <Text className="tab-bar__label">订单</Text>
+            </View>
+          </View>
+          <View className="tab-bar__item">
+            <View className="tab-bar__link" onClick={() => Taro.navigateTo({ url: '/pages/profile/index' }).catch(() => {})}>
+              <View className="tab-bar__icon"><Text>👤</Text></View>
+              <Text className="tab-bar__label">我的</Text>
+            </View>
+          </View>
+        </View>
+      </View>
     </View>
   );
 }

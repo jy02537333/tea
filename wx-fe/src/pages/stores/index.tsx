@@ -1,90 +1,97 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Button } from '@tarojs/components';
-import Taro from '@tarojs/taro';
-import { listStores } from '../../services/stores';
-import { Store } from '../../services/types';
-import usePermission from '../../hooks/usePermission';
-import { PERM_HINT_STORE_MGMT_READONLY_PAGE, PERM_HINT_STORE_MGMT_READONLY_TOAST, PERM_TOAST_NO_STORE_FINANCE } from '../../constants/permission';
+import { View, Text } from '@tarojs/components';
+import Taro, { useDidShow } from '@tarojs/taro';
+import { mockStores, StoreItem } from '../../services/mockData';
+import './index.scss';
 
 export default function StoresPage() {
-  const perm = usePermission();
-  const [stores, setStores] = useState<Store[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [currentStoreName, setCurrentStoreName] = useState('隽也YUYE茶馆 · 本店');
+
+  function syncCurrentStore() {
+    try {
+      const raw = Taro.getStorageSync('current_store_name');
+      let saved = '';
+      if (typeof raw === 'string') {
+        saved = raw;
+        if (raw.trim().startsWith('{')) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed.data === 'string') saved = parsed.data;
+          } catch (_) {}
+        }
+      } else if (raw && typeof raw === 'object' && typeof (raw as any).data === 'string') {
+        saved = String((raw as any).data);
+      }
+      saved = String(saved || '').trim();
+      if (saved) setCurrentStoreName(saved);
+    } catch (_) {}
+  }
 
   useEffect(() => {
-    void fetchStores();
+    syncCurrentStore();
   }, []);
 
-  async function fetchStores() {
-    setLoading(true);
+  useDidShow(() => {
+    syncCurrentStore();
+  });
+
+  function handleSelectStore(store: StoreItem) {
     try {
-      const res = await listStores({ page: 1, limit: 50 });
-      const maybe: any = res;
-      const items: Store[] = Array.isArray(maybe?.data)
-        ? maybe.data
-        : Array.isArray(maybe?.items)
-        ? maybe.items
-        : Array.isArray(maybe)
-        ? maybe
-        : [];
-      // 过滤禁用门店（status=0 不展示，容错无 status 字段）
-      const visible = items.filter((s) => (typeof (s as any)?.status === 'number' ? (s as any).status !== 0 : true));
-      setStores(visible);
-    } catch (e) {
-      console.error('load stores failed', e);
-      Taro.showToast({ title: '加载门店失败', icon: 'none' });
-    } finally {
-      setLoading(false);
-    }
+      Taro.setStorageSync('current_store_name', store.name);
+      Taro.setStorageSync('current_store_id', store.id);
+    } catch (_) {}
+    setCurrentStoreName(store.name);
+    Taro.showToast({ title: '已选择门店', icon: 'none' });
+    Taro.navigateTo({ url: '/pages/menu/index' }).catch(() => {});
   }
 
-  function goDetail(id: number) {
-    Taro.navigateTo({ url: `/pages/store-detail/index?store_id=${id}` });
-  }
-
-  function setCurrent(id: number) {
-    try { Taro.setStorageSync('current_store_id', String(id)); } catch (_) {}
-    const canUseFinance = perm.allowedStoreFinance;
-    if (perm.allowedStoreMgmt) {
-      Taro.showToast({ title: canUseFinance ? '已设为当前门店，可在财务页使用' : '已设为当前门店（财务页需权限）', icon: canUseFinance ? 'success' : 'none' });
-    } else {
-      Taro.showToast({ title: '已设为当前门店（仅用于前端上下文），财务页需权限', icon: 'none' });
-    }
+  function isSelected(name: string) {
+    return currentStoreName === name;
   }
 
   return (
-    <View style={{ padding: 12 }}>
-      <Text style={{ fontSize: 16, fontWeight: 'bold' }}>门店列表</Text>
-      {!perm.allowedStoreMgmt && (
-        <Text style={{ display: 'block', marginTop: 6, color: '#999' }}>{PERM_HINT_STORE_MGMT_READONLY_PAGE}</Text>
-      )}
-      {loading && <Text style={{ display: 'block', marginTop: 8 }}>加载中...</Text>}
-      {!loading && !stores.length && <Text style={{ display: 'block', marginTop: 8 }}>暂无门店</Text>}
-      {stores.map((s) => (
-        <View key={s.id} style={{ marginTop: 12, paddingBottom: 8, borderBottom: '1px solid #eee' }}>
-          <Text style={{ display: 'block', fontSize: 16 }}>{s.name}</Text>
-          {s.address && <Text style={{ display: 'block', color: '#666' }}>地址：{s.address}</Text>}
-          <View style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-            <Button size="mini" type="primary" onClick={() => goDetail(s.id)}>查看详情</Button>
-            <Button size="mini" onClick={() => setCurrent(s.id)}>设为当前门店</Button>
-            <Button
-              size="mini"
-              onClick={() => {
-                if (!perm.allowedStoreFinance) {
-                  Taro.showToast({ title: PERM_TOAST_NO_STORE_FINANCE, icon: 'none' });
-                  return;
-                }
-                Taro.navigateTo({ url: `/pages/store-finance/index?store_id=${s.id}` });
-              }}
-            >
-              财务流水
-            </Button>
-            {!perm.allowedStoreFinance && (
-              <Text style={{ color: '#999', fontSize: 12 }}>（需权限）</Text>
-            )}
+    <View className="page-stores">
+      <View className="app">
+        <View className="nav-bar">
+          <View className="nav-left">
+            <View className="nav-back"><Text>‹</Text></View>
+            <Text className="nav-title">选择门店</Text>
           </View>
+          <Text className="nav-right">当前：{currentStoreName.replace(' · 本店', '')}</Text>
         </View>
-      ))}
+
+        <View className="scroll">
+          <Text className="location-tip">基于你当前定位，为你展示附近可自提的门店～</Text>
+
+          {mockStores.map((store) => (
+            <View className="store-card" key={store.id} onClick={() => handleSelectStore(store)}>
+              <View className="store-row-top">
+                <View>
+                  <Text className="store-name">{store.name}</Text>
+                  <Text className="store-meta">{store.meta}</Text>
+                </View>
+                {isSelected(store.name) && <Text className="store-tag">当前门店</Text>}
+              </View>
+              <Text className="store-distance">{store.distance}</Text>
+              <View className="store-action-row">
+                <Text>{store.actionNote}</Text>
+                <View
+                  className={`store-select-btn ${isSelected(store.name) ? '' : 'store-select-btn--ghost'}`}
+                  onClick={() => handleSelectStore(store)}
+                  data-testid="store-select-btn"
+                  data-store-name={store.name}
+                >
+                  <Text>{isSelected(store.name) ? '已选中' : '切换到这家'}</Text>
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        <View className="footer">
+          <Text>茶心阁 · 小程序「选择门店」页面静态稿 · 仅作示意</Text>
+        </View>
+      </View>
     </View>
   );
 }

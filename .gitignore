@@ -51,6 +51,9 @@ admin-fe/test-results/
 wx-fe/dist/
 wx-fe/dist-fixed/
 
+# Local backup copy (do not commit)
+wx-fe (副本)/
+
 # Local runtime artifacts
 *.pid
 

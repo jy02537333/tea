@@ -1,16 +1,14 @@
 {
   "name": "wx-fe",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "scripts": {
-    "build": "pnpm build:weapp",
     "dev:h5": "taro build --type h5 --watch",
     "build:h5": "taro build --type h5",
     "dev:weapp": "taro build --type weapp --watch",
     "build:weapp": "taro build --type weapp",
     "typecheck": "tsc --noEmit",
-    "test": "pnpm run typecheck",
-    "test:full": "pnpm run typecheck && pnpm run build"
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@tarojs/components": "4.1.8",
@@ -22,27 +20,23 @@
     "@tarojs/runtime": "4.1.8",
     "@tarojs/shared": "4.1.8",
     "@tarojs/taro": "4.1.8",
-    "axios": "^1.13.2",
-    "qrcode": "^1.5.3",
-    "marked": "4.3.0",
-    "dompurify": "^2.4.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@babel/core": "^7.26.0",
     "@babel/preset-react": "^7.28.5",
+    "@playwright/test": "^1.57.0",
     "@pmmmwh/react-refresh-webpack-plugin": "^0.6.2",
     "@tarojs/cli": "4.1.8",
     "@tarojs/plugin-html": "4.1.8",
+    "@tarojs/taro-loader": "4.1.8",
     "@tarojs/webpack5-runner": "4.1.8",
     "@types/node": "^22.8.6",
-    "@types/qrcode": "^1.5.0",
     "@types/react": "^18.3.27",
     "@types/react-dom": "^18.3.7",
     "babel-preset-taro": "4.1.8",
-    "less": "^4.2.0",
-    "typescript": "^5.4.5",
-    "vite": "^4.5.3"
+    "sass": "^1.77.8",
+    "typescript": "^5.4.5"
   }
 }
